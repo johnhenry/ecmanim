@@ -2,15 +2,16 @@
 // ergonomic `.animate` builder that mirrors manim's `mob.animate.shift(...)`.
 
 import { Animation, Transform } from "./Animation.js";
-import { running, smooth } from "./rate_functions.js";
+import { running, smooth, linear } from "./rate_functions.js";
 
 // Interpolate a scalar (used for timing math).
 const mix = (a, b, t) => a + (b - a) * t;
 
 export class AnimationGroup extends Animation {
   constructor(animations, config = {}) {
-    // The group's own mobject is a stand-in; real work is delegated.
-    super(null, config);
+    // The group's own mobject is a stand-in; real work is delegated. manim's
+    // AnimationGroup defaults to a linear group rate function.
+    super(null, { ...config, rateFunc: config.rateFunc ?? linear });
     this.animations = animations.flat().filter(Boolean).map((a) =>
       a && a._isAnimateBuilder ? a.build() : a);
     this.lagRatio = config.lagRatio ?? 0;
@@ -50,7 +51,8 @@ export class AnimationGroup extends Animation {
   }
 
   interpolate(alpha) {
-    const t = Math.max(0, Math.min(1, alpha));
+    // Apply the group's rate function, then dispatch to each child by its window.
+    const t = this.rateFunc(Math.max(0, Math.min(1, alpha)));
     for (const { anim, start, end } of this.scaledTimings) {
       const span = end - start || 1e-9;
       const local = Math.max(0, Math.min(1, (t - start) / span));

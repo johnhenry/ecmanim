@@ -119,7 +119,7 @@ export class ThreeDScene extends Scene {
     return this;
   }
 
-  beginAmbientCameraRotation({ rate = 0.2, about = "theta" } = {}) {
+  beginAmbientCameraRotation({ rate = 0.02, about = "theta" } = {}) {
     this._ambientOn = true;
     this._ambientRate = rate;
     this._ambientField = about;

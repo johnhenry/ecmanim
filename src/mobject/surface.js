@@ -35,7 +35,11 @@ export class Surface extends VGroup {
     const res = config.resolution ?? 24;
     this.resolution = Array.isArray(res) ? res : [res, res];
     this.fillOpacity = config.fillOpacity ?? 1;
-    this.checkerboard = config.checkerboardColors ?? config.checkerboard ?? null;
+    // manim's Surface is checkerboarded by default; keep solids solid when an
+    // explicit fill/colorFunc is given.
+    this.checkerboard = config.checkerboardColors ?? config.checkerboard ??
+      ((config.fillColor == null && config.color == null && config.colorFunc == null)
+        ? ["#29ABCA", "#1C758A"] : null);
     this.baseFill = config.fillColor ?? config.color ?? "#29ABCA";
     this.colorFunc = config.colorFunc ?? null; // (u,v,point) -> color
     this.lightDirection = config.lightDirection ? V.normalize(config.lightDirection) : DEFAULT_LIGHT;
@@ -170,8 +174,8 @@ export class Sphere extends Surface {
 
 export class Torus extends Surface {
   constructor(config = {}) {
-    const R = config.majorRadius ?? 2;
-    const r = config.minorRadius ?? 0.6;
+    const R = config.majorRadius ?? 3; // manim default major/minor = 3/1
+    const r = config.minorRadius ?? 1;
     const func = (u, v) => [
       (R + r * Math.cos(v)) * Math.cos(u),
       (R + r * Math.cos(v)) * Math.sin(u),
@@ -205,7 +209,7 @@ export class Cylinder extends Surface {
 export class Cone extends Surface {
   constructor(config = {}) {
     const r = config.baseRadius ?? 1;
-    const h = config.height ?? 2;
+    const h = config.height ?? 1; // manim Cone default height = 1
     // v in [0,1] from apex (z=h) to base (z=0).
     const func = (u, v) => [r * v * Math.cos(u), r * v * Math.sin(u), h * (1 - v)];
     super(func, {
@@ -228,9 +232,10 @@ export class Box extends VGroup {
     const color = config.fillColor ?? config.color ?? "#58C4DD";
     const light = config.lightDirection ? V.normalize(config.lightDirection) : DEFAULT_LIGHT;
     const faceCfg = {
-      fillOpacity: config.fillOpacity ?? 1,
+      // manim Cube/Prism defaults: fill_opacity 0.75, stroke_width 0.
+      fillOpacity: config.fillOpacity ?? 0.75,
       strokeColor: config.strokeColor ?? "#00000066",
-      strokeWidth: config.strokeWidth ?? 1,
+      strokeWidth: config.strokeWidth ?? 0,
     };
     // Corner helper.
     const c = (sx, sy, sz) => [sx * w, sy * h, sz * d];

@@ -23,8 +23,10 @@ test("per-vertex colors vary within a face (smooth gradient)", () => {
 test("shared grid vertices get matching normals -> seamless shading", () => {
   // Two horizontally-adjacent faces share an edge; the shared corners should get
   // (near) identical colors, which is what makes Gouraud shading seamless.
+  // Use a solid fill so we isolate shading continuity (checkerboard is now the
+  // default and would intentionally alternate colors across the shared edge).
   const s = new Surface((u, v) => [Math.cos(u), Math.sin(u), v], {
-    uRange: [0, 2 * Math.PI], vRange: [0, 1], resolution: [12, 4], smooth: true,
+    uRange: [0, 2 * Math.PI], vRange: [0, 1], resolution: [12, 4], smooth: true, fillColor: "#888888",
   });
   // Face at (i=0,j=0) and (i=1,j=0): resolution nv=4, so face index = i*nv + j.
   const f0 = s.submobjects[0 * 4 + 0];

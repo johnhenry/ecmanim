@@ -35,18 +35,49 @@ export class ValueTracker extends Mobject {
 export class DecimalNumber extends Text {
   constructor(value = 0, config = {}) {
     const numDecimalPlaces = config.numDecimalPlaces ?? 2;
-    super(Number(value).toFixed(numDecimalPlaces), config);
+    const cfg = { ...config };
+    // Temporarily construct with a placeholder; _format needs the fields below.
+    super("0", cfg);
     this.numDecimalPlaces = numDecimalPlaces;
-    this.value = value;
     this.unit = config.unit ?? "";
+    this.includeSign = config.includeSign ?? false;
+    this.groupWithCommas = config.groupWithCommas ?? true; // manim default
+    this.showEllipsis = config.showEllipsis ?? false;
+    // Which edge stays pinned as the value's width changes (manim default LEFT).
+    this.edgeToFix = config.edgeToFix ?? [-1, 0, 0];
+    this.value = value;
+    this.text = this._format(value);
+    this._buildBox();
+    if (config.point ?? config.at) this.moveTo(config.point ?? config.at);
+  }
+
+  _format(value) {
+    const neg = value < 0;
+    let s = Math.abs(value).toFixed(this.numDecimalPlaces);
+    if (this.groupWithCommas) {
+      const parts = s.split(".");
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      s = parts.join(".");
+    }
+    const sign = neg ? "-" : this.includeSign ? "+" : "";
+    return sign + s + (this.showEllipsis ? "…" : "") + this.unit;
+  }
+
+  getValue() {
+    return this.value;
+  }
+
+  incrementValue(delta = 1) {
+    return this.setValue(this.value + delta);
   }
 
   setValue(value) {
     this.value = value;
-    const center = this.getCenter();
-    this.text = Number(value).toFixed(this.numDecimalPlaces) + this.unit;
+    // Pin the configured edge so a changing width doesn't shift the number.
+    const anchor = this.getBoundaryPoint(this.edgeToFix);
+    this.text = this._format(value);
     this._buildBox();
-    this.moveTo(center);
+    this.moveTo(anchor, this.edgeToFix);
     return this;
   }
 }

@@ -4,6 +4,7 @@
 import { VMobject } from "./VMobject.js";
 import * as V from "../core/math/vector.js";
 import { arcBezierPoints } from "../core/math/bezier.js";
+import { RED, WHITE } from "../core/color.js";
 
 export class Arc extends VMobject {
   constructor(config = {}) {
@@ -19,7 +20,8 @@ export class Arc extends VMobject {
 
 export class Circle extends Arc {
   constructor(config = {}) {
-    super({ angle: 2 * Math.PI, fillOpacity: 0, ...config });
+    // manim's Circle defaults to a RED stroke with no fill.
+    super({ angle: 2 * Math.PI, fillOpacity: 0, ...config, color: config.color ?? RED });
     if (config.fillColor != null && config.fillOpacity == null) this.fillOpacity = 1;
   }
 }
@@ -27,14 +29,15 @@ export class Circle extends Arc {
 export class Dot extends Circle {
   constructor(config = {}) {
     const point = config.point ?? V.ORIGIN;
-    super({ radius: config.radius ?? 0.08, fillOpacity: 1, strokeWidth: 0, ...config });
+    // manim's Dot defaults to a filled WHITE dot (radius 0.08, no stroke).
+    super({ radius: config.radius ?? 0.08, fillOpacity: 1, strokeWidth: 0, ...config, color: config.color ?? WHITE });
     this.moveTo(point);
   }
 }
 
 export class Ellipse extends VMobject {
   constructor(config = {}) {
-    super(config);
+    super({ ...config, color: config.color ?? RED }); // manim: Ellipse(Circle) -> RED
     const w = config.width ?? 2;
     const h = config.height ?? 1;
     const pts = arcBezierPoints(1, 0, 2 * Math.PI);
@@ -48,8 +51,9 @@ export class Ellipse extends VMobject {
 export class Annulus extends VMobject {
   constructor(config = {}) {
     super({ fillOpacity: 1, strokeWidth: 0, ...config });
-    const outer = config.outerRadius ?? 1;
-    const inner = config.innerRadius ?? 0.5;
+    // manim defaults: inner_radius=1, outer_radius=2.
+    const outer = config.outerRadius ?? 2;
+    const inner = config.innerRadius ?? 1;
     const center = config.arcCenter ?? V.ORIGIN;
     // Outer ring CCW, inner ring CW — even-odd fill leaves the hole.
     this.appendBezierPoints(arcBezierPoints(outer, 0, 2 * Math.PI, center), true);
@@ -87,9 +91,33 @@ export class DashedLine extends Line {
   constructor(start, end, config = {}) {
     super(start, end, config);
     this.numDashes = config.numDashes ?? 15;
-    this.dashRatio = config.dashRatio ?? 0.5;
+    this.dashedRatio = config.dashedRatio ?? config.dashRatio ?? 0.5;
     this._dashed = true;
+    this._dashify(this.numDashes, this.dashedRatio);
   }
+
+  // Rebuild the path as `n` short straight dash subpaths so it actually renders
+  // dashed. Each dash covers `ratio/n` of the line; the gaps make up the rest.
+  _dashify(n, ratio) {
+    const start = this.start, end = this.end;
+    this.points = [];
+    this.subpathStarts = [];
+    if (n <= 0) return this.setPointsAsCorners([start, end]);
+    const period = 1 / n;
+    const dash = ratio * period;
+    for (let i = 0; i < n; i++) {
+      const a0 = i * period;
+      const a1 = Math.min(1, a0 + dash);
+      const p0 = V.lerp(start, end, a0);
+      const p1 = V.lerp(start, end, a1);
+      this.subpathStarts.push(this.points.length);
+      this.points.push([...p0], V.lerp(p0, p1, 1 / 3), V.lerp(p0, p1, 2 / 3), [...p1]);
+    }
+    return this;
+  }
+
+  getStart() { return this.start; }
+  getEnd() { return this.end; }
 }
 
 export class Arrow extends Line {

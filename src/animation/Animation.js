@@ -162,14 +162,22 @@ export class FadeIn extends Animation {
   }
 
   setup() {
-    this.targetOpacities = this.mobject.getFamily().map((m) => ({
+    const fam = this.mobject.getFamily();
+    this.targetOpacities = fam.map((m) => ({
       fill: m.fillOpacity ?? m.opacity ?? 1,
       stroke: m.strokeOpacity ?? m.opacity ?? 1,
       op: m.opacity ?? 1,
     }));
-    this.finalPoints = this.mobject.getFamily().map((m) => m.points.map((p) => [...p]));
-    // Start shifted/scaled and invisible.
-    if (this.shiftVec.some((c) => c !== 0)) this.mobject.shift(V.neg(this.shiftVec));
+    this.finalPoints = fam.map((m) => m.points.map((p) => [...p]));
+    // The mobject fades in from a state scaled by `scale` about its center and
+    // shifted by `-shift` (manim's _Fade). Precompute that start geometry.
+    const c = this.mobject.getCenter();
+    const s = this.scaleFactor;
+    this.startPoints = this.finalPoints.map((pts) => pts.map((p) => [
+      c[0] + (p[0] - c[0]) * s - this.shiftVec[0],
+      c[1] + (p[1] - c[1]) * s - this.shiftVec[1],
+      c[2] + (p[2] - c[2]) * s - this.shiftVec[2],
+    ]));
   }
 
   interpolateMobject(alpha) {
@@ -179,10 +187,9 @@ export class FadeIn extends Animation {
       m.fillOpacity = t.fill * alpha;
       m.strokeOpacity = t.stroke * alpha;
       m.opacity = t.op;
-      // Interpolate position from shifted start to final.
+      const start = this.startPoints[i];
       const final = this.finalPoints[i];
-      const off = V.scale(this.shiftVec, alpha - 1); // moves from -shift..0
-      for (let j = 0; j < m.points.length; j++) m.points[j] = V.add(final[j], off);
+      for (let j = 0; j < m.points.length; j++) m.points[j] = V.lerp(start[j], final[j], alpha);
     });
   }
 
@@ -197,14 +204,24 @@ export class FadeOut extends Animation {
   constructor(mobject, config = {}) {
     super(mobject, { ...config, remover: true });
     this.shiftVec = config.shift ?? [0, 0, 0];
+    this.scaleFactor = config.scale ?? 1;
   }
 
   setup() {
-    this.startOpacities = this.mobject.getFamily().map((m) => ({
+    const fam = this.mobject.getFamily();
+    this.startOpacities = fam.map((m) => ({
       fill: m.fillOpacity ?? m.opacity ?? 1,
       stroke: m.strokeOpacity ?? m.opacity ?? 1,
     }));
-    this.startPoints = this.mobject.getFamily().map((m) => m.points.map((p) => [...p]));
+    this.startPoints = fam.map((m) => m.points.map((p) => [...p]));
+    // Fades out toward a state scaled by `scale` about center and shifted by `shift`.
+    const c = this.mobject.getCenter();
+    const s = this.scaleFactor;
+    this.endPoints = this.startPoints.map((pts) => pts.map((p) => [
+      c[0] + (p[0] - c[0]) * s + this.shiftVec[0],
+      c[1] + (p[1] - c[1]) * s + this.shiftVec[1],
+      c[2] + (p[2] - c[2]) * s + this.shiftVec[2],
+    ]));
   }
 
   interpolateMobject(alpha) {
@@ -214,8 +231,8 @@ export class FadeOut extends Animation {
       m.fillOpacity = s.fill * (1 - alpha);
       m.strokeOpacity = s.stroke * (1 - alpha);
       const start = this.startPoints[i];
-      const off = V.scale(this.shiftVec, alpha);
-      for (let j = 0; j < m.points.length; j++) m.points[j] = V.add(start[j], off);
+      const end = this.endPoints[i];
+      for (let j = 0; j < m.points.length; j++) m.points[j] = V.lerp(start[j], end[j], alpha);
     });
   }
 
@@ -262,8 +279,9 @@ export class ApplyMethod extends Animation {
 export const Shift = (mob, vec, config) => new ApplyMethod(mob, "shift", vec, config);
 export const MoveTo = (mob, pt, config) => new ApplyMethod(mob, "moveTo", pt, config);
 export const ScaleAnim = (mob, f, config) => new ApplyMethod(mob, "scale", f, config);
-export const Rotate = (mob, angle, config = {}) =>
-  new ApplyMethod(mob, "rotate", angle, { axis: config.axis ?? V.OUT });
+// NOTE: the animated `Rotate` lives in ./extra.js (a full Animation subclass with
+// about_point support). Do not re-add a factory named `Rotate` here — it caused a
+// duplicate-export collision.
 
 export class FadeToColor extends ApplyMethod {
   constructor(mobject, color, config = {}) {
