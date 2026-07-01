@@ -22,6 +22,17 @@ export {
   Arc, Circle, Dot, Ellipse, Annulus, Line, DashedLine, Arrow,
   Polygon, RegularPolygon, Triangle, Rectangle, Square,
 } from "./mobject/geometry.ts";
+export * from "./mobject/tips.ts";
+export * from "./mobject/arcs.ts";
+export * from "./mobject/polygram.ts";
+export * from "./mobject/shape_matchers.ts";
+export * from "./mobject/vectors.ts";
+export * from "./mobject/labeled.ts";
+export * from "./mobject/boolean_ops.ts";
+export * from "./mobject/matrix.ts";
+export * from "./mobject/table.ts";
+export * from "./mobject/brace.ts";
+export * from "./mobject/graph.ts";
 export { Text, MarkupText } from "./mobject/text/Text.ts";
 export { VText, setDefaultFont, setDefaultFontSync, getDefaultFont } from "./mobject/vectorized_text.ts";
 export { parsePathToSubpaths, subpathsToVMobject } from "./mobject/svg_path.ts";

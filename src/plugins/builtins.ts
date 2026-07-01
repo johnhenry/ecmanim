@@ -10,6 +10,17 @@ import { Scene } from "../scene/Scene.ts";
 import { Color } from "../core/color.ts";
 
 import * as geometry from "../mobject/geometry.ts";
+import * as tips from "../mobject/tips.ts";
+import * as arcs from "../mobject/arcs.ts";
+import * as polygram from "../mobject/polygram.ts";
+import * as shapeMatchers from "../mobject/shape_matchers.ts";
+import * as vectors from "../mobject/vectors.ts";
+import * as labeled from "../mobject/labeled.ts";
+import * as booleanOps from "../mobject/boolean_ops.ts";
+import * as matrix from "../mobject/matrix.ts";
+import * as table from "../mobject/table.ts";
+import * as brace from "../mobject/brace.ts";
+import * as graph from "../mobject/graph.ts";
 import * as surface from "../mobject/surface.ts";
 import * as coords from "../mobject/coordinate_systems.ts";
 import * as valueTracker from "../mobject/value_tracker.ts";
@@ -34,8 +45,9 @@ export function registerBuiltins(): typeof registry {
   if (done) return registry;
   done = true;
 
-  const mobjectModules = [geometry, surface, coords, valueTracker, textMod,
-    vtextMod, mathtexMod, svgMod, imageMod, threeDMod];
+  const mobjectModules = [geometry, tips, arcs, polygram, shapeMatchers, vectors,
+    labeled, booleanOps, matrix, table, brace, graph, surface, coords,
+    valueTracker, textMod, vtextMod, mathtexMod, svgMod, imageMod, threeDMod];
   for (const mod of mobjectModules) {
     for (const [name, value] of Object.entries(mod)) {
       if (isSubclassOf(value, Mobject)) registry.registerMobject(name, value);

@@ -6,15 +6,31 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./node": { "types": "./dist/node.d.ts", "default": "./dist/node.js" },
-    "./browser": { "types": "./dist/browser.d.ts", "default": "./dist/browser.js" },
-    "./browser-three": { "types": "./dist/browser-three.d.ts", "default": "./dist/browser-three.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./browser-three": {
+      "types": "./dist/browser-three.d.ts",
+      "default": "./dist/browser-three.js"
+    }
   },
   "bin": {
     "manim-js": "./bin/manim-js.ts"
   },
-  "files": ["dist", "src", "bin"],
+  "files": [
+    "dist",
+    "src",
+    "bin"
+  ],
   "scripts": {
     "build": "tsc",
     "type-check": "tsc --noEmit",
@@ -36,7 +52,8 @@
   },
   "dependencies": {
     "mathjax-full": "^3.2.1",
-    "opentype.js": "^2.0.0"
+    "opentype.js": "^2.0.0",
+    "polygon-clipping": "^0.15.7"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

@@ -6,6 +6,8 @@ import type { VMobjectConfig } from "./VMobject.ts";
 import * as V from "../core/math/vector.ts";
 import { arcBezierPoints } from "../core/math/bezier.ts";
 import { RED, WHITE } from "../core/color.ts";
+import { ArrowTriangleFilledTip } from "./tips.ts";
+import type { ArrowTip } from "./tips.ts";
 
 export interface ArcConfig extends VMobjectConfig {
   radius?: number;
@@ -168,35 +170,75 @@ export class DashedLine extends Line {
 
 export interface ArrowConfig extends LineConfig {
   tipLength?: number;
+  buff?: number;
+  tipShape?: any;
+  maxTipLengthToLengthRatio?: number;
+  maxStrokeWidthToLengthRatio?: number;
 }
 
 export class Arrow extends Line {
   tipLength: number;
+  buff: number;
+  tipShape: any;
+  maxTipLengthToLengthRatio: number;
+  maxStrokeWidthToLengthRatio: number;
   _hasTip: boolean;
   tip: VMobject;
+  _origStart: number[];
+  _origEnd: number[];
 
   constructor(start: number[] | LineConfig = V.LEFT, end: number[] = V.RIGHT, config: ArrowConfig = {}) {
     super(start, end, config);
     this.tipLength = config.tipLength ?? 0.25;
+    // manim MED_SMALL_BUFF default; shortens the visible shaft at both ends.
+    this.buff = config.buff ?? 0.25;
+    this.tipShape = config.tipShape ?? ArrowTriangleFilledTip;
+    this.maxTipLengthToLengthRatio = config.maxTipLengthToLengthRatio ?? 0.25;
+    this.maxStrokeWidthToLengthRatio = config.maxStrokeWidthToLengthRatio ?? 5;
     this._hasTip = true;
+    this._origStart = V.clone(this.getStart());
+    this._origEnd = V.clone(this.getEnd());
+    this._applyBuff();
+    this._scaleForShortArrows();
     this.buildTip();
   }
 
+  // Trim the shaft by `buff` at each end so the tip does not overshoot.
+  private _applyBuff(): void {
+    if (this.buff <= 0) return;
+    const s = this._origStart;
+    const e = this._origEnd;
+    const total = V.distance(s, e);
+    if (total <= 2 * this.buff) return;
+    const dir = V.normalize(V.sub(e, s));
+    const ns = V.add(s, V.scale(dir, this.buff));
+    const ne = V.sub(e, V.scale(dir, this.buff));
+    this.setPointsAsCorners([ns, ne]);
+  }
+
+  // Shrink tip length / stroke width for very short arrows (manim behavior).
+  private _scaleForShortArrows(): void {
+    const length = V.distance(this.getStart(), this.getEnd()) + 2 * this.buff;
+    if (length <= 0) return;
+    const maxTip = length * this.maxTipLengthToLengthRatio;
+    if (this.tipLength > maxTip) this.tipLength = maxTip;
+    const maxStroke = length * this.maxStrokeWidthToLengthRatio;
+    if (this.strokeWidth > maxStroke) this.strokeWidth = maxStroke;
+  }
+
   buildTip(): this {
+    const TipClass = this.tipShape ?? ArrowTriangleFilledTip;
+    const tip: ArrowTip = new TipClass({ tipLength: this.tipLength }) as ArrowTip;
+    tip.setColor(this.strokeColor);
+    tip.fillOpacity = 1;
     const s = this.getStart();
     const e = this.getEnd();
     const dir = V.normalize(V.sub(e, s));
-    const back = V.scale(dir, -this.tipLength);
-    const perp = [-dir[1], dir[0], 0];
-    const base = V.add(e, back);
-    const p1 = V.add(base, V.scale(perp, this.tipLength * 0.5));
-    const p2 = V.sub(base, V.scale(perp, this.tipLength * 0.5));
-    const tip = new VMobject({ fillOpacity: 1 });
-    tip.setColor(this.strokeColor);
-    tip.setPointsAsCorners([e, p1, p2, e]);
-    tip.fillOpacity = 1;
-    this.tip = tip;
-    this.add(tip);
+    const angle = V.angleOf(dir);
+    tip.rotate(angle - tip.getTipAngle(), { aboutPoint: tip.getTipPoint() });
+    tip.shift(V.sub(e, tip.getTipPoint()));
+    this.tip = tip as unknown as VMobject;
+    this.add(this.tip);
     return this;
   }
 }
