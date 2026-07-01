@@ -49,6 +49,7 @@ src/
     mathtex.js         MathTex / Tex — LaTeX via MathJax → Bézier glyphs
     svg_path.js        SVG path `d` → cubic-Bézier subpaths (powers MathTex/VText)
     coordinate_systems.js  NumberLine, Axes (+ plot), NumberPlane
+    surface.js         Surface, Sphere, Torus, Cylinder, Cone, Cube, Box (shaded meshes)
     value_tracker.js   ValueTracker, DecimalNumber, Integer, alwaysRedraw
   scene/
     Scene.js           play()/wait(), fixed-fps frame emission (backend-agnostic)
@@ -126,6 +127,7 @@ node examples/graph.js     # Axes, plot(), ValueTracker, alwaysRedraw, LaggedSta
 node examples/morph.js     # VText — glyph outlines traced by Write, morphed by Transform
 node examples/mathtex.js   # MathTex — LaTeX (Euler's identity, sums, integrals) as Béziers
 node examples/threed.js    # ThreeDScene — projection camera orbiting a 3D scene
+node examples/surfaces.js  # Sphere, Torus, Cube, parametric saddle — shaded, depth-sorted
 node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello.mp4
 ```
 
@@ -141,6 +143,7 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Text (vector) | Text (Pango glyph paths) | ✅ `VText` | **real glyph outlines as Béziers** (via opentype.js) — Write traces them, Transform morphs letters into shapes |
 | LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex` | **MathJax → SVG → Béziers, no LaTeX install**; genuine glyph VMobjects that Write/Transform |
 | 3D | ThreeDScene, ThreeDAxes, move_camera | ✅ `ThreeDScene`, `ThreeDCamera`, `ThreeDAxes` | projection camera (φ/θ + perspective), `moveCamera`, ambient rotation, depth sort — **no WebGL, renders headlessly** |
+| Surfaces | Surface, Sphere, Cube, …, checkerboard, shading | ✅ `Surface`/`ParametricSurface`, `Sphere`, `Torus`, `Cylinder`, `Cone`, `Cube`, `Box` | quad-mesh faces, Lambertian shading, painter depth-sort, checkerboard/`colorFunc` |
 | Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)` |
 | Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ Create, Write, Uncreate | |
 | Transform | Transform, ReplacementTransform | ✅ same | automatic Bézier point-count alignment |
@@ -157,11 +160,11 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 
 ### Not yet ported
 
-- `Surface` / parametric-surface mobjects and lighting (the 3D **camera** and
-  `ThreeDAxes` exist; smooth-shaded surfaces do not).
-- A GPU/WebGL renderer. 3D uses a CPU projection camera (like manim's Cairo
-  renderer) so it works headlessly in Node. Three.js could be layered on as an
-  optional browser-only accelerated backend.
+- A GPU/WebGL renderer. 3D uses a CPU projection camera + painter's-algorithm
+  depth sort (like manim's Cairo renderer), so it works headlessly in Node.
+  Faces are flat-shaded per quad (no per-pixel/Gouraud smoothing) and there is
+  no true z-buffer, so deeply interpenetrating surfaces can mis-sort. Three.js
+  could be layered on as an optional browser-only accelerated backend.
 - `ImageMobject`, SVG-file import (the SVG **path** parser exists and powers
   `MathTex`/`VText`; a full `SVGMobject` file loader is not wrapped up), sound.
 - `MathTex` browser support currently expects MathJax to be initialized; the

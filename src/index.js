@@ -27,6 +27,9 @@ export { VText, setDefaultFont, setDefaultFontSync, getDefaultFont } from "./mob
 export { parsePathToSubpaths, subpathsToVMobject } from "./mobject/svg_path.js";
 export { MathTex, Tex, texToVGroup, initMathTex } from "./mobject/mathtex.js";
 export { ThreeDScene, ThreeDCamera, ThreeDAxes } from "./scene/three_d.js";
+export {
+  Surface, ParametricSurface, Sphere, Torus, Cylinder, Cone, Box, Cube,
+} from "./mobject/surface.js";
 export { NumberLine, Axes, NumberPlane } from "./mobject/coordinate_systems.js";
 export { ValueTracker, DecimalNumber, Integer, alwaysRedraw } from "./mobject/value_tracker.js";
 

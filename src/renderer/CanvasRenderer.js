@@ -4,6 +4,14 @@
 
 import { partialBezier } from "../core/math/bezier.js";
 
+// Average of a point list — a cheap face/mobject center for depth sorting.
+function centroid(points) {
+  let x = 0, y = 0, z = 0;
+  for (const p of points) { x += p[0]; y += p[1]; z += p[2]; }
+  const n = points.length || 1;
+  return [x / n, y / n, z / n];
+}
+
 export class Camera {
   constructor(config = {}) {
     this.pixelWidth = config.pixelWidth ?? 1920;
@@ -50,15 +58,22 @@ export class CanvasRenderer {
   }
 
   renderMobjects(mobjects) {
-    // Draw in z-index order, stable for equal z.
+    // Draw in z-index order, stable for equal z. With a 3D camera, break ties by
+    // painter's depth (far faces first) so surfaces self-occlude correctly.
+    const camera3d = typeof this.camera.projectionDepth === "function" ? this.camera : null;
     const flat = [];
+    let seq = 0;
     const collect = (m, inheritedZ) => {
       const z = m.zIndex ?? inheritedZ;
-      if (m.points && m.points.length) flat.push({ mob: m, z });
+      if (m.points && m.points.length) {
+        const depth = camera3d ? camera3d.projectionDepth(centroid(m.points)) : 0;
+        flat.push({ mob: m, z, depth, seq: seq++ });
+      }
       for (const s of m.submobjects) collect(s, z);
     };
     for (const m of mobjects) collect(m, 0);
-    flat.sort((a, b) => a.z - b.z);
+    // Ascending depth = far -> near (nearer draws last, on top).
+    flat.sort((a, b) => (a.z - b.z) || (a.depth - b.depth) || (a.seq - b.seq));
     for (const { mob } of flat) {
       if (mob._isText) this.drawText(mob);
       else this.drawVMobject(mob);
