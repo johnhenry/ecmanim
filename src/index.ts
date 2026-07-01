@@ -8,13 +8,22 @@ export {
   PI, TAU, DEGREES,
 } from "./core/math/vector.ts";
 
-export { Color } from "./core/color.ts";
+// Color: the Color class, the full palette (core names top-level + X11/XKCD/
+// SVGNAMES/BS381/AS2700/DVIPSNAMES namespaces), and all color utilities.
+export * from "./core/color.ts";
 export * as colors from "./core/color.ts";
+
+// Constants (buffers, axes, screen edges, enums, defaults). PI/TAU/DEGREES come
+// from vector.ts above, so exclude them here to avoid a duplicate export.
 export {
-  WHITE, BLACK, GRAY, GREY, RED, GREEN, BLUE, YELLOW, GOLD, ORANGE,
-  PURPLE, PINK, MAROON, TEAL, LIGHT_GRAY, DARK_GRAY, DARK_BLUE,
-  BLUE_A, BLUE_B, BLUE_C, BLUE_D, BLUE_E, GREEN_A, GREEN_C, GREEN_E, RED_C, RED_E,
-} from "./core/color.ts";
+  X_AXIS, Y_AXIS, Z_AXIS, TOP, BOTTOM, LEFT_SIDE, RIGHT_SIDE,
+  SMALL_BUFF, MED_SMALL_BUFF, MED_LARGE_BUFF, LARGE_BUFF,
+  DEFAULT_MOBJECT_TO_EDGE_BUFFER, DEFAULT_MOBJECT_TO_MOBJECT_BUFFER,
+  FRAME_HEIGHT, FRAME_WIDTH, FRAME_X_RADIUS, FRAME_Y_RADIUS, DEFAULT_FRAME_RATE,
+  EPSILON, DEFAULT_STROKE_WIDTH, DEFAULT_FONT_SIZE, DEFAULT_DOT_RADIUS, DEFAULT_ARROW_TIP_LENGTH,
+  RendererType, LineJointType, CapStyleType,
+} from "./core/constants.ts";
+export * as constants from "./core/constants.ts";
 
 export { Mobject, Group } from "./mobject/Mobject.ts";
 export { VMobject, VGroup } from "./mobject/VMobject.ts";
