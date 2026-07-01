@@ -37,6 +37,7 @@ export function collectBuffers(mobjects) {
   const tBuckets = new Map(); // alpha(rounded) -> {alpha, positions, colors}
   const lines = { positions: [], colors: [] };
   const texts = [];
+  const images = [];
 
   const pushTri = (target, a, b, c, ca, cb, cc) => {
     target.positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
@@ -47,6 +48,8 @@ export function collectBuffers(mobjects) {
     if (m.points && m.points.length) {
       if (m._isText) {
         texts.push(m);
+      } else if (m._isImage) {
+        images.push(m);
       } else {
         const opacity = m.opacity ?? 1;
         const loops = flattenMobject(m);
@@ -94,5 +97,5 @@ export function collectBuffers(mobjects) {
   };
 
   for (const m of mobjects) walk(m);
-  return { opaque, transparent: [...tBuckets.values()], lines, texts };
+  return { opaque, transparent: [...tBuckets.values()], lines, texts, images };
 }

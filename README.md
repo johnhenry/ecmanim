@@ -48,6 +48,8 @@ src/
     vectorized_text.js VText — real glyph outlines as Béziers (opentype.js)
     mathtex.js         MathTex / Tex — LaTeX via MathJax → Bézier glyphs
     svg_path.js        SVG path `d` → cubic-Bézier subpaths (powers MathTex/VText)
+    svg_mobject.js     SVGMobject — load an .svg file → animatable VMobjects
+    image_mobject.js   ImageMobject — a raster bitmap placed in the scene
     coordinate_systems.js  NumberLine, Axes (+ plot), NumberPlane
     surface.js         Surface, Sphere, Torus, Cylinder, Cone, Cube, Box (shaded meshes)
     value_tracker.js   ValueTracker, DecimalNumber, Integer, alwaysRedraw
@@ -166,6 +168,7 @@ node examples/threed.js    # ThreeDScene — projection camera orbiting a 3D sce
 node examples/surfaces.js  # Sphere, Torus, Cube, parametric saddle — shaded, depth-sorted
 node examples/interpenetrate.js  # z-buffer vs painter sorting on a sphere through a plane
 node examples/smooth.js    # smooth (Gouraud) vs flat shading on spheres + a torus
+node examples/media.js     # ImageMobject + SVGMobject + sound (MP4 with an audio track)
 node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello.mp4
 ```
 
@@ -194,6 +197,9 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Updaters | `mob.add_updater(fn)` | `mob.addUpdater((mob, dt) => …)` | run each frame during play/wait |
 | Rate funcs | smooth, rush_into, there_and_back, … | ✅ camelCase: `smooth`, `rushInto`, `thereAndBack`, … | |
 | Colors | WHITE, BLUE, RED, … | ✅ same names | plus `Color.lerp`, hex parsing |
+| Images | `ImageMobject` | ✅ `ImageMobject` | `loadImage`/`imageMobject` (Node) or `loadImage` (browser); positioned, scaled, faded |
+| SVG files | `SVGMobject` | ✅ `SVGMobject` | `loadSVG(path/url)`; parses paths/shapes/groups/transforms → animatable VMobjects |
+| Sound | `self.add_sound(file, time)` | ✅ `scene.addSound(file, {timeOffset, gain})` | Node muxes into the video via ffmpeg; browser plays live during playback |
 | Render targets | `-ql/-qm/-qh`, mp4/gif/png | ✅ quality presets, mp4/webm/gif/png-sequence | **+ browser (Canvas live + WebM), + WebGL (Three.js) GPU backend** |
 | Renderers | Cairo (2D) / OpenGL (GL) | ✅ Canvas-2D (CPU, Node+browser, z-buffer for 3D) + Three.js (WebGL, browser) | same Scene/mobjects drive both |
 
@@ -214,12 +220,16 @@ spheres/tori look smooth rather than faceted. Pass `smooth: false` for flat
 per-face shading, or `camera.flatShading = true` globally (`examples/smooth.js`
 shows both). `Cube`/`Box` are intentionally flat (hard edges).
 
-### Not yet ported
+### Minor divergences
 
-- `ImageMobject`, SVG-file import (the SVG **path** parser exists and powers
-  `MathTex`/`VText`; a full `SVGMobject` file loader is not wrapped up), sound.
-- `MathTex` browser support currently expects MathJax to be initialized; the
-  Node path auto-initializes it.
+- `MathTex`/`VText` in the browser expect MathJax / an opentype font to be
+  available (a bundler or import-map, or `setDefaultFont`); the Node path
+  auto-initializes both.
+- 3D is CPU-rasterized (with a z-buffer) by default and GPU-accelerated via the
+  optional Three.js backend; there is no built-in Phong/Gouraud *per-pixel*
+  lighting model beyond the shading described above.
+- `ImageMobject` in 3D is drawn at its projected bounding box (not perspective-
+  warped) in the CPU renderer; the WebGL backend places it as a true 3D quad.
 
 ## Testing
 

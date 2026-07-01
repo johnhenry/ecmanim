@@ -81,11 +81,11 @@ export class CanvasRenderer {
     const bg = parseHexColor(camera.background);
     this._zb.clear(bg[0], bg[1], bg[2]);
 
-    // Collect the drawable family; text is deferred to a vector overlay.
-    const texts = [];
+    // Collect the drawable family; text and images are deferred to an overlay.
+    const overlay = [];
     const draw = (m) => {
       if (m.points && m.points.length) {
-        if (m._isText) texts.push(m);
+        if (m._isText || m._isImage) overlay.push(m);
         else this._rasterMobject(m);
       }
       for (const s of m.submobjects) draw(s);
@@ -93,7 +93,7 @@ export class CanvasRenderer {
     for (const m of mobjects) draw(m);
 
     this._zb.blitTo(ctx);
-    for (const t of texts) this.drawText(t);
+    for (const m of overlay) m._isImage ? this.drawImage(m) : this.drawText(m);
   }
 
   _projectVertex(p) {
@@ -187,8 +187,28 @@ export class CanvasRenderer {
     flat.sort((a, b) => (a.z - b.z) || (a.depth - b.depth) || (a.seq - b.seq));
     for (const { mob } of flat) {
       if (mob._isText) this.drawText(mob);
+      else if (mob._isImage) this.drawImage(mob);
       else this.drawVMobject(mob);
     }
+  }
+
+  // Draw a raster ImageMobject into the pixel bounding box of its projected
+  // corners (axis-aligned; the common 2D case is exact, 3D is an approximation).
+  drawImage(mob) {
+    if (!mob.image) return;
+    const { ctx, camera } = this;
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (const p of mob.points) {
+      const [x, y] = camera.toPixel(p);
+      minx = Math.min(minx, x); miny = Math.min(miny, y);
+      maxx = Math.max(maxx, x); maxy = Math.max(maxy, y);
+    }
+    ctx.save();
+    ctx.globalAlpha = mob.opacity ?? 1;
+    try {
+      ctx.drawImage(mob.image, minx, miny, maxx - minx, maxy - miny);
+    } catch { /* unsupported drawable */ }
+    ctx.restore();
   }
 
   drawText(mob) {

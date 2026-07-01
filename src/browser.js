@@ -44,8 +44,16 @@ export async function play(sceneOrConstruct, options = {}) {
     const scene = makeScene(sceneOrConstruct, { fps, camera });
     const start = performance.now();
     let frame = 0;
+    const played = new Set();
     scene.frameHandler = async (mobjects) => {
       renderer.renderScene(mobjects);
+      // Fire scheduled sounds as the animation clock reaches them.
+      for (const s of scene.sounds) {
+        if (!played.has(s) && (s.time ?? 0) <= scene.time) {
+          played.add(s);
+          playSound(s);
+        }
+      }
       frame++;
       // Throttle to real-time based on target fps.
       const target = start + (frame * 1000) / fps;
@@ -55,6 +63,32 @@ export async function play(sceneOrConstruct, options = {}) {
   } while (loop);
 
   return { canvas };
+}
+
+function playSound(s) {
+  try {
+    const audio = new Audio(s.file);
+    audio.volume = Math.max(0, Math.min(1, s.gain ?? 1));
+    audio.play().catch(() => {});
+  } catch { /* no audio available */ }
+}
+
+// Load an SVG file into an SVGMobject (browser: fetch the URL).
+export async function loadSVG(url, config = {}) {
+  const { SVGMobject } = await import("./mobject/svg_mobject.js");
+  const text = await fetch(url).then((r) => r.text());
+  return new SVGMobject(text, config);
+}
+
+// Load a bitmap for ImageMobject (browser).
+export async function loadImage(src) {
+  if (typeof createImageBitmap === "function" && src instanceof Blob) return createImageBitmap(src);
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = src;
+  if (img.decode) { try { await img.decode(); return img; } catch { /* fall through */ } }
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+  return img;
 }
 
 // Record a scene to a WebM Blob (offline, as fast as the browser allows).

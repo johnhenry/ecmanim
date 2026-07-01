@@ -26,6 +26,8 @@ export { Text, MarkupText } from "./mobject/text/Text.js";
 export { VText, setDefaultFont, setDefaultFontSync, getDefaultFont } from "./mobject/vectorized_text.js";
 export { parsePathToSubpaths, subpathsToVMobject } from "./mobject/svg_path.js";
 export { MathTex, Tex, texToVGroup, initMathTex } from "./mobject/mathtex.js";
+export { ImageMobject } from "./mobject/image_mobject.js";
+export { SVGMobject, parseXML, parseTransform } from "./mobject/svg_mobject.js";
 export { ThreeDScene, ThreeDCamera, ThreeDAxes } from "./scene/three_d.js";
 export {
   Surface, ParametricSurface, Sphere, Torus, Cylinder, Cone, Box, Cube,

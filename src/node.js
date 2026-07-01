@@ -2,7 +2,7 @@
 // ffmpeg. This is the "runs everywhere manim runs" path.
 
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, renameSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Camera, CanvasRenderer } from "./renderer/CanvasRenderer.js";
 import { autoRegisterFonts, loadVectorFont } from "./renderer/fonts-node.js";
@@ -108,10 +108,67 @@ export async function render(sceneOrConstruct, options = {}) {
     });
   }
 
+  // Mux any scheduled sounds into the finished video.
+  if (ffmpeg && scene.sounds && scene.sounds.length) {
+    await muxAudio(outPath, scene.sounds, format, verbose);
+  }
+
   if (verbose) {
     console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${frameDir ?? outPath}`);
   }
-  return { output: frameDir ?? outPath, frames: emitted, fps, pixelWidth, pixelHeight };
+  return { output: frameDir ?? outPath, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0 };
+}
+
+// Overlay scheduled audio clips onto a rendered video with ffmpeg (delay each to
+// its start time, apply gain, mix, and remux keeping the video stream as-is).
+async function muxAudio(videoPath, sounds, format, verbose) {
+  const inputs = ["-i", videoPath];
+  const filters = [];
+  const labels = [];
+  sounds.forEach((s, i) => {
+    inputs.push("-i", resolve(s.file));
+    const d = Math.max(0, Math.round((s.time ?? 0) * 1000));
+    filters.push(`[${i + 1}:a]adelay=${d}|${d},volume=${s.gain ?? 1}[a${i}]`);
+    labels.push(`[a${i}]`);
+  });
+  const filterComplex = sounds.length === 1
+    ? filters[0]
+    : `${filters.join(";")};${labels.join("")}amix=inputs=${sounds.length}:normalize=0[aout]`;
+  const audioLabel = sounds.length === 1 ? "[a0]" : "[aout]";
+  const audioCodec = format === "webm" ? "libopus" : "aac";
+  const tmp = videoPath.replace(/(\.[^.]+)$/, ".withaudio$1");
+
+  const args = [
+    "-y", ...inputs,
+    "-filter_complex", filterComplex,
+    "-map", "0:v", "-map", audioLabel,
+    "-c:v", "copy", "-c:a", audioCodec, tmp,
+  ];
+  await new Promise((res, rej) => {
+    const ff = spawn("ffmpeg", args, { stdio: ["ignore", "inherit", verbose ? "inherit" : "ignore"] });
+    ff.on("close", (code) => (code === 0 ? res() : rej(new Error("ffmpeg audio mux exited " + code))));
+    ff.on("error", rej);
+  });
+  renameSync(tmp, videoPath);
+}
+
+// Load a bitmap for ImageMobject (Node: via @napi-rs/canvas).
+export async function loadImage(src) {
+  const { loadImage: load } = await loadCanvas();
+  return load(src);
+}
+
+// Convenience: load an image file straight into an ImageMobject.
+export async function imageMobject(src, config = {}) {
+  const { ImageMobject } = await import("./mobject/image_mobject.js");
+  return new ImageMobject(await loadImage(src), config);
+}
+
+// Load an SVG file into an SVGMobject (Node: read from disk).
+export async function loadSVG(path, config = {}) {
+  const { readFileSync } = await import("node:fs");
+  const { SVGMobject } = await import("./mobject/svg_mobject.js");
+  return new SVGMobject(readFileSync(resolve(path), "utf8"), config);
 }
 
 function startFfmpeg({ fps, pixelWidth, pixelHeight, outPath, format, verbose }) {

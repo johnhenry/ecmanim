@@ -10,6 +10,16 @@ export class Scene {
     this.frameHandler = config.frameHandler ?? (async () => {});
     this.time = 0;
     this.frameCount = 0;
+    this.sounds = [];
+  }
+
+  // Schedule an audio clip. Defaults to the current animation time, so calling
+  // it between play()/wait() lines lands the sound at that moment. The Node
+  // backend muxes these into the video with ffmpeg; the browser backend plays
+  // them live during playback.
+  addSound(file, { timeOffset, gain = 1 } = {}) {
+    this.sounds.push({ file, time: timeOffset ?? this.time, gain });
+    return this;
   }
 
   add(...mobs) {

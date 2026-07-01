@@ -76,6 +76,7 @@ export class ThreeRenderer {
     for (const b of buf.transparent) this.group.add(this._mesh(b, true, b.alpha));
     if (buf.lines.positions.length) this.group.add(this._lines(buf.lines));
     for (const t of buf.texts) { const s = this._textSprite(t); if (s) this.group.add(s); }
+    for (const im of buf.images) { const p = this._imageQuad(im); if (p) this.group.add(p); }
 
     this.syncCamera();
     this.renderer.render(this.scene, this.threeCamera);
@@ -125,6 +126,24 @@ export class ThreeRenderer {
     const wh = mob.getHeight() || mob.fontSize || 0.5;
     sprite.scale.set(wh * (canvas.width / canvas.height), wh, 1);
     return sprite;
+  }
+
+  // A textured quad built from the ImageMobject's four (possibly transformed)
+  // corner points, so it lives correctly in 3D.
+  _imageQuad(mob) {
+    const { THREE } = this;
+    if (!mob.image) return null;
+    const [tl, tr, br, bl] = mob.points;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([
+      tl[0], tl[1], tl[2], bl[0], bl[1], bl[2], br[0], br[1], br[2],
+      tl[0], tl[1], tl[2], br[0], br[1], br[2], tr[0], tr[1], tr[2],
+    ], 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1], 2));
+    const tex = new THREE.Texture(mob.image);
+    tex.needsUpdate = true;
+    const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: mob.opacity ?? 1, side: THREE.DoubleSide });
+    return new THREE.Mesh(g, m);
   }
 
   _clearGroup() {
