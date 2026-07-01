@@ -191,6 +191,31 @@ export async function loadSVG(path: string, config: any = {}) {
   return new SVGMobject(readFileSync(resolve(path), "utf8"), config);
 }
 
+// Node-only plugin loader (the analog of manim.cfg's `[CLI] plugins`). Accepts a
+// config object `{ plugins: [...] }` or a path to a manim.config.{js,json} that
+// default-exports one. Each entry is a plugin object or a module specifier whose
+// default export is the plugin. Registered via the shared registry.
+export async function loadPlugins(config: string | { plugins?: any[] } = "manim.config.js") {
+  const { registry } = await import("./index.ts");
+  let cfg: any = config;
+  if (typeof config === "string") {
+    const { pathToFileURL } = await import("node:url");
+    const p = resolve(config);
+    if (p.endsWith(".json")) {
+      const { readFileSync } = await import("node:fs");
+      cfg = JSON.parse(readFileSync(p, "utf8"));
+    } else {
+      const mod = await import(pathToFileURL(p).href);
+      cfg = mod.default ?? mod;
+    }
+  }
+  for (const entry of cfg?.plugins ?? []) {
+    const plugin = typeof entry === "string" ? (await import(entry)).default : entry;
+    if (plugin) registry.use(plugin);
+  }
+  return registry;
+}
+
 function startFfmpeg({ fps, pixelWidth, pixelHeight, outPath, format, verbose }: any) {
   const args = [
     "-y",

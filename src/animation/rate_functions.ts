@@ -2,6 +2,7 @@
 // Names mirror manim.utils.rate_functions.
 
 import type { RateFunc } from "../core/types.ts";
+import { registry } from "../plugins/registry.ts";
 
 export const linear = (t: number): number => t;
 
@@ -46,7 +47,9 @@ export const easeInOutCubic = (t: number): number => (t < 0.5 ? 4 * t * t * t : 
 export const thereAndBackClamp = thereAndBack;
 
 export function running(name: RateFunc | string): RateFunc {
-  return typeof name === "function" ? name : (RATE_FUNCTIONS[name] ?? smooth);
+  if (typeof name === "function") return name;
+  // Built-ins first, then any plugin-registered rate function, else smooth.
+  return RATE_FUNCTIONS[name] ?? registry.rateFunctions.get(name) ?? smooth;
 }
 
 export const RATE_FUNCTIONS: Record<string, RateFunc> = {

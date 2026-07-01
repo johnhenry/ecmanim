@@ -52,6 +52,12 @@ export {
 } from "./animation/extra.ts";
 export * as rate_functions from "./animation/rate_functions.ts";
 
+// Plugin system: register the built-ins, then expose use()/registry.
+import { registerBuiltins } from "./plugins/builtins.ts";
+registerBuiltins();
+export { use, registry, Registry } from "./plugins/registry.ts";
+export type { Plugin, PluginLike, RegistryKind } from "./plugins/registry.ts";
+
 // Quality presets mirroring manim's -ql / -qm / -qh flags.
 export const QUALITIES = {
   low: { pixelWidth: 854, pixelHeight: 480, fps: 15 },

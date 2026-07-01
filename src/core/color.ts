@@ -2,6 +2,7 @@
 // Accepts hex strings, {r,g,b} objects, or existing Color instances.
 
 import type { ColorLike } from "./types.ts";
+import { registry } from "../plugins/registry.ts";
 
 export class Color {
   r: number;
@@ -19,7 +20,11 @@ export class Color {
   static parse(input: ColorLike | Color | null | undefined): Color {
     if (input == null) return new Color(1, 1, 1, 1);
     if (input instanceof Color) return new Color(input.r, input.g, input.b, input.a);
-    if (typeof input === "string") return Color.fromHex(input);
+    if (typeof input === "string") {
+      // Resolve plugin-registered / named colors (e.g. "RED") to their hex.
+      const named = registry.colors.get(input);
+      return Color.fromHex(named ?? input);
+    }
     if (Array.isArray(input)) return new Color(input[0], input[1], input[2], input[3] ?? 1);
     if (typeof input === "object") return new Color(input.r ?? 1, input.g ?? 1, input.b ?? 1, input.a ?? 1);
     return new Color();
