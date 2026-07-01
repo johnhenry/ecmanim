@@ -1,0 +1,8 @@
+node_modules/
+examples/out/
+media/
+*_frames/
+*.mp4
+*.webm
+*.gif
+.DS_Store

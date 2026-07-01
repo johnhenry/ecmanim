@@ -1,0 +1,31 @@
+{
+  "name": "manim-js",
+  "version": "0.1.0",
+  "description": "A JavaScript port of manim (Mathematical Animation Engine). Runs in Node (renders to MP4 via ffmpeg) and in the browser (live canvas + WebM export).",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./node": "./src/node.js",
+    "./browser": "./src/browser.js"
+  },
+  "bin": {
+    "manim-js": "./bin/manim-js.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "example": "node examples/basic.js"
+  },
+  "keywords": [
+    "manim",
+    "animation",
+    "math",
+    "canvas",
+    "3blue1brown",
+    "bezier"
+  ],
+  "license": "MIT",
+  "optionalDependencies": {
+    "@napi-rs/canvas": "^0.1.100"
+  }
+}
