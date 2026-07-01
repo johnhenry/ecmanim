@@ -3,19 +3,23 @@
   "version": "0.1.0",
   "description": "A JavaScript port of manim (Mathematical Animation Engine). Runs in Node (renders to MP4 via ffmpeg) and in the browser (live canvas + WebM export).",
   "type": "module",
-  "main": "./src/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./node": "./src/node.js",
-    "./browser": "./src/browser.js",
-    "./browser-three": "./src/browser-three.js"
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./node": { "types": "./dist/node.d.ts", "default": "./dist/node.js" },
+    "./browser": { "types": "./dist/browser.d.ts", "default": "./dist/browser.js" },
+    "./browser-three": { "types": "./dist/browser-three.d.ts", "default": "./dist/browser-three.js" }
   },
   "bin": {
-    "manim-js": "./bin/manim-js.js"
+    "manim-js": "./bin/manim-js.ts"
   },
+  "files": ["dist", "src", "bin"],
   "scripts": {
-    "test": "node --test",
-    "example": "node examples/basic.js"
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "test": "node --test 'test/**/*.test.ts'",
+    "example": "node examples/basic.ts"
   },
   "keywords": [
     "manim",
@@ -33,5 +37,10 @@
   "dependencies": {
     "mathjax-full": "^3.2.1",
     "opentype.js": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.0",
+    "@types/three": "^0.185.0",
+    "typescript": "^6.0.3"
   }
 }

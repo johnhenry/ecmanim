@@ -6,3 +6,5 @@ media/
 *.webm
 *.gif
 .DS_Store
+dist/
+*.tsbuildinfo
