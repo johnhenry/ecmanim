@@ -1,0 +1,38 @@
+{
+  "name": "cyberpunk",
+  "version": "1.0.0",
+  "description": "A neon cyberpunk plugin: hot palette, a punchy 'thump' rate function, a Mobius strip surface, and a five-point star SVG shape. Portable across manim-js and Python manim.",
+  "colors": {
+    "NEON_PINK": "#ff2d95",
+    "NEON_CYAN": "#0ff0fc",
+    "ACID_GREEN": "#39ff14",
+    "DEEP_PURPLE": "#2d0b59"
+  },
+  "rateFunctions": {
+    "thump": "0.5 - 0.5*cos(t*2*pi)",
+    "overshoot": "t*t*(3 - 2*t)"
+  },
+  "surfaces": {
+    "MobiusStrip": {
+      "x": "(1 + (v/2)*cos(u/2))*cos(u)",
+      "y": "(1 + (v/2)*cos(u/2))*sin(u)",
+      "z": "(v/2)*sin(u/2)",
+      "uRange": [0, 6.283185307179586],
+      "vRange": [-1, 1],
+      "resolution": [48, 8],
+      "fillColor": "NEON_CYAN"
+    },
+    "NeonTorus": {
+      "x": "(3 + cos(v))*cos(u)",
+      "y": "(3 + cos(v))*sin(u)",
+      "z": "sin(v)",
+      "uRange": [0, 6.283185307179586],
+      "vRange": [0, 6.283185307179586],
+      "resolution": [36, 18],
+      "fillColor": "NEON_PINK"
+    }
+  },
+  "shapes": {
+    "NeonStar": "<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\"><polygon fill=\"#39ff14\" points=\"50,3 61,38 98,38 68,60 79,95 50,73 21,95 32,60 2,38 39,38\"/></svg>"
+  }
+}

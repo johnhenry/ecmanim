@@ -3,6 +3,15 @@
 
 import type { Vec3 } from "../types.ts";
 
+// Optional WASM accelerator, injected by src/wasm.ts once loaded (keeps this
+// core module dependency-free; earclipTriangulation uses it for simple polygons).
+let _wasmEarclip: ((points: number[][]) => number[]) | null = null;
+let _wasmReady: () => boolean = () => false;
+export function _setWasmEarclip(fn: (points: number[][]) => number[], ready: () => boolean): void {
+  _wasmEarclip = fn;
+  _wasmReady = ready;
+}
+
 export const vec = (x = 0, y = 0, z = 0): Vec3 => [x, y, z];
 
 export const add = (a: number[], b: number[]): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -284,6 +293,11 @@ export function shoelaceDirection(points: number[][]): "CW" | "CCW" {
  * by ringEnds). Returns a flat list of vertex-index triples.
  */
 export function earclipTriangulation(points: number[][], ringEnds?: number[]): number[] {
+  // Fast path: the shared WASM core handles simple polygons (no holes) when loaded.
+  if ((!ringEnds || ringEnds.length <= 1) && points.length >= 3 && _wasmEarclip && _wasmReady()) {
+    const tris = _wasmEarclip(points);
+    if (tris.length) return tris;
+  }
   const ends = ringEnds && ringEnds.length ? ringEnds : [points.length];
 
   // Build the traversal order, bridging holes to the outer ring by nearest

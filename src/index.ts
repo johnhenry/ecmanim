@@ -110,6 +110,9 @@ export * as rate_functions from "./animation/rate_functions.ts";
 // Plugin system: register the built-ins, then expose use()/registry.
 import { registerBuiltins } from "./plugins/builtins.ts";
 registerBuiltins();
+export { loadWasm, isWasmLoaded, bezierEvalWasm, earclipWasm, mat3VecWasm } from "./wasm.ts";
+export { loadManifest, loadManifestFromFile } from "./plugins/manifest.ts";
+export { compileExpr, evalExpr } from "./plugins/expr.ts";
 export { use, registry, Registry } from "./plugins/registry.ts";
 export type { Plugin, PluginLike, RegistryKind } from "./plugins/registry.ts";
 
