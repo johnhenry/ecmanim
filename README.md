@@ -1,12 +1,9 @@
 # manim-js
 
-A JavaScript port of [manim](https://github.com/ManimCommunity/manim) — the
-Mathematical Animation Engine popularized by 3Blue1Brown.
-
-**It runs everywhere manim runs** (Node.js → renders to `.mp4`/`.webm`/`.gif`
-via ffmpeg) **plus the browser** (live playback on a `<canvas>` and `.webm`
-export via `MediaRecorder`) — using the *exact same* `Scene`, mobject, and
-animation code on both targets.
+A **TypeScript** port of [manim](https://github.com/ManimCommunity/manim) — the
+Mathematical Animation Engine popularized by 3Blue1Brown — that renders the same
+`Scene` code in **Node** (MP4/WebM/GIF/MOV/PNG via ffmpeg) and in the **browser**
+(live Canvas-2D playback + WebM, plus an optional WebGL/Three.js backend).
 
 ```js
 import { render, Scene, Circle, Square, Transform, Create, BLUE, GREEN } from "manim-js/node";
@@ -23,154 +20,238 @@ class Demo extends Scene {
 await render(Demo, { output: "demo.mp4", quality: "high" });
 ```
 
-## Why a canvas-based port?
+## What makes it different
 
-manim's core object is the **`VMobject`** — a shape made of cubic Bézier
-curves. The browser's Canvas-2D API (`bezierCurveTo`) maps onto this almost
-perfectly, and Node gets the identical API from
-[`@napi-rs/canvas`](https://github.com/Brooooooklyn/canvas) (prebuilt binaries —
-**no system Cairo required**, so it works on NixOS out of the box). One renderer
-drives both. Video muxing on Node is done by piping PNG frames to `ffmpeg`.
-
-## Architecture
-
-```
-src/
-  core/
-    math/vector.js     [x,y,z] point/vector math + direction constants (UP, RIGHT, …)
-    math/bezier.js     cubic bezier eval, arc approximation, partial-curve splitting
-    color.js           Color class + manim palette (BLUE, RED, YELLOW, …)
-  mobject/
-    Mobject.js         base: submobject tree, transforms, bounds, .animate, updaters
-    VMobject.js        bezier shapes, fill/stroke, subpaths, point-count alignment
-    geometry.js        Arc Circle Dot Ellipse Annulus Line Arrow Polygon Rectangle Square …
-    text/Text.js       Canvas-text mobject with typewriter reveal
-    vectorized_text.js VText — real glyph outlines as Béziers (opentype.js)
-    mathtex.js         MathTex / Tex — LaTeX via MathJax → Bézier glyphs
-    svg_path.js        SVG path `d` → cubic-Bézier subpaths (powers MathTex/VText)
-    svg_mobject.js     SVGMobject — load an .svg file → animatable VMobjects
-    image_mobject.js   ImageMobject — a raster bitmap placed in the scene
-    coordinate_systems.js  NumberLine, Axes (+ plot), NumberPlane
-    surface.js         Surface, Sphere, Torus, Cylinder, Cone, Cube, Box (shaded meshes)
-    value_tracker.js   ValueTracker, DecimalNumber, Integer, alwaysRedraw
-  scene/
-    Scene.js           play()/wait(), fixed-fps frame emission (backend-agnostic)
-    three_d.js         ThreeDScene, ThreeDCamera (projection), ThreeDAxes
-  animation/
-    Animation.js       Animation base, Transform, Create, Write, Fade*, ApplyMethod
-    composition.js     AnimationGroup, LaggedStart, Succession, the .animate builder
-    extra.js           GrowFromCenter, SpinInFromNothing, Indicate, Flash, MoveAlongPath, …
-    rate_functions.js  smooth, linear, thereAndBack, easeInOut*, …
-  renderer/
-    CanvasRenderer.js  isomorphic: draws mobjects to any 2D context (+ 3D z-buffer path)
-    zbuffer.js         software rasterizer w/ per-pixel depth buffer (3D)
-    geometry_util.js   mobject tree -> GPU-ready vertex buffers (shared)
-    ThreeRenderer.js   WebGL renderer (Three.js) — GPU depth buffer, MSAA
-    fonts-node.js      auto-registers system fonts (@napi-rs/canvas + opentype)
-  node.js              Node backend: @napi-rs/canvas → ffmpeg
-  browser.js           Browser backend (Canvas-2D): live play() + record() → WebM
-  browser-three.js     Browser backend (WebGL/Three.js): GPU play() + record()
-```
+- **TypeScript, build-free in dev.** Node 25 runs the `.ts` sources directly via
+  type-stripping — no compile step to iterate. `tsc` emits `dist/` + `.d.ts` for
+  publishing and browser bundlers. See `npm run build` / `type-check` / `test`.
+- **Three render targets, one Scene.** The *exact same* mobject/animation/scene
+  code drives (1) headless Node video, (2) a live browser `<canvas>` with WebM
+  export, and (3) an optional GPU **WebGL/Three.js** backend. 3D uses a CPU
+  projection camera with a per-pixel software z-buffer and Gouraud shading, so it
+  renders headlessly with no GPU.
+- **Plugins, three ways.** A native `use(plugin)` registry (register mobjects,
+  animations, rate functions, colors, scenes), a portable **JSON manifest** that
+  loads into *both* manim-js and Python manim, and a shared **Rust→WASM math
+  core** callable from JS and Python (verified byte-identical). See
+  [docs/plugins.md](docs/plugins.md).
+- **Near-complete manim parity.** ~390 exports, ~120 registered mobjects, ~67
+  animations, all 45 registered rate functions (51 exported), and the full
+  ~2200-color palette. See the [parity table](#api-parity-with-manim).
 
 ## Install
 
 ```bash
-npm install            # installs @napi-rs/canvas (optional dep) for Node rendering
-# ffmpeg must be on PATH for video output
+npm install            # pulls @napi-rs/canvas + three as optional deps
+# ffmpeg (and ffprobe) must be on PATH for Node video output
 ```
 
-## Node usage
+`@napi-rs/canvas` ships prebuilt binaries — **no system Cairo required**, so it
+works on NixOS out of the box. Run `npx manim-js checkhealth` to verify node,
+ffmpeg, ffprobe, canvas, and fonts.
+
+## Quickstart
+
+### Node (render to a file)
 
 ```js
-import { render, Scene, /* mobjects, animations, colors */ } from "manim-js/node";
+import { render, Scene, Circle, Text, Create, YELLOW, BLUE } from "manim-js/node";
 
-await render(MySceneClass, {
-  output: "out.mp4",
-  quality: "medium",       // low | medium | high | fourk
-  format: "mp4",           // mp4 | webm | gif | png-sequence
-  background: "#0d1117",
-  fps: 30,                 // optional, overrides the quality preset
-});
+class Intro extends Scene {
+  async construct() {
+    const t = new Text("Hello, manim-js", { fontSize: 0.8, color: YELLOW, point: [0, 3, 0] });
+    await this.play(new Create(t));
+    await this.play(new Create(new Circle({ radius: 1.5, color: BLUE })));
+    await this.wait(0.5);
+  }
+}
 
-// Or render a bare construct function:
-await render(async (scene) => {
-  await scene.play(new Create(new Circle()));
-}, { output: "out.mp4" });
+await render(Intro, { output: "intro.mp4", quality: "medium" });   // low | medium | high | fourk | production
 ```
 
-### CLI
+Or from the CLI (see [docs/cli.md](docs/cli.md)):
 
 ```bash
-npx manim-js render myscene.js -q high -o out.mp4
-npx manim-js render myscene.js --scene IntroScene --format webm
+npx manim-js render intro.ts Intro -q high -o intro.mp4
 ```
 
-## Browser usage
+### Browser (live playback + WebM)
 
 ```html
 <canvas id="stage" width="1280" height="720"></canvas>
 <script type="module">
-  import { play, record, Scene, Circle, Create } from "./node_modules/manim-js/src/browser.js";
+  import { play, record, Scene, Circle, Create } from "manim-js/browser";
 
   class Demo extends Scene {
     async construct() { await this.play(new Create(new Circle({ radius: 2 }))); }
   }
 
   const canvas = document.getElementById("stage");
-  await play(Demo, { canvas, quality: "medium" });      // live, real-time playback
-
+  await play(Demo, { canvas, quality: "medium" });      // real-time playback
   const blob = await record(Demo, { quality: "high" }); // -> WebM Blob for download
 </script>
 ```
 
-See `examples/browser/index.html` for a complete page.
+See `examples/browser/index.html` for a full page and
+`examples/browser-three/index.html` for the WebGL backend.
 
-### WebGL (Three.js) backend
+## Backends
 
-For GPU-accelerated 3D there's an optional Three.js backend with the **same
-`play` / `record` API**, swapping only the draw step. It gives a hardware depth
-buffer (perfect interpenetration for free), MSAA, and real-time interactivity
-(OrbitControls). Fills become vertex-colored meshes, strokes become line
-segments, text becomes billboard sprites.
+| Entry point | Target | Output | Notes |
+|-------------|--------|--------|-------|
+| `manim-js` | isomorphic core | — | all mobjects/animations/scenes/colors + the plugin API; no renderer glue |
+| `manim-js/node` | Node.js | mp4, webm, gif, mov, png-sequence, png | `@napi-rs/canvas` → PNG frames piped to `ffmpeg`; partial-movie caching + sections |
+| `manim-js/browser` | browser (Canvas-2D) | live `<canvas>` + WebM | `play()` for real-time, `record()` → WebM `Blob` via `MediaRecorder` |
+| `manim-js/browser-three` | browser (WebGL) | live `<canvas>` + WebM | Three.js: hardware depth buffer, MSAA, OrbitControls; same `play`/`record` API |
 
-```html
-<script type="importmap">
-{ "imports": { "three": "/node_modules/three/build/three.module.js",
-               "three/addons/": "/node_modules/three/examples/jsm/" } }
-</script>
-<script type="module">
-  import * as THREE from "three";
-  import { play, ThreeDScene, ThreeDCamera, Sphere, DEGREES } from "/src/browser-three.js";
+The Canvas-2D CPU backend is the default and the only one needed for headless
+Node video. The Three.js backend is a browser-only GPU accelerator that swaps
+only the draw step (fills → vertex-colored meshes, strokes → line segments, text
+→ billboards). Architecture details: [docs/architecture.md](docs/architecture.md).
 
-  class Demo extends ThreeDScene {
-    async construct() {
-      this.add(new Sphere({ radius: 1.5 }));
-      await this.moveCamera({ theta: 30 * DEGREES }, { runTime: 3 });
-    }
-  }
-  await play(Demo, { canvas, three: THREE, camera: new ThreeDCamera({ phi: 68 * DEGREES }) });
-</script>
+## CLI
+
+```bash
+npx manim-js render scene.ts MyScene -q high -o out.mp4
+npx manim-js render scene.ts --scene IntroScene --format webm
+npx manim-js render scene.ts -s            # just the final frame as PNG
+npx manim-js render scene.ts -n 2,5        # only play() indices 2..5
+npx manim-js cfg --write                   # write manim.config.json
+npx manim-js init scene.ts                 # scaffold a starter scene
+npx manim-js plugins                       # list registered mobjects/animations/…
+npx manim-js checkhealth                   # node / ffmpeg / canvas / fonts
 ```
 
-Same `Scene`, mobjects, and animations as every other target. See
-`examples/browser-three/index.html` (includes an "Explore" orbit mode). The CPU
-Canvas backend remains the default and the only one needed for headless Node
-video; Three.js is a browser-only accelerator.
+Full flag and subcommand reference, config-file format, caching, and sections:
+[docs/cli.md](docs/cli.md).
+
+## Plugins
+
+Extend the engine three ways — see [docs/plugins.md](docs/plugins.md):
+
+```js
+import { use, loadManifest, loadWasm } from "manim-js";
+import heartPlugin from "./examples/plugins/heart-plugin.ts";
+import cyberpunk from "./examples/plugins/cyberpunk.manifest.json" with { type: "json" };
+
+use(heartPlugin);        // native: register a Heart mobject, Heartbeat animation, color, rate func
+loadManifest(cyberpunk); // portable JSON manifest: colors/rateFunctions/surfaces/shapes (also loads in Python manim)
+await loadWasm();         // shared Rust→WASM math core (also callable from Python via wasmtime)
+```
 
 ## Examples
 
-```bash
-node examples/basic.js     # shapes, Create, Transform, FadeOut, Text
-node examples/graph.js     # Axes, plot(), ValueTracker, alwaysRedraw, LaggedStart, Indicate
-node examples/morph.js     # VText — glyph outlines traced by Write, morphed by Transform
-node examples/mathtex.js   # MathTex — LaTeX (Euler's identity, sums, integrals) as Béziers
-node examples/threed.js    # ThreeDScene — projection camera orbiting a 3D scene
-node examples/surfaces.js  # Sphere, Torus, Cube, parametric saddle — shaded, depth-sorted
-node examples/interpenetrate.js  # z-buffer vs painter sorting on a sphere through a plane
-node examples/smooth.js    # smooth (Gouraud) vs flat shading on spheres + a torus
-node examples/media.js     # ImageMobject + SVGMobject + sound (MP4 with an audio track)
-node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello.mp4
+Render any of these with `node examples/<name>.ts` (writes to `examples/out/`):
+
+| File | Shows |
+|------|-------|
+| `examples/basic.ts` | shapes, Create, Transform, FadeOut, Text |
+| `examples/graph.ts` | Axes, `plot()`, ValueTracker, alwaysRedraw, LaggedStart, Indicate |
+| `examples/hello-scene.ts` | minimal Scene + `nextSection()` (used by the CLI docs) |
+| `examples/morph.ts` | VText — glyph outlines traced by Write, morphed by Transform |
+| `examples/mathtex.ts` | MathTex — LaTeX (Euler's identity, sums, integrals) as Béziers |
+| `examples/threed.ts` | ThreeDScene — projection camera orbiting a 3D scene |
+| `examples/surfaces.ts` | Sphere, Torus, Cube, parametric saddle — shaded, depth-sorted |
+| `examples/interpenetrate.ts` | z-buffer vs painter sorting on a sphere through a plane |
+| `examples/smooth.ts` | smooth (Gouraud) vs flat shading on spheres + a torus |
+| `examples/media.ts` | ImageMobject + SVGMobject + sound (MP4 with an audio track) |
+| `examples/browser/index.html` | browser Canvas-2D backend (live + WebM export) |
+| `examples/browser-three/index.html` | browser WebGL/Three.js backend (+ "Explore" orbit mode) |
+| `examples/plugins/heart-plugin.ts` | native `use()` plugin |
+| `examples/plugins/cyberpunk.manifest.json` | portable cross-language manifest |
+
+## Architecture
+
 ```
+src/
+  core/
+    math/vector.ts     [x,y,z] point/vector math + direction constants (UP, RIGHT, …)
+    math/bezier.ts     cubic bezier eval, arc approximation, partial-curve splitting
+    math/paths.ts      path functions (straight/arc/counterclockwise) for MoveAlongPath etc.
+    color.ts           Color class + color utilities
+    colors_data.ts     the full ~2200-color palette (core + X11/XKCD/SVG/BS381/AS2700/DVIPS)
+    constants.ts       buffers, screen edges, enums (RendererType, LineJointType, CapStyleType)
+    types.ts           shared types (RateFunc, …)
+  mobject/
+    Mobject.ts         base: submobject tree, transforms, bounds, .animate, updaters
+    VMobject.ts        bezier shapes, fill/stroke, subpaths, point-count alignment
+    geometry.ts        Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon Rectangle Square …
+    tips.ts arcs.ts    arrow tips; ArcBetweenPoints, CurvedArrow, Sector, Angle, AnnularSector
+    polygram.ts        Polygram, RegularPolygram, Star, RoundedRectangle
+    boolean_ops.ts     Union/Difference/Intersection/Exclusion (polygon-clipping)
+    matrix.ts table.ts Matrix, IntegerMatrix, DecimalMatrix; Table, MathTable, MobjectTable
+    brace.ts           Brace, BraceLabel, BraceBetweenPoints, BraceText
+    graph.ts           Graph, DiGraph (network graphs + layouts)
+    vectors.ts         Vector, Arrow-based vector helpers
+    labeled.ts         LabeledLine, LabeledArrow
+    shape_matchers.ts  SurroundingRectangle, BackgroundRectangle, Cross, Underline
+    coordinate_systems.ts NumberLine, Axes, NumberPlane, PolarPlane, ComplexPlane, UnitInterval
+    functions.ts       ParametricFunction, FunctionGraph, ImplicitFunction
+    graphing_scale.ts  LogBase and axis scaling helpers
+    probability.ts     BarChart, SampleSpace
+    vector_field.ts    VectorField, ArrowVectorField, StreamLines
+    surface.ts         Surface/ParametricSurface, Sphere, Torus, Cylinder, Cone, Box, Cube,
+                       Prism, Dot3D, Line3D, Arrow3D, ThreeDVMobject (+ caps)
+    polyhedra.ts       Polyhedron, Tetrahedron, Octahedron, Icosahedron, Dodecahedron, ConvexHull3D
+    value_tracker.ts   ValueTracker, DecimalNumber, Integer, alwaysRedraw
+    complex_value_tracker.ts  ComplexValueTracker
+    text/Text.ts       Text/MarkupText (Canvas glyphs, .chars, t2c) + RasterText
+    text/paragraph.ts  Paragraph, Title
+    text/code.ts       Code (syntax-highlighted listings)
+    text/variable.ts   Variable (label = tracked DecimalNumber)
+    text/tex_extras.ts Tex text-mode helpers
+    vectorized_text.ts VText — real glyph outlines as Béziers (opentype.js)
+    mathtex.ts         MathTex / Tex / SingleStringMathTex — LaTeX via MathJax → Bézier glyphs (token/part model)
+    svg_path.ts        SVG path `d` → cubic-Bézier subpaths (powers MathTex/VText)
+    svg_mobject.ts     SVGMobject — load an .svg → animatable VMobjects
+    image_mobject.ts   ImageMobject — a raster bitmap in the scene
+  scene/
+    Scene.ts           play()/wait(), fixed-fps frame emission, sections (nextSection)
+    three_d.ts         ThreeDScene, ThreeDCamera (projection), ThreeDAxes
+    moving_camera_scene.ts  MovingCameraScene, ScreenRectangle, FullScreenRectangle
+    zoomed_scene.ts    ZoomedScene
+    vector_space_scene.ts   VectorScene, LinearTransformationScene
+  camera/
+    multi_camera.ts    MultiCamera
+    mapping_camera.ts  MappingCamera
+  animation/
+    Animation.ts       Animation base, Transform, Create, Write, Fade*, ApplyMethod, MoveTo, …
+    composition.ts     AnimationGroup, LaggedStart, LaggedStartMap, Succession, the .animate builder
+    extra.ts           GrowFrom*, SpinInFromNothing, Indicate, Flash, Wiggle, Circumscribe, FocusOn, …
+    creation_extra.ts  DrawBorderThenFill, Unwrite, TypeWithCursor, SpiralIn, letter/word reveals
+    transform_extra.ts TransformFromCopy, MoveToTarget, Restore, ApplyMatrix, ApplyComplexFunction, …
+    transform_matching.ts  TransformMatchingShapes, TransformMatchingTex
+    movement.ts        Homotopy, SmoothedVectorizedHomotopy, ComplexHomotopy, PhaseFlow
+    indication_extra.ts ShowPassingFlash, ApplyWave, Blink
+    changing.ts        AnimatedBoundary, TracedPath
+    numbers.ts         ChangingDecimal, ChangeDecimalToValue
+    specialized.ts     Broadcast, ChangeSpeed
+    rate_functions.ts  all 58 rate curves (45 registered by name)
+  renderer/
+    CanvasRenderer.ts  isomorphic: draws mobjects to any 2D context (+ 3D z-buffer path)
+    zbuffer.ts         software rasterizer w/ per-pixel depth buffer (3D)
+    geometry_util.ts   mobject tree → GPU-ready vertex buffers (shared by ThreeRenderer)
+    ThreeRenderer.ts   WebGL renderer (Three.js) — GPU depth buffer, MSAA
+    fonts-node.ts      auto-registers system fonts (@napi-rs/canvas + opentype)
+  plugins/
+    registry.ts        the shared Registry + use()
+    builtins.ts        registers all built-in mobjects/animations/rate-funcs/colors/scenes
+    manifest.ts        loadManifest() — portable JSON manifest → registry
+    expr.ts            safe recursive-descent expression evaluator (no eval)
+  wasm.ts              loader for the shared Rust→WASM math core
+  node.ts              Node backend: @napi-rs/canvas → ffmpeg (+ caching, sections)
+  browser.ts           Browser backend (Canvas-2D): live play() + record() → WebM
+  browser-three.ts     Browser backend (WebGL/Three.js): GPU play() + record()
+  index.ts             isomorphic entry point (registers built-ins on import)
+
+packages/
+  plugin-spec/         portable manifest JSON Schema + expression grammar (the shared spec)
+  manim-portable-plugins/  Python adapter: load the same manifest into Python manim
+  manim-wasm/          Rust source (lib.rs) + compiled manim_core.wasm + Python (wasmtime) loader
+```
+
+Deeper module map, rendering pipeline, and registry mechanics:
+[docs/architecture.md](docs/architecture.md).
 
 ## API parity with manim
 
@@ -180,62 +261,90 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Play | `self.play(a, b, run_time=2)` | `await this.play(a, b, { _playConfig: true, runTime: 2 })` | parallel by default |
 | `.animate` | `mob.animate.shift(RIGHT)` | `mob.animate.shift([1,0,0])` | chainable proxy |
 | Geometry | Circle, Square, Line, Polygon, … | ✅ same | Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon RegularPolygon Triangle Rectangle Square |
-| Text (raster) | Text | ✅ `Text` | fast Canvas text, typewriter reveal for Write/Create |
-| Text (vector) | Text (Pango glyph paths) | ✅ `VText` | **real glyph outlines as Béziers** (via opentype.js) — Write traces them, Transform morphs letters into shapes |
-| LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex` | **MathJax → SVG → Béziers, no LaTeX install**; genuine glyph VMobjects that Write/Transform |
-| 3D | ThreeDScene, ThreeDAxes, move_camera | ✅ `ThreeDScene`, `ThreeDCamera`, `ThreeDAxes` | projection camera (φ/θ + perspective), `moveCamera`, ambient rotation, depth sort — **no WebGL, renders headlessly** |
-| Surfaces | Surface, Sphere, Cube, …, checkerboard, shading | ✅ `Surface`/`ParametricSurface`, `Sphere`, `Torus`, `Cylinder`, `Cone`, `Cube`, `Box` | quad-mesh faces, **smooth (Gouraud) or flat shading**, checkerboard/`colorFunc`, **per-pixel z-buffer** so interpenetrating surfaces resolve correctly |
+| Tips / arcs | ArrowTip, ArcBetweenPoints, CurvedArrow, Sector, Angle | ✅ same | tips.ts, arcs.ts — Sector/AnnularSector/Angle/RightAngle |
+| Polygrams | Polygram, RegularPolygram, Star, RoundedRectangle | ✅ same | polygram.ts |
+| Boolean ops | Union, Difference, Intersection, Exclusion | ✅ same | via `polygon-clipping` |
+| Matrix | Matrix, IntegerMatrix, DecimalMatrix | ✅ same | brackets, entries, `get_rows/get_columns` |
+| Table | Table, MathTable, MobjectTable | ✅ same | row/col labels, lines, highlights |
+| Brace | Brace, BraceLabel, BraceBetweenPoints, BraceText | ✅ same | |
+| Graphs | Graph, DiGraph | ✅ same | vertices/edges + layouts |
+| Text (raster) | Text | ✅ `Text` / `RasterText` | fast Canvas text, typewriter reveal for Write/Create, `.chars`, `t2c` |
+| Text (vector) | Text (Pango glyph paths) | ✅ `VText` | **real glyph outlines as Béziers** (opentype.js) — Write traces, Transform morphs |
+| Markup | MarkupText | ✅ `MarkupText` | inline color/style spans |
+| LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex`, `SingleStringMathTex` | **MathJax → SVG → Béziers, no LaTeX binary**; token/part model, text-mode `Tex` |
+| Code / prose | Code, Paragraph, Title, Variable | ✅ same | syntax-highlighted `Code`, `Paragraph`, `Title`, tracked `Variable` |
 | Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)` |
-| Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ Create, Write, Uncreate | |
+| Axes helpers | area, Riemann rects, secant/tangent, labels | ✅ same | `get_area`, Riemann rectangles, secant/tangent lines, axis labels |
+| Planes | PolarPlane, ComplexPlane, LogBase | ✅ same | polar/complex planes, log-scaled axes |
+| Function plots | ParametricFunction, FunctionGraph, ImplicitFunction | ✅ same | functions.ts |
+| Charts | BarChart, SampleSpace | ✅ same | probability.ts |
+| Vector fields | VectorField, ArrowVectorField, StreamLines | ✅ same | vector_field.ts |
+| 3D | ThreeDScene, ThreeDAxes, move_camera | ✅ same | projection camera (φ/θ + perspective), `moveCamera`, ambient rotation, gamma/light, fixed-in-frame |
+| 3D solids | Sphere, Torus, Cylinder, Cone, Cube, Box, Prism | ✅ same | + caps, Dot3D, Line3D, Arrow3D, ThreeDVMobject |
+| Polyhedra | Tetrahedron, Octahedron, Icosahedron, Dodecahedron | ✅ same | + Polyhedron, ConvexHull3D |
+| Surfaces | Surface, checkerboard, shading | ✅ `Surface`/`ParametricSurface` | quad-mesh faces, **smooth (Gouraud) or flat shading**, checkerboard/`colorFunc`, **per-pixel z-buffer** |
+| Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ same | + Unwrite, SpiralIn, letter/word/typewriter reveals |
 | Transform | Transform, ReplacementTransform | ✅ same | automatic Bézier point-count alignment |
-| Fading | FadeIn, FadeOut (+shift/scale) | ✅ same | |
+| Transform (matching) | TransformMatchingShapes, TransformMatchingTex | ✅ same | transform_matching.ts |
+| Transform (extra) | MoveToTarget, Restore, ApplyMatrix, ApplyComplexFunction, … | ✅ same | transform_extra.ts |
+| Fading | FadeIn, FadeOut (+shift/scale), FadeTransform | ✅ same | |
 | Growth | GrowFromCenter/Point/Edge, SpinInFromNothing, ShrinkToCenter | ✅ same | |
-| Motion | MoveAlongPath, Rotate, Rotating, ApplyMethod | ✅ same | |
-| Emphasis | Indicate, Flash, Wiggle, Circumscribe, FocusOn | ✅ same | |
-| Groups | AnimationGroup, LaggedStart, Succession | ✅ same | `lagRatio` timing matches manim |
-| Trackers | ValueTracker, DecimalNumber, Integer, always_redraw | ✅ ValueTracker, DecimalNumber, Integer, `alwaysRedraw` | |
+| Motion | MoveAlongPath, Rotate, Rotating, ApplyMethod, Homotopy, PhaseFlow | ✅ same | movement.ts |
+| Emphasis | Indicate, Flash, Wiggle, Circumscribe, FocusOn, ApplyWave, Blink | ✅ same | |
+| Groups | AnimationGroup, LaggedStart, LaggedStartMap, Succession | ✅ same | `lagRatio` timing matches manim |
+| Changing | AnimatedBoundary, TracedPath | ✅ same | |
+| Trackers | ValueTracker, DecimalNumber, Integer, ComplexValueTracker, always_redraw | ✅ same | `alwaysRedraw`; DecimalNumber is raster-backed (see below) |
 | Updaters | `mob.add_updater(fn)` | `mob.addUpdater((mob, dt) => …)` | run each frame during play/wait |
-| Rate funcs | smooth, rush_into, there_and_back, … | ✅ camelCase: `smooth`, `rushInto`, `thereAndBack`, … | |
-| Colors | WHITE, BLUE, RED, … | ✅ same names | plus `Color.lerp`, hex parsing |
-| Images | `ImageMobject` | ✅ `ImageMobject` | `loadImage`/`imageMobject` (Node) or `loadImage` (browser); positioned, scaled, faded |
-| SVG files | `SVGMobject` | ✅ `SVGMobject` | `loadSVG(path/url)`; parses paths/shapes/groups/transforms → animatable VMobjects |
-| Sound | `self.add_sound(file, time)` | ✅ `scene.addSound(file, {timeOffset, gain})` | Node muxes into the video via ffmpeg; browser plays live during playback |
-| Render targets | `-ql/-qm/-qh`, mp4/gif/png | ✅ quality presets, mp4/webm/gif/png-sequence | **+ browser (Canvas live + WebM), + WebGL (Three.js) GPU backend** |
+| Rate funcs | smooth, rush_into, there_and_back, … (58) | ✅ camelCase (58 exported, 45 registered) | `smooth`, `rushInto`, `thereAndBack`, … |
+| Colors | WHITE, BLUE, RED, … | ✅ same names + ~2200 palette | X11/XKCD/SVG/BS381/AS2700/DVIPS namespaces + `Color.lerp`, hex parsing |
+| Images | `ImageMobject` | ✅ `ImageMobject` | positioned, scaled, faded |
+| SVG files | `SVGMobject` | ✅ `SVGMobject` | parses paths/shapes/groups/transforms → animatable VMobjects |
+| Sound | `self.add_sound(file, time)` | ✅ `scene.addSound(file, {timeOffset, gain})` | Node muxes via ffmpeg; browser plays live |
+| Cameras | MovingCamera, MultiCamera, MappingCamera | ✅ MovingCameraScene, ZoomedScene, MultiCamera, MappingCamera | |
+| Vector scenes | VectorScene, LinearTransformationScene | ✅ same | vector_space_scene.ts |
+| Sections | `self.next_section(...)` | ✅ `scene.nextSection(...)` | `--save_sections` writes per-section videos + JSON index |
+| Config / caching | `manim.cfg`, partial-movie cache | ✅ `manim.config.{js,json}`, partial-movie cache | layered config, content-hash partials, `--disable_caching`/`--flush_cache` |
+| Render targets | `-ql/-qm/-qh`, mp4/gif/png | ✅ quality presets, mp4/webm/gif/mov/png | **+ browser (Canvas live + WebM), + WebGL (Three.js) GPU backend** |
 | Renderers | Cairo (2D) / OpenGL (GL) | ✅ Canvas-2D (CPU, Node+browser, z-buffer for 3D) + Three.js (WebGL, browser) | same Scene/mobjects drive both |
+| Plugins | `manim.plugins` entry points | ✅ `use()` + portable JSON manifest + WASM core | manifest loads in manim-js *and* Python manim; WASM callable from both |
 
-### 3D rendering
+### Honest divergences
 
-3D uses a CPU **projection camera** (like manim's Cairo renderer), so it renders
-headlessly in Node with no GPU/WebGL. When a `ThreeDCamera` is active the
-renderer switches to a **software rasterizer with a per-pixel z-buffer**
-(`src/renderer/zbuffer.js`): filled faces become depth-tested triangles and
-strokes become depth-tested lines, so *interpenetrating* surfaces (e.g. a sphere
-poking through a plane) resolve correctly per pixel rather than mis-sorting.
-Set `camera.disableZBuffer = true` to fall back to per-face painter sorting
-(see `examples/interpenetrate.js` for the side-by-side).
-
-Parametric surfaces default to **smooth (Gouraud) shading** — each corner is lit
-by an analytic surface normal and the color is interpolated across the face, so
-spheres/tori look smooth rather than faceted. Pass `smooth: false` for flat
-per-face shading, or `camera.flatShading = true` globally (`examples/smooth.js`
-shows both). `Cube`/`Box` are intentionally flat (hard edges).
-
-### Minor divergences
-
-- `MathTex`/`VText` in the browser expect MathJax / an opentype font to be
-  available (a bundler or import-map, or `setDefaultFont`); the Node path
-  auto-initializes both.
-- 3D is CPU-rasterized (with a z-buffer) by default and GPU-accelerated via the
-  optional Three.js backend; there is no built-in Phong/Gouraud *per-pixel*
-  lighting model beyond the shading described above.
-- `ImageMobject` in 3D is drawn at its projected bounding box (not perspective-
-  warped) in the CPU renderer; the WebGL backend places it as a true 3D quad.
+- **`DecimalNumber` is raster-backed.** It extends `RasterText` (Canvas glyphs),
+  not vector glyphs, so number labels are drawn as bitmap text rather than Béziers.
+- **`MathTex` / `VText` in the browser need a font/bundler.** They expect MathJax
+  and an opentype font to be available (via a bundler, import-map, or
+  `setDefaultFont`). The Node path auto-initializes both.
+- **No true LaTeX binary.** `MathTex`/`Tex` render via **MathJax → SVG → Béziers**,
+  not a real LaTeX/dvipng toolchain, so exotic LaTeX packages are out of scope.
+- **3D is CPU-projection, not GPU-lit.** The default renderer is a software
+  projection camera with a per-pixel z-buffer and Gouraud/flat shading — there is
+  no per-pixel Phong lighting model. The optional Three.js backend adds GPU depth
+  and MSAA but the same shading approximation.
+- **`ImageMobject` in 3D** is drawn at its projected bounding box in the CPU
+  renderer (not perspective-warped); the WebGL backend places it as a true 3D quad.
+- **Python side of manifest/WASM needs its own runtimes.** Loading a manifest into
+  Python manim requires `manim` installed (`manim-portable-plugins[manim]`), and
+  calling the WASM core from Python requires `wasmtime`.
 
 ## Testing
 
 ```bash
-npm test    # node --test — 32 tests across math, mobjects, animations, integration + a headless render
+npm test    # node --test — ~300 tests across 38 files (math, mobjects, animations,
+            # 3D/z-buffer, plugins, manifest, CLI/config, integration + headless renders)
 ```
+
+## Building
+
+```bash
+npm run type-check   # tsc --noEmit (strict-ish; see tsconfig.json)
+npm run build        # tsc → dist/ (JS + .d.ts + sourcemaps) for publish/bundlers
+```
+
+Node 25+ runs the `.ts` sources directly (type-stripping), so no build is needed
+for local development, the CLI, or the examples — `dist/` exists for publishing
+and browser bundlers via the package `exports` map (`.`, `./node`, `./browser`,
+`./browser-three`).
 
 ## License
 
