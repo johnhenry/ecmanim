@@ -2,7 +2,17 @@
 // isomorphic: the same code drives a browser <canvas> and a Node
 // @napi-rs/canvas surface. It knows nothing about video or the DOM.
 
-import { partialBezier } from "../core/math/bezier.js";
+import { partialBezier, bezier } from "../core/math/bezier.js";
+import { ZBuffer } from "./zbuffer.js";
+import { Color } from "../core/color.js";
+
+const to255 = (c) => [
+  Math.round(Math.max(0, Math.min(1, c.r)) * 255),
+  Math.round(Math.max(0, Math.min(1, c.g)) * 255),
+  Math.round(Math.max(0, Math.min(1, c.b)) * 255),
+];
+
+const parseHexColor = (str) => to255(Color.parse(str));
 
 // Average of a point list — a cheap face/mobject center for depth sorting.
 function centroid(points) {
@@ -53,8 +63,94 @@ export class CanvasRenderer {
   }
 
   renderScene(mobjects) {
+    // With a 3D camera, use the depth-buffered rasterizer so interpenetrating
+    // surfaces resolve per pixel (painter sorting can't). 2D uses vector fills.
+    if (typeof this.camera.projectionDepth === "function" && !this.camera.disableZBuffer) {
+      this.renderScene3D(mobjects);
+      return;
+    }
     this.clear();
     this.renderMobjects(mobjects);
+  }
+
+  // --- 3D depth-buffered path --------------------------------------------
+  renderScene3D(mobjects) {
+    const { ctx, camera } = this;
+    if (!this._zb) this._zb = new ZBuffer(camera.pixelWidth, camera.pixelHeight);
+    this._zb.resize(camera.pixelWidth, camera.pixelHeight);
+    const bg = parseHexColor(camera.background);
+    this._zb.clear(bg[0], bg[1], bg[2]);
+
+    // Collect the drawable family; text is deferred to a vector overlay.
+    const texts = [];
+    const draw = (m) => {
+      if (m.points && m.points.length) {
+        if (m._isText) texts.push(m);
+        else this._rasterMobject(m);
+      }
+      for (const s of m.submobjects) draw(s);
+    };
+    for (const m of mobjects) draw(m);
+
+    this._zb.blitTo(ctx);
+    for (const t of texts) this.drawText(t);
+  }
+
+  _projectVertex(p) {
+    const [x, y] = this.camera.toPixel(p);
+    return { x, y, z: this.camera.projectionDepth(p) };
+  }
+
+  // Flatten a VMobject's subpaths into world-space polygon loops.
+  _flatten(mob) {
+    const seg = mob._straightPath ? 1 : 6;
+    const loops = [];
+    for (const sp of mob.getSubpaths()) {
+      const nc = Math.floor((sp.length - 1) / 3);
+      if (nc < 1) continue;
+      const loop = [sp[0]];
+      for (let i = 0; i < nc; i++) {
+        const a = sp[3 * i], c1 = sp[3 * i + 1], c2 = sp[3 * i + 2], b = sp[3 * i + 3];
+        for (let k = 1; k <= seg; k++) loop.push(seg === 1 ? b : bezier(a, c1, c2, b, k / seg));
+      }
+      loops.push(loop);
+    }
+    return loops;
+  }
+
+  _rasterMobject(mob) {
+    const zb = this._zb;
+    const opacity = mob.opacity ?? 1;
+    const loops = this._flatten(mob);
+
+    const fillAlpha = (mob.fillOpacity ?? 0) * opacity;
+    if (fillAlpha > 0 && mob.fillColor) {
+      const rgb = to255(mob.fillColor);
+      for (const loop of loops) {
+        const n = loop.length;
+        if (n < 3) continue;
+        const c = this._projectVertex(centroid(loop));
+        const proj = loop.map((p) => this._projectVertex(p));
+        for (let i = 0; i < n; i++) {
+          zb.triangle(c, proj[i], proj[(i + 1) % n], rgb, fillAlpha);
+        }
+      }
+    }
+
+    const strokeAlpha = (mob.strokeOpacity ?? 1) * opacity;
+    const strokeWidth = mob.strokeWidth ?? 0;
+    if (strokeWidth > 0 && strokeAlpha > 0 && mob.strokeColor) {
+      const rgb = to255(mob.strokeColor);
+      const halfWidth = (strokeWidth * this.camera.strokeScale()) / 2;
+      // Bias edges toward the viewer so grid lines sit atop coplanar faces.
+      const bias = 0.02 * (this.camera.focalDistance ?? 20) / 20 + 0.01;
+      for (const loop of loops) {
+        const proj = loop.map((p) => this._projectVertex(p));
+        for (let i = 0; i < proj.length - 1; i++) {
+          zb.line(proj[i], proj[i + 1], halfWidth, rgb, strokeAlpha, bias);
+        }
+      }
+    }
   }
 
   renderMobjects(mobjects) {

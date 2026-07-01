@@ -50,6 +50,7 @@ export class VMobject extends Mobject {
   setPointsAsCorners(corners) {
     this.points = [];
     this.subpathStarts = [0];
+    this._straightPath = true; // segments are straight -> cheap to flatten (z-buffer)
     if (corners.length === 0) return this;
     this.points.push(V.clone(corners[0]));
     for (let i = 1; i < corners.length; i++) this.addLineTo(corners[i]);

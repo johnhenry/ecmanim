@@ -60,7 +60,8 @@ src/
     extra.js           GrowFromCenter, SpinInFromNothing, Indicate, Flash, MoveAlongPath, …
     rate_functions.js  smooth, linear, thereAndBack, easeInOut*, …
   renderer/
-    CanvasRenderer.js  isomorphic: draws mobjects to any 2D context
+    CanvasRenderer.js  isomorphic: draws mobjects to any 2D context (+ 3D z-buffer path)
+    zbuffer.js         software rasterizer w/ per-pixel depth buffer (3D)
     fonts-node.js      auto-registers system fonts (@napi-rs/canvas + opentype)
   node.js              Node backend: @napi-rs/canvas → ffmpeg
   browser.js           Browser backend: live play() + record() → WebM Blob
@@ -128,6 +129,7 @@ node examples/morph.js     # VText — glyph outlines traced by Write, morphed b
 node examples/mathtex.js   # MathTex — LaTeX (Euler's identity, sums, integrals) as Béziers
 node examples/threed.js    # ThreeDScene — projection camera orbiting a 3D scene
 node examples/surfaces.js  # Sphere, Torus, Cube, parametric saddle — shaded, depth-sorted
+node examples/interpenetrate.js  # z-buffer vs painter sorting on a sphere through a plane
 node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello.mp4
 ```
 
@@ -143,7 +145,7 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Text (vector) | Text (Pango glyph paths) | ✅ `VText` | **real glyph outlines as Béziers** (via opentype.js) — Write traces them, Transform morphs letters into shapes |
 | LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex` | **MathJax → SVG → Béziers, no LaTeX install**; genuine glyph VMobjects that Write/Transform |
 | 3D | ThreeDScene, ThreeDAxes, move_camera | ✅ `ThreeDScene`, `ThreeDCamera`, `ThreeDAxes` | projection camera (φ/θ + perspective), `moveCamera`, ambient rotation, depth sort — **no WebGL, renders headlessly** |
-| Surfaces | Surface, Sphere, Cube, …, checkerboard, shading | ✅ `Surface`/`ParametricSurface`, `Sphere`, `Torus`, `Cylinder`, `Cone`, `Cube`, `Box` | quad-mesh faces, Lambertian shading, painter depth-sort, checkerboard/`colorFunc` |
+| Surfaces | Surface, Sphere, Cube, …, checkerboard, shading | ✅ `Surface`/`ParametricSurface`, `Sphere`, `Torus`, `Cylinder`, `Cone`, `Cube`, `Box` | quad-mesh faces, Lambertian shading, checkerboard/`colorFunc`, **per-pixel z-buffer** so interpenetrating surfaces resolve correctly |
 | Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)` |
 | Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ Create, Write, Uncreate | |
 | Transform | Transform, ReplacementTransform | ✅ same | automatic Bézier point-count alignment |
@@ -158,13 +160,22 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Colors | WHITE, BLUE, RED, … | ✅ same names | plus `Color.lerp`, hex parsing |
 | Render targets | `-ql/-qm/-qh`, mp4/gif/png | ✅ quality presets, mp4/webm/gif/png-sequence | **+ browser (live + WebM)** |
 
+### 3D rendering
+
+3D uses a CPU **projection camera** (like manim's Cairo renderer), so it renders
+headlessly in Node with no GPU/WebGL. When a `ThreeDCamera` is active the
+renderer switches to a **software rasterizer with a per-pixel z-buffer**
+(`src/renderer/zbuffer.js`): filled faces become depth-tested triangles and
+strokes become depth-tested lines, so *interpenetrating* surfaces (e.g. a sphere
+poking through a plane) resolve correctly per pixel rather than mis-sorting.
+Set `camera.disableZBuffer = true` to fall back to per-face painter sorting
+(see `examples/interpenetrate.js` for the side-by-side).
+
 ### Not yet ported
 
-- A GPU/WebGL renderer. 3D uses a CPU projection camera + painter's-algorithm
-  depth sort (like manim's Cairo renderer), so it works headlessly in Node.
-  Faces are flat-shaded per quad (no per-pixel/Gouraud smoothing) and there is
-  no true z-buffer, so deeply interpenetrating surfaces can mis-sort. Three.js
-  could be layered on as an optional browser-only accelerated backend.
+- Faces are flat-shaded per quad (no Gourand/Phong per-pixel smoothing).
+- A GPU/WebGL renderer — Three.js could be layered on as an optional
+  browser-only accelerated backend; the CPU path already handles both targets.
 - `ImageMobject`, SVG-file import (the SVG **path** parser exists and powers
   `MathTex`/`VText`; a full `SVGMobject` file loader is not wrapped up), sound.
 - `MathTex` browser support currently expects MathJax to be initialized; the
