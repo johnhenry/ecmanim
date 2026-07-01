@@ -104,6 +104,9 @@ export class Scene {
     const runTimeOverride = config.runTime;
     for (const a of anims) {
       if (runTimeOverride != null) a.runTime = runTimeOverride;
+      // Suspend the target's updaters while the animation runs so an updater and
+      // the animation don't fight over the same mobject (manim's default).
+      if (a.suspendMobjectUpdating !== false) a.mobject?.suspendUpdating?.();
       a.begin();
       for (const m of a.getMobjectsToIntroduce()) this.add(m);
     }
@@ -125,6 +128,8 @@ export class Scene {
 
     for (const a of anims) {
       a.finish();
+      // Resume updaters that were suspended for the duration of the animation.
+      if (a.suspendMobjectUpdating !== false) a.mobject?.resumeUpdating?.();
       for (const m of a.getMobjectsToIntroduce()) this.add(m);
       for (const m of a.getMobjectsToRemove()) this.remove(m);
       // ReplacementTransform introduces its target explicitly.

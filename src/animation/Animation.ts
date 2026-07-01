@@ -4,6 +4,7 @@
 import { smooth, linear, running } from "./rate_functions.ts";
 import { Color } from "../core/color.ts";
 import * as V from "../core/math/vector.ts";
+import { pathAlongArc, straightPath, type PathFunc } from "../core/math/paths.ts";
 import type { Mobject } from "../mobject/Mobject.ts";
 import type { RateFunc } from "../core/types.ts";
 
@@ -14,6 +15,14 @@ export interface AnimationConfig {
   remover?: boolean;
   introducer?: boolean;
   lagRatio?: number;
+  /** When true, wrap the rate function as t => rate(1 - t) (manim's reverse_rate_function). */
+  reverseRateFunc?: boolean;
+  /** Arc angle (radians) along which Transform-style animations move points. Default 0 (straight). */
+  pathArc?: number;
+  /** Explicit path function; overrides pathArc when given. */
+  pathFunc?: PathFunc;
+  /** When true (default), Scene.play suspends the mobject's updaters while the anim runs. */
+  suspendMobjectUpdating?: boolean;
   [key: string]: any;
 }
 
@@ -26,6 +35,7 @@ export class Animation {
   remover: boolean;
   introducer: boolean;
   lagRatio: number;
+  suspendMobjectUpdating: boolean;
   started: boolean;
   finished: boolean;
   startState: any;
@@ -33,12 +43,31 @@ export class Animation {
   constructor(mobject: Mobject, config: AnimationConfig = {}) {
     this.mobject = mobject;
     this.runTime = config.runTime ?? 1;
-    this.rateFunc = running(config.rateFunc ?? smooth);
+    let rate = running(config.rateFunc ?? smooth);
+    // reverse_rate_function: play the eased curve backwards (manim semantics).
+    if (config.reverseRateFunc) {
+      const base = rate;
+      rate = (t: number) => base(1 - t);
+    }
+    this.rateFunc = rate;
     this.remover = config.remover ?? false; // remove mobject from scene when done
     this.introducer = config.introducer ?? false; // add mobject to scene at start
     this.lagRatio = config.lagRatio ?? 0;
+    this.suspendMobjectUpdating = config.suspendMobjectUpdating ?? true;
     this.started = false;
     this.finished = false;
+  }
+
+  // manim's Animation.get_sub_alpha. With lag L and n submobjects the total
+  // "length" of the staggered window is (n-1)*L + 1; each submobject i occupies
+  // a unit-width slice starting at i*L. Returns the local alpha for submobject
+  // `index` given the global `alpha`.
+  getSubAlpha(alpha: number, index: number, numSubmobjects: number): number {
+    const lag = this.lagRatio;
+    const fullLength = (numSubmobjects - 1) * lag + 1;
+    const value = alpha * fullLength;
+    const lower = index * lag;
+    return Math.max(0, Math.min(1, value - lower));
   }
 
   // Called once when the animation starts playing.
@@ -59,9 +88,30 @@ export class Animation {
   }
 
   // alpha is raw progress in [0,1]; subclasses override interpolateMobject.
+  // When lagRatio > 0 and the animation opts into staggering (interpolateSubmobject
+  // is overridden), walk the mobject family applying a per-member sub-alpha.
   interpolate(alpha: number): void {
-    this.interpolateMobject(this.rateFunc(Math.max(0, Math.min(1, alpha))));
+    const eased = this.rateFunc(Math.max(0, Math.min(1, alpha)));
+    if (this.lagRatio > 0 && this.usesSubmobjectStagger()) {
+      const fam = this.mobject.getFamily();
+      const n = fam.length;
+      for (let i = 0; i < n; i++) {
+        this.interpolateSubmobject(fam[i], this.getSubAlpha(eased, i, n), i);
+      }
+      return;
+    }
+    this.interpolateMobject(eased);
   }
+
+  // Subclasses that stagger override this; the default (returns false) keeps the
+  // global single-alpha path so lagRatio has no effect unless opted in.
+  usesSubmobjectStagger(): boolean {
+    return false;
+  }
+
+  // Per-family-member hook used only on the staggered path. `subAlpha` is the
+  // already-eased local alpha for `submob` (family member at `index`).
+  interpolateSubmobject(_submob: any, _subAlpha: number, _index: number): void {}
 
   interpolateMobject(_alpha: number): void {}
 
@@ -80,11 +130,16 @@ export class Transform extends Animation {
   replace: boolean;
   targetCopy: any;
   startCopy: any;
+  pathArc: number;
+  pathFunc: PathFunc | null;
 
   constructor(mobject: Mobject, target: Mobject, config: AnimationConfig & { replace?: boolean } = {}) {
     super(mobject, config);
     this.target = target;
     this.replace = config.replace ?? false;
+    this.pathArc = config.pathArc ?? 0;
+    // Explicit pathFunc wins; else derive from pathArc (straight when 0).
+    this.pathFunc = config.pathFunc ?? (this.pathArc !== 0 ? pathAlongArc(this.pathArc) : null);
   }
 
   setup(): void {
@@ -104,7 +159,25 @@ export class Transform extends Animation {
   }
 
   interpolateMobject(alpha: number): void {
+    // Interpolate color/opacity/etc. via the mobject's own blend...
     this.mobject.interpolate(this.startState, this.targetCopy, alpha);
+    // ...then, when a curved path is active, override the point positions so
+    // each point travels along the path function rather than a straight line.
+    if (this.pathFunc) {
+      const live = this.mobject.getFamily();
+      const starts = this.startState.getFamily();
+      const targets = this.targetCopy.getFamily();
+      const nm = Math.min(live.length, starts.length, targets.length);
+      for (let k = 0; k < nm; k++) {
+        const lp = live[k].points;
+        const sp = starts[k].points;
+        const tp = targets[k].points;
+        const n = Math.min(lp.length, sp.length, tp.length);
+        if (n === 0) continue;
+        const moved = this.pathFunc(sp.slice(0, n), tp.slice(0, n), alpha);
+        for (let i = 0; i < n; i++) lp[i] = moved[i] as number[];
+      }
+    }
   }
 }
 
@@ -137,17 +210,30 @@ export class Create extends Animation {
     this.origFill = this.mobject.getFamily().map((m: any) => m.fillOpacity ?? 0);
   }
 
+  // Draw a single family member at its local alpha. Shared by the global and
+  // the per-submobject (staggered) code paths so behavior is identical for a
+  // single mobject (family length 1) regardless of lagRatio.
+  protected drawMember(m: any, index: number, a: number): void {
+    if (m._isText) {
+      m.revealFraction = a; // typewriter reveal for Text
+      return;
+    }
+    m.strokeEnd = a;
+    // Fade fill in only over the final stretch so the outline draws first.
+    if (m.fillOpacity != null) m.fillOpacity = this.origFill[index] * Math.max(0, (a - 0.5) * 2);
+  }
+
+  usesSubmobjectStagger(): boolean {
+    return true;
+  }
+
+  interpolateSubmobject(submob: any, subAlpha: number, index: number): void {
+    this.drawMember(submob, index, subAlpha);
+  }
+
   interpolateMobject(alpha: number): void {
     const fam = this.mobject.getFamily();
-    fam.forEach((m: any, i: number) => {
-      if (m._isText) {
-        m.revealFraction = alpha; // typewriter reveal for Text
-        return;
-      }
-      m.strokeEnd = alpha;
-      // Fade fill in only over the final stretch so the outline draws first.
-      if (m.fillOpacity != null) m.fillOpacity = this.origFill[i] * Math.max(0, (alpha - 0.5) * 2);
-    });
+    fam.forEach((m: any, i: number) => this.drawMember(m, i, alpha));
   }
 
   finish(): this {
@@ -164,19 +250,23 @@ export class Create extends Animation {
 
 export class Write extends Create {
   constructor(mobject: Mobject, config: AnimationConfig = {}) {
-    super(mobject, { runTime: config.runTime ?? 1.5, rateFunc: config.rateFunc ?? linear, ...config });
+    // Small default lag so multi-glyph / multi-submobject Write draws
+    // progressively; a single-submobject mobject still animates 0->1 exactly.
+    super(mobject, {
+      runTime: config.runTime ?? 1.5,
+      rateFunc: config.rateFunc ?? linear,
+      lagRatio: config.lagRatio ?? 0.1,
+      ...config,
+    });
   }
 }
 
 export class Uncreate extends Create {
   constructor(mobject: Mobject, config: AnimationConfig = {}) {
-    super(mobject, config);
+    // reverse_rate_function turns the 0->1 Create draw into a 1->0 erase.
+    super(mobject, { ...config, reverseRateFunc: true });
     this.remover = true;
     this.introducer = false;
-  }
-
-  interpolateMobject(alpha: number): void {
-    super.interpolateMobject(1 - alpha);
   }
 
   finish(): this {
@@ -219,21 +309,33 @@ export class FadeIn extends Animation {
     ]));
   }
 
+  protected fadeMember(m: any, i: number, a: number): void {
+    const t = this.targetOpacities[i];
+    m.fillOpacity = t.fill * a;
+    m.strokeOpacity = t.stroke * a;
+    m.opacity = t.op;
+    const start = this.startPoints[i];
+    const final = this.finalPoints[i];
+    for (let j = 0; j < m.points.length; j++) m.points[j] = V.lerp(start[j], final[j], a);
+  }
+
+  usesSubmobjectStagger(): boolean {
+    return true;
+  }
+
+  interpolateSubmobject(submob: any, subAlpha: number, index: number): void {
+    this.fadeMember(submob, index, subAlpha);
+  }
+
   interpolateMobject(alpha: number): void {
     const fam = this.mobject.getFamily();
-    fam.forEach((m: any, i: number) => {
-      const t = this.targetOpacities[i];
-      m.fillOpacity = t.fill * alpha;
-      m.strokeOpacity = t.stroke * alpha;
-      m.opacity = t.op;
-      const start = this.startPoints[i];
-      const final = this.finalPoints[i];
-      for (let j = 0; j < m.points.length; j++) m.points[j] = V.lerp(start[j], final[j], alpha);
-    });
+    fam.forEach((m: any, i: number) => this.fadeMember(m, i, alpha));
   }
 
   finish(): this {
-    this.interpolateMobject(1);
+    // Force the fully-faded-in end state regardless of lag windows.
+    const fam = this.mobject.getFamily();
+    fam.forEach((m: any, i: number) => this.fadeMember(m, i, 1));
     this.finished = true;
     return this;
   }

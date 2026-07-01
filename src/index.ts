@@ -16,7 +16,7 @@ export {
   BLUE_A, BLUE_B, BLUE_C, BLUE_D, BLUE_E, GREEN_A, GREEN_C, GREEN_E, RED_C, RED_E,
 } from "./core/color.ts";
 
-export { Mobject } from "./mobject/Mobject.ts";
+export { Mobject, Group } from "./mobject/Mobject.ts";
 export { VMobject, VGroup } from "./mobject/VMobject.ts";
 export {
   Arc, Circle, Dot, Ellipse, Annulus, Line, DashedLine, Arrow,

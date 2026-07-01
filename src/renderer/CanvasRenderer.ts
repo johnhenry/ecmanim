@@ -321,11 +321,48 @@ export class CanvasRenderer {
     }
   }
 
+  // Build a linear gradient across the mobject's projected bounding box in the
+  // sheen direction, from its gradientColors. Returns null if unavailable.
+  _buildGradient(mob: any, alpha: number): CanvasGradient | null {
+    const colors: any[] = mob.gradientColors;
+    if (!colors || colors.length === 0) return null;
+    const { ctx, camera } = this;
+    // Pixel-space bounding box of the projected points.
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (const p of mob.points) {
+      const [x, y] = camera.toPixel(p);
+      minx = Math.min(minx, x); miny = Math.min(miny, y);
+      maxx = Math.max(maxx, x); maxy = Math.max(maxy, y);
+    }
+    if (!isFinite(minx)) return null;
+    // Sheen direction in world space -> pixel space (y flips).
+    const dir = mob.sheenDirection ?? [-1, 1, 0];
+    const dx = dir[0];
+    const dy = -(dir[1] ?? 0); // world y-up -> pixel y-down
+    const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
+    const hw = (maxx - minx) / 2 || 1, hh = (maxy - miny) / 2 || 1;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const grad = ctx.createLinearGradient(
+      cx - ux * hw, cy - uy * hh,
+      cx + ux * hw, cy + uy * hh,
+    );
+    const n = colors.length;
+    for (let i = 0; i < n; i++) {
+      const stop = n === 1 ? 0 : i / (n - 1);
+      grad.addColorStop(stop, colors[i].toRGBAString(alpha));
+    }
+    return grad;
+  }
+
   drawVMobject(mob: any): void {
     const { ctx, camera } = this;
     if (mob.points.length === 0) return;
 
     const proportion = mob.strokeEnd ?? 1;
+    const opacity = mob.opacity ?? 1;
+    const lineJoin: CanvasLineJoin = mob.lineJoin ?? "round";
+    const lineCap: CanvasLineCap = mob.lineCap ?? "round";
 
     // Fill (only meaningful when the whole path is present).
     const fillOpacity = mob.fillOpacity ?? 0;
@@ -333,20 +370,35 @@ export class CanvasRenderer {
       ctx.beginPath();
       this.tracePath(mob, 1);
       ctx.closePath();
-      ctx.fillStyle = mob.fillColor.toRGBAString(fillOpacity * (mob.opacity ?? 1));
+      const alpha = fillOpacity * opacity;
+      const grad = this._buildGradient(mob, alpha);
+      ctx.fillStyle = grad ?? mob.fillColor.toRGBAString(alpha);
       ctx.fill("evenodd");
     }
 
-    // Stroke.
+    // Background stroke: a wider stroke drawn under the main stroke.
+    const bgWidth = mob.backgroundStrokeWidth ?? 0;
+    const bgOpacity = mob.backgroundStrokeOpacity ?? 1;
+    if (bgWidth > 0 && bgOpacity > 0 && mob.backgroundStrokeColor) {
+      ctx.beginPath();
+      this.tracePath(mob, proportion);
+      ctx.strokeStyle = mob.backgroundStrokeColor.toRGBAString(bgOpacity * opacity);
+      ctx.lineWidth = bgWidth * camera.strokeScale();
+      ctx.lineJoin = lineJoin;
+      ctx.lineCap = lineCap;
+      ctx.stroke();
+    }
+
+    // Main stroke.
     const strokeOpacity = mob.strokeOpacity ?? 1;
     const strokeWidth = mob.strokeWidth ?? 0;
     if (strokeWidth > 0 && strokeOpacity > 0) {
       ctx.beginPath();
       this.tracePath(mob, proportion);
-      ctx.strokeStyle = mob.strokeColor.toRGBAString(strokeOpacity * (mob.opacity ?? 1));
+      ctx.strokeStyle = mob.strokeColor.toRGBAString(strokeOpacity * opacity);
       ctx.lineWidth = strokeWidth * camera.strokeScale();
-      ctx.lineJoin = mob.lineJoin ?? "round";
-      ctx.lineCap = mob.lineCap ?? "round";
+      ctx.lineJoin = lineJoin;
+      ctx.lineCap = lineCap;
       ctx.stroke();
     }
   }
