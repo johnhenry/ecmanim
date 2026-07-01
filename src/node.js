@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Camera, CanvasRenderer } from "./renderer/CanvasRenderer.js";
-import { autoRegisterFonts } from "./renderer/fonts-node.js";
+import { autoRegisterFonts, loadVectorFont } from "./renderer/fonts-node.js";
 import { Scene } from "./scene/Scene.js";
 import { QUALITIES } from "./index.js";
 
@@ -42,13 +42,23 @@ export async function render(sceneOrConstruct, options = {}) {
 
   const { createCanvas, GlobalFonts } = await loadCanvas();
   autoRegisterFonts(GlobalFonts);
+  await loadVectorFont(options.vectorFont ?? "sans-serif").catch(() => null); // for VText
+  // Warm MathJax so MathTex(...) construction is synchronous inside construct().
+  await import("./mobject/mathtex.js").then((m) => m.initMathTex()).catch(() => null);
   if (options.fonts && GlobalFonts) {
     for (const f of options.fonts) GlobalFonts.registerFromPath(f.path, f.name);
   }
 
   const canvas = createCanvas(pixelWidth, pixelHeight);
   const ctx = canvas.getContext("2d");
-  const camera = new Camera({ pixelWidth, pixelHeight, background, ...options.camera });
+  // options.camera may be a ready-made Camera instance (e.g. a ThreeDCamera) or
+  // a plain config object.
+  const camera = options.camera instanceof Camera
+    ? options.camera
+    : new Camera({ pixelWidth, pixelHeight, background, ...options.camera });
+  camera.pixelWidth = pixelWidth;
+  camera.pixelHeight = pixelHeight;
+  if (!camera.background) camera.background = background;
   const renderer = new CanvasRenderer(ctx, camera);
 
   const outPath = resolve(output);

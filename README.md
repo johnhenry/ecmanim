@@ -45,8 +45,14 @@ src/
     VMobject.js        bezier shapes, fill/stroke, subpaths, point-count alignment
     geometry.js        Arc Circle Dot Ellipse Annulus Line Arrow Polygon Rectangle Square …
     text/Text.js       Canvas-text mobject with typewriter reveal
+    vectorized_text.js VText — real glyph outlines as Béziers (opentype.js)
+    mathtex.js         MathTex / Tex — LaTeX via MathJax → Bézier glyphs
+    svg_path.js        SVG path `d` → cubic-Bézier subpaths (powers MathTex/VText)
     coordinate_systems.js  NumberLine, Axes (+ plot), NumberPlane
     value_tracker.js   ValueTracker, DecimalNumber, Integer, alwaysRedraw
+  scene/
+    Scene.js           play()/wait(), fixed-fps frame emission (backend-agnostic)
+    three_d.js         ThreeDScene, ThreeDCamera (projection), ThreeDAxes
   animation/
     Animation.js       Animation base, Transform, Create, Write, Fade*, ApplyMethod
     composition.js     AnimationGroup, LaggedStart, Succession, the .animate builder
@@ -54,8 +60,7 @@ src/
     rate_functions.js  smooth, linear, thereAndBack, easeInOut*, …
   renderer/
     CanvasRenderer.js  isomorphic: draws mobjects to any 2D context
-    fonts-node.js      auto-registers a system font for @napi-rs/canvas
-  scene/Scene.js       play()/wait(), fixed-fps frame emission (backend-agnostic)
+    fonts-node.js      auto-registers system fonts (@napi-rs/canvas + opentype)
   node.js              Node backend: @napi-rs/canvas → ffmpeg
   browser.js           Browser backend: live play() + record() → WebM Blob
 ```
@@ -118,6 +123,9 @@ See `examples/browser/index.html` for a complete page.
 ```bash
 node examples/basic.js     # shapes, Create, Transform, FadeOut, Text
 node examples/graph.js     # Axes, plot(), ValueTracker, alwaysRedraw, LaggedStart, Indicate
+node examples/morph.js     # VText — glyph outlines traced by Write, morphed by Transform
+node examples/mathtex.js   # MathTex — LaTeX (Euler's identity, sums, integrals) as Béziers
+node examples/threed.js    # ThreeDScene — projection camera orbiting a 3D scene
 node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello.mp4
 ```
 
@@ -129,7 +137,10 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Play | `self.play(a, b, run_time=2)` | `await this.play(a, b, { _playConfig: true, runTime: 2 })` | parallel by default |
 | `.animate` | `mob.animate.shift(RIGHT)` | `mob.animate.shift([1,0,0])` | chainable proxy |
 | Geometry | Circle, Square, Line, Polygon, … | ✅ same | Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon RegularPolygon Triangle Rectangle Square |
-| Text | Text (Pango glyph paths) | ✅ Canvas text | typewriter reveal for Write/Create; not true glyph-vector morphing |
+| Text (raster) | Text | ✅ `Text` | fast Canvas text, typewriter reveal for Write/Create |
+| Text (vector) | Text (Pango glyph paths) | ✅ `VText` | **real glyph outlines as Béziers** (via opentype.js) — Write traces them, Transform morphs letters into shapes |
+| LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex` | **MathJax → SVG → Béziers, no LaTeX install**; genuine glyph VMobjects that Write/Transform |
+| 3D | ThreeDScene, ThreeDAxes, move_camera | ✅ `ThreeDScene`, `ThreeDCamera`, `ThreeDAxes` | projection camera (φ/θ + perspective), `moveCamera`, ambient rotation, depth sort — **no WebGL, renders headlessly** |
 | Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)` |
 | Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ Create, Write, Uncreate | |
 | Transform | Transform, ReplacementTransform | ✅ same | automatic Bézier point-count alignment |
@@ -146,13 +157,15 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 
 ### Not yet ported
 
-- LaTeX / `MathTex` (manim shells out to LaTeX). `Text` covers plain strings;
-  `MathTex` is not implemented.
-- True glyph-path text (so `Transform`-ing text into shapes morphs the box, not
-  the letterforms).
-- 3D scenes (`ThreeDScene`, `Surface`) — the math is 3D-ready (points are
-  `[x,y,z]`, rotation takes an axis) but there is no 3D camera projection yet.
-- SVG import, `ImageMobject`, sound.
+- `Surface` / parametric-surface mobjects and lighting (the 3D **camera** and
+  `ThreeDAxes` exist; smooth-shaded surfaces do not).
+- A GPU/WebGL renderer. 3D uses a CPU projection camera (like manim's Cairo
+  renderer) so it works headlessly in Node. Three.js could be layered on as an
+  optional browser-only accelerated backend.
+- `ImageMobject`, SVG-file import (the SVG **path** parser exists and powers
+  `MathTex`/`VText`; a full `SVGMobject` file loader is not wrapped up), sound.
+- `MathTex` browser support currently expects MathJax to be initialized; the
+  Node path auto-initializes it.
 
 ## Testing
 

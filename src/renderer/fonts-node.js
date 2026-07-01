@@ -4,7 +4,7 @@
 // the box. Falls back to scanning common font directories.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 function fcMatch(pattern) {
@@ -40,6 +40,27 @@ function scanForFont() {
   };
   for (const r of roots) walk(r, 0);
   return found[0] || null;
+}
+
+// Resolve a concrete TTF/OTF file path for a fontconfig pattern (for opentype.js
+// glyph extraction). Returns null if fontconfig / no font is available.
+export function resolveFontPath(pattern = "sans-serif") {
+  const p = fcMatch(pattern);
+  if (p && existsSync(p) && /\.(ttf|otf)$/i.test(p)) return p;
+  return scanForFont();
+}
+
+// Load a system font as an opentype.js Font (for VText / MathTex glyph outlines)
+// and register it as the library default. Node-only.
+export async function loadVectorFont(pattern = "sans-serif") {
+  const path = resolveFontPath(pattern);
+  if (!path) return null;
+  const opentype = (await import("opentype.js")).default;
+  const buf = readFileSync(path);
+  const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  const { setDefaultFontSync } = await import("../mobject/vectorized_text.js");
+  setDefaultFontSync(font);
+  return font;
 }
 
 let registered = false;

@@ -27,5 +27,9 @@
   "license": "MIT",
   "optionalDependencies": {
     "@napi-rs/canvas": "^0.1.100"
+  },
+  "dependencies": {
+    "mathjax-full": "^3.2.1",
+    "opentype.js": "^2.0.0"
   }
 }
