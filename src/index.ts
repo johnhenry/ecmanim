@@ -54,6 +54,11 @@ export { MathTex, Tex, SingleStringMathTex, texToVGroup, initMathTex } from "./m
 export { ImageMobject } from "./mobject/image_mobject.ts";
 export { SVGMobject, parseXML, parseTransform } from "./mobject/svg_mobject.ts";
 export { ThreeDScene, ThreeDCamera, ThreeDAxes } from "./scene/three_d.ts";
+export { MovingCameraScene, ScreenRectangle, FullScreenRectangle } from "./scene/moving_camera_scene.ts";
+export { ZoomedScene } from "./scene/zoomed_scene.ts";
+export { VectorScene, LinearTransformationScene } from "./scene/vector_space_scene.ts";
+export { MultiCamera } from "./camera/multi_camera.ts";
+export { MappingCamera } from "./camera/mapping_camera.ts";
 export {
   Surface, ParametricSurface, Sphere, Torus, Cylinder, Cone, Box, Cube,
   Prism, Dot3D, Line3D, Arrow3D, ThreeDVMobject,

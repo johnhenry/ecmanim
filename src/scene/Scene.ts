@@ -15,6 +15,37 @@ export interface SceneSound {
   gain: number;
 }
 
+/** Section types, mirroring manim's `PresentationSectionType`. */
+export const SectionType = {
+  NORMAL: "section.normal",
+  SKIP: "section.skip",
+  LOOP: "section.loop",
+  COMPLETE_LOOP: "section.complete_loop",
+} as const;
+
+/**
+ * A section boundary, recorded by `nextSection()`. `startFrame` is the frame
+ * count at the moment the section began; the backend fills `endFrame` when the
+ * next section starts (or at end of render).
+ */
+export interface SceneSection {
+  name: string;
+  type: string;
+  skipAnimations: boolean;
+  startFrame: number;
+  endFrame: number;
+  id: number;
+}
+
+/** A descriptor recorded for each play() call, used for content-addressed caching. */
+export interface PlayRecord {
+  index: number;       // 0-based play() ordinal
+  kind: string;        // "play" | "wait"
+  hash: string;        // content hash of the animation descriptors
+  startFrame: number;  // frame count when this segment began
+  endFrame: number;    // frame count when this segment ended
+}
+
 /** Configuration accepted by the Scene constructor. */
 export interface SceneConfig {
   fps?: number;
@@ -32,6 +63,22 @@ export class Scene {
   frameCount: number;
   sounds: SceneSound[];
 
+  // --- Sections (manim's next_section) ---
+  sections: SceneSection[];
+  private _sectionId: number;
+
+  // --- Per-play tracking (for caching + from/upto animation ranges) ---
+  playCount: number;                 // number of play() calls seen so far
+  playRecords: PlayRecord[];         // one record per play()/wait segment
+  /**
+   * Optional hook invoked by a backend at the start of each play()/wait segment,
+   * BEFORE any frames are emitted. It receives a descriptor and returns
+   * per-segment directives:
+   *   { skip: true }  — don't render this segment's frames (still advance time)
+   * Used by node.ts for caching and from/upto animation ranges.
+   */
+  onSegment?: (rec: { index: number; kind: string; hash: string; startFrame: number }) => { skip?: boolean } | undefined;
+
   constructor(config: SceneConfig = {}) {
     this.mobjects = [];
     this.fps = config.fps ?? 30;
@@ -40,6 +87,67 @@ export class Scene {
     this.time = 0;
     this.frameCount = 0;
     this.sounds = [];
+    this.sections = [];
+    this._sectionId = 0;
+    this.playCount = 0;
+    this.playRecords = [];
+  }
+
+  /**
+   * Start a new section (manim's `self.next_section(...)`). Records the section
+   * boundary at the current frame. The backend uses these boundaries to split
+   * the rendered video into per-section files + a JSON index.
+   */
+  nextSection(name = "unnamed", type: string = SectionType.NORMAL, skipAnimations = false): this {
+    // Close the previous section (if any) at the current frame.
+    if (this.sections.length) {
+      const prev = this.sections[this.sections.length - 1];
+      if (prev.endFrame < 0) prev.endFrame = this.frameCount;
+    }
+    this.sections.push({
+      name,
+      type,
+      skipAnimations,
+      startFrame: this.frameCount,
+      endFrame: -1,
+      id: this._sectionId++,
+    });
+    return this;
+  }
+
+  /** Close out the final open section (called by the backend at end of render). */
+  finalizeSections(): void {
+    if (this.sections.length) {
+      const last = this.sections[this.sections.length - 1];
+      if (last.endFrame < 0) last.endFrame = this.frameCount;
+    }
+  }
+
+  /**
+   * Compute a stable content hash for a set of animations for caching. Based on
+   * class names, target mobject ids/point counts, runTime, and the current
+   * scene mobject count (so an added mobject invalidates downstream segments).
+   */
+  hashAnimations(anims: any[], kind: string): string {
+    // Content-addressed (like manim): fingerprint the animation classes and the
+    // structural shape/position of their targets — NOT object identity — so the
+    // same construct() re-run produces the same hash and reuses partials.
+    const parts: string[] = [kind, `mob:${this.mobjects.length}`, `fps:${this.fps}`];
+    for (const a of anims) {
+      const cls = a?.constructor?.name ?? "anon";
+      const mob = a?.mobject;
+      const npts = Array.isArray(mob?.points) ? mob.points.length : 0;
+      const nsub = Array.isArray(mob?.submobjects) ? mob.submobjects.length : 0;
+      // A coarse position/scale fingerprint from the first & last point.
+      let geom = "";
+      if (Array.isArray(mob?.points) && mob.points.length) {
+        const p0 = mob.points[0], pL = mob.points[mob.points.length - 1];
+        const r = (v: any) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v);
+        geom = `${(p0 ?? []).map?.(r).join(",") ?? ""}~${(pL ?? []).map?.(r).join(",") ?? ""}`;
+      }
+      parts.push(`${cls}:${npts}:${nsub}:${geom}:${a?.runTime ?? ""}`);
+    }
+    return fnv1a(parts.join("|"));
   }
 
   // Schedule an audio clip. Defaults to the current animation time, so calling
@@ -101,6 +209,8 @@ export class Scene {
       a && a._isAnimateBuilder ? a.build() : a);
     if (anims.length === 0) return this;
 
+    const playIndex = this.playCount++;
+
     const runTimeOverride = config.runTime;
     for (const a of anims) {
       if (runTimeOverride != null) a.runTime = runTimeOverride;
@@ -110,6 +220,12 @@ export class Scene {
       a.begin();
       for (const m of a.getMobjectsToIntroduce()) this.add(m);
     }
+
+    // Notify a backend that a play() segment is starting (for caching / ranges).
+    const startFrame = this.frameCount;
+    const hash = this.hashAnimations(anims, "play");
+    const directive = this.onSegment?.({ index: playIndex, kind: "play", hash, startFrame });
+    const skip = !!directive?.skip;
 
     const totalTime = Math.max(...anims.map((a) => a.runTime));
     const nFrames = Math.max(1, Math.round(totalTime * this.fps));
@@ -123,8 +239,11 @@ export class Scene {
       }
       this.updateMobjects(dt);
       this.time += dt;
-      await this.emitFrame();
+      if (skip) this.frameCount++;
+      else await this.emitFrame();
     }
+
+    this.playRecords.push({ index: playIndex, kind: "play", hash, startFrame, endFrame: this.frameCount });
 
     for (const a of anims) {
       a.finish();
@@ -142,11 +261,24 @@ export class Scene {
   async wait(duration = 1): Promise<this> {
     const nFrames = Math.max(1, Math.round(duration * this.fps));
     const dt = duration / nFrames;
+
+    const playIndex = this.playCount++;
+    const startFrame = this.frameCount;
+    // A wait's content depends on the visible mobjects + duration; include a
+    // point-count fingerprint so a changed scene invalidates the cached hold.
+    const fp = this.mobjects.map((m: any) =>
+      `${m?.constructor?.name ?? "m"}:${Array.isArray(m?.points) ? m.points.length : 0}`).join(",");
+    const hash = this.hashAnimations([{ constructor: { name: "Wait" }, runTime: duration, mobject: { points: [], submobjects: [] } }], `wait:${duration}:${fp}`);
+    const directive = this.onSegment?.({ index: playIndex, kind: "wait", hash, startFrame });
+    const skip = !!directive?.skip;
+
     for (let f = 0; f < nFrames; f++) {
       this.updateMobjects(dt);
       this.time += dt;
-      await this.emitFrame();
+      if (skip) this.frameCount++;
+      else await this.emitFrame();
     }
+    this.playRecords.push({ index: playIndex, kind: "wait", hash, startFrame, endFrame: this.frameCount });
     return this;
   }
 
@@ -158,6 +290,17 @@ export class Scene {
   // Full run: emit an initial frame, then the user's construct().
   async render(): Promise<this> {
     await this.construct();
+    this.finalizeSections();
     return this;
   }
+}
+
+/** FNV-1a 32-bit hash, returned as an 8-char hex string. Deterministic + fast. */
+function fnv1a(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
 }

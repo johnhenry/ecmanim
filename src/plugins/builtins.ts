@@ -39,6 +39,9 @@ import * as mathtexMod from "../mobject/mathtex.ts";
 import * as svgMod from "../mobject/svg_mobject.ts";
 import * as imageMod from "../mobject/image_mobject.ts";
 import * as threeDMod from "../scene/three_d.ts";
+import * as movingCamScene from "../scene/moving_camera_scene.ts";
+import * as zoomedScene from "../scene/zoomed_scene.ts";
+import * as vectorScene from "../scene/vector_space_scene.ts";
 import * as animationMod from "../animation/Animation.ts";
 import * as extra from "../animation/extra.ts";
 import * as composition from "../animation/composition.ts";
@@ -64,7 +67,7 @@ export function registerBuiltins(): typeof registry {
 
   const mobjectModules = [geometry, tips, arcs, polygram, shapeMatchers, vectors,
     labeled, booleanOps, matrix, table, brace, graph, surface, polyhedra, coords, functionsMod, probabilityMod, vectorFieldMod,
-    complexVT, valueTracker, textMod, paragraphMod, texExtrasMod, codeMod, variableMod, vtextMod, mathtexMod, svgMod, imageMod, threeDMod];
+    complexVT, valueTracker, textMod, paragraphMod, texExtrasMod, codeMod, variableMod, vtextMod, mathtexMod, svgMod, imageMod, threeDMod, movingCamScene, zoomedScene, vectorScene];
   for (const mod of mobjectModules) {
     for (const [name, value] of Object.entries(mod)) {
       if (isSubclassOf(value, Mobject)) registry.registerMobject(name, value);

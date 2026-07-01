@@ -51,6 +51,10 @@ export class Camera {
   declare disableZBuffer?: boolean;
   declare flatShading?: boolean;
   declare focalDistance?: number;
+  // An optional animatable "camera frame" mobject (a Rectangle). When set, its
+  // size/center drive the viewport via preRender() — this is how
+  // MovingCameraScene / ZoomedScene pan and zoom by animating a mobject.
+  declare frame?: any;
 
   constructor(config: CameraConfig = {}) {
     this.pixelWidth = config.pixelWidth ?? 1920;
@@ -74,6 +78,17 @@ export class Camera {
   // Convert a manim stroke width (roughly px at 1080p) to this resolution.
   strokeScale(): number {
     return this.pixelHeight / 1080;
+  }
+
+  // Sync the viewport (frameCenter/width/height) to the frame mobject, if one is
+  // set. A no-op when `this.frame` is unset, so behavior is unchanged for the
+  // common case. Called at the top of the renderer's renderScene/renderScene3D.
+  preRender(): void {
+    const f = this.frame;
+    if (!f) return;
+    if (typeof f.getCenter === "function") this.frameCenter = f.getCenter();
+    if (typeof f.getHeight === "function") this.frameHeight = f.getHeight();
+    if (typeof f.getWidth === "function") this.frameWidth = f.getWidth();
   }
 }
 
@@ -103,6 +118,8 @@ export class CanvasRenderer {
   }
 
   renderScene(mobjects: any[]): void {
+    // Sync the viewport to an animatable camera frame (no-op when unset).
+    this.camera.preRender?.();
     // With a 3D camera, use the depth-buffered rasterizer so interpenetrating
     // surfaces resolve per pixel (painter sorting can't). 2D uses vector fills.
     if (typeof this.camera.projectionDepth === "function" && !this.camera.disableZBuffer) {
@@ -115,6 +132,8 @@ export class CanvasRenderer {
 
   // --- 3D depth-buffered path --------------------------------------------
   renderScene3D(mobjects: any[]): void {
+    // Sync the viewport to an animatable camera frame (no-op when unset).
+    this.camera.preRender?.();
     const { ctx, camera } = this;
     if (!this._zb) this._zb = new ZBuffer(camera.pixelWidth, camera.pixelHeight);
     this._zb.resize(camera.pixelWidth, camera.pixelHeight);
