@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.js",
     "./node": "./src/node.js",
-    "./browser": "./src/browser.js"
+    "./browser": "./src/browser.js",
+    "./browser-three": "./src/browser-three.js"
   },
   "bin": {
     "manim-js": "./bin/manim-js.js"
@@ -26,7 +27,8 @@
   ],
   "license": "MIT",
   "optionalDependencies": {
-    "@napi-rs/canvas": "^0.1.100"
+    "@napi-rs/canvas": "^0.1.100",
+    "three": "^0.185.1"
   },
   "dependencies": {
     "mathjax-full": "^3.2.1",

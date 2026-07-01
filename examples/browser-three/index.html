@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>manim-js — WebGL (Three.js) backend</title>
+  <style>
+    body { margin: 0; background: #0d1117; color: #c9d1d9; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 1.5rem; }
+    canvas { width: 80vw; max-width: 960px; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.5); background:#000; }
+    button { background:#238636; color:#fff; border:0; padding:.6rem 1.2rem; border-radius:6px; font-size:1rem; cursor:pointer; }
+    h1 { font-weight: 600; } code { background:#161b22; padding:.15rem .4rem; border-radius:4px; }
+    .row { display:flex; gap:.6rem; }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/node_modules/three/build/three.module.js",
+      "three/addons/": "/node_modules/three/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <h1>manim-js on the GPU (WebGL / Three.js)</h1>
+  <p>Same <code>Scene</code> and mobjects as the CPU backend — hardware depth buffer, MSAA, real-time.</p>
+  <canvas id="stage" width="1280" height="720"></canvas>
+  <div class="row">
+    <button id="replay">▶ Replay</button>
+    <button id="explore">🖱 Explore (orbit)</button>
+    <button id="download">⬇ Download WebM</button>
+  </div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import {
+      play, record, ThreeRenderer, Scene, ThreeDScene, ThreeDCamera, ThreeDAxes,
+      Sphere, Torus, Cube, Surface, FadeIn, DEGREES, RED, GREEN, BLUE, TEAL,
+    } from "/src/browser-three.js";
+
+    class Demo extends ThreeDScene {
+      async construct() {
+        this.setCameraOrientation({ phi: 68 * DEGREES, theta: -90 * DEGREES });
+        const sphere = new Sphere({ radius: 1.2, fillColor: BLUE, strokeWidth: 0 }).moveTo([-3, 0, 0]);
+        const torus = new Torus({ majorRadius: 1.1, minorRadius: 0.4, fillColor: RED, strokeWidth: 0 }).moveTo([3, 0, 0]);
+        const cube = new Cube({ sideLength: 1.5, fillColor: GREEN }).moveTo([0, 3, 0]);
+        const saddle = new Surface((u, v) => [u, v, 0.4 * (u * u - v * v)],
+          { uRange: [-2, 2], vRange: [-2, 2], resolution: [24, 24], checkerboardColors: ["#F0AC5F", "#8C5A20"], strokeWidth: 0 })
+          .moveTo([0, -3, 0]);
+        this.add(sphere, torus, cube, saddle);
+        await this.play(new FadeIn(sphere), new FadeIn(torus), new FadeIn(cube), new FadeIn(saddle),
+          { _playConfig: true, runTime: 1 });
+        await this.moveCamera({ theta: 30 * DEGREES, phi: 60 * DEGREES }, { runTime: 4 });
+        await this.moveCamera({ theta: 150 * DEGREES }, { runTime: 4 });
+      }
+    }
+
+    const canvas = document.getElementById("stage");
+    const camera = () => new ThreeDCamera({ phi: 68 * DEGREES, theta: -90 * DEGREES });
+    const run = () => play(Demo, { canvas, three: THREE, quality: "medium", background: "#0d1117", camera: camera() });
+    run();
+    document.getElementById("replay").onclick = run;
+
+    // Freeze the final scene and let the user orbit it with the mouse.
+    document.getElementById("explore").onclick = async () => {
+      const cam = camera();
+      const renderer = new ThreeRenderer(THREE, { canvas, camera: cam, background: "#0d1117", three: THREE });
+      const scene = new Demo({ fps: 30, camera: cam });
+      scene.frameHandler = async () => {}; // build final state without animating
+      await scene.render();
+      renderer.render(scene.mobjects);
+      const controls = new OrbitControls(renderer.threeCamera, canvas);
+      controls.target.set(0, 0, 0);
+      (function loop() { controls.update(); renderer.renderer.render(renderer.scene, renderer.threeCamera); requestAnimationFrame(loop); })();
+    };
+
+    document.getElementById("download").onclick = async () => {
+      const blob = await record(Demo, { three: THREE, quality: "high", background: "#0d1117", camera: camera() });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "manim-js-webgl.webm"; a.click();
+    };
+  </script>
+</body>
+</html>

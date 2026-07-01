@@ -62,9 +62,12 @@ src/
   renderer/
     CanvasRenderer.js  isomorphic: draws mobjects to any 2D context (+ 3D z-buffer path)
     zbuffer.js         software rasterizer w/ per-pixel depth buffer (3D)
+    geometry_util.js   mobject tree -> GPU-ready vertex buffers (shared)
+    ThreeRenderer.js   WebGL renderer (Three.js) — GPU depth buffer, MSAA
     fonts-node.js      auto-registers system fonts (@napi-rs/canvas + opentype)
   node.js              Node backend: @napi-rs/canvas → ffmpeg
-  browser.js           Browser backend: live play() + record() → WebM Blob
+  browser.js           Browser backend (Canvas-2D): live play() + record() → WebM
+  browser-three.js     Browser backend (WebGL/Three.js): GPU play() + record()
 ```
 
 ## Install
@@ -120,6 +123,38 @@ npx manim-js render myscene.js --scene IntroScene --format webm
 
 See `examples/browser/index.html` for a complete page.
 
+### WebGL (Three.js) backend
+
+For GPU-accelerated 3D there's an optional Three.js backend with the **same
+`play` / `record` API**, swapping only the draw step. It gives a hardware depth
+buffer (perfect interpenetration for free), MSAA, and real-time interactivity
+(OrbitControls). Fills become vertex-colored meshes, strokes become line
+segments, text becomes billboard sprites.
+
+```html
+<script type="importmap">
+{ "imports": { "three": "/node_modules/three/build/three.module.js",
+               "three/addons/": "/node_modules/three/examples/jsm/" } }
+</script>
+<script type="module">
+  import * as THREE from "three";
+  import { play, ThreeDScene, ThreeDCamera, Sphere, DEGREES } from "/src/browser-three.js";
+
+  class Demo extends ThreeDScene {
+    async construct() {
+      this.add(new Sphere({ radius: 1.5 }));
+      await this.moveCamera({ theta: 30 * DEGREES }, { runTime: 3 });
+    }
+  }
+  await play(Demo, { canvas, three: THREE, camera: new ThreeDCamera({ phi: 68 * DEGREES }) });
+</script>
+```
+
+Same `Scene`, mobjects, and animations as every other target. See
+`examples/browser-three/index.html` (includes an "Explore" orbit mode). The CPU
+Canvas backend remains the default and the only one needed for headless Node
+video; Three.js is a browser-only accelerator.
+
 ## Examples
 
 ```bash
@@ -159,7 +194,8 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Updaters | `mob.add_updater(fn)` | `mob.addUpdater((mob, dt) => …)` | run each frame during play/wait |
 | Rate funcs | smooth, rush_into, there_and_back, … | ✅ camelCase: `smooth`, `rushInto`, `thereAndBack`, … | |
 | Colors | WHITE, BLUE, RED, … | ✅ same names | plus `Color.lerp`, hex parsing |
-| Render targets | `-ql/-qm/-qh`, mp4/gif/png | ✅ quality presets, mp4/webm/gif/png-sequence | **+ browser (live + WebM)** |
+| Render targets | `-ql/-qm/-qh`, mp4/gif/png | ✅ quality presets, mp4/webm/gif/png-sequence | **+ browser (Canvas live + WebM), + WebGL (Three.js) GPU backend** |
+| Renderers | Cairo (2D) / OpenGL (GL) | ✅ Canvas-2D (CPU, Node+browser, z-buffer for 3D) + Three.js (WebGL, browser) | same Scene/mobjects drive both |
 
 ### 3D rendering
 
@@ -180,8 +216,6 @@ shows both). `Cube`/`Box` are intentionally flat (hard edges).
 
 ### Not yet ported
 
-- A GPU/WebGL renderer — Three.js could be layered on as an optional
-  browser-only accelerated backend; the CPU path already handles both targets.
 - `ImageMobject`, SVG-file import (the SVG **path** parser exists and powers
   `MathTex`/`VText`; a full `SVGMobject` file loader is not wrapped up), sound.
 - `MathTex` browser support currently expects MathJax to be initialized; the
