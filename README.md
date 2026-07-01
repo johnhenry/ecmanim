@@ -130,6 +130,7 @@ node examples/mathtex.js   # MathTex — LaTeX (Euler's identity, sums, integral
 node examples/threed.js    # ThreeDScene — projection camera orbiting a 3D scene
 node examples/surfaces.js  # Sphere, Torus, Cube, parametric saddle — shaded, depth-sorted
 node examples/interpenetrate.js  # z-buffer vs painter sorting on a sphere through a plane
+node examples/smooth.js    # smooth (Gouraud) vs flat shading on spheres + a torus
 node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello.mp4
 ```
 
@@ -145,7 +146,7 @@ node bin/manim-js.js render examples/hello-scene.js -q low -o examples/out/hello
 | Text (vector) | Text (Pango glyph paths) | ✅ `VText` | **real glyph outlines as Béziers** (via opentype.js) — Write traces them, Transform morphs letters into shapes |
 | LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex` | **MathJax → SVG → Béziers, no LaTeX install**; genuine glyph VMobjects that Write/Transform |
 | 3D | ThreeDScene, ThreeDAxes, move_camera | ✅ `ThreeDScene`, `ThreeDCamera`, `ThreeDAxes` | projection camera (φ/θ + perspective), `moveCamera`, ambient rotation, depth sort — **no WebGL, renders headlessly** |
-| Surfaces | Surface, Sphere, Cube, …, checkerboard, shading | ✅ `Surface`/`ParametricSurface`, `Sphere`, `Torus`, `Cylinder`, `Cone`, `Cube`, `Box` | quad-mesh faces, Lambertian shading, checkerboard/`colorFunc`, **per-pixel z-buffer** so interpenetrating surfaces resolve correctly |
+| Surfaces | Surface, Sphere, Cube, …, checkerboard, shading | ✅ `Surface`/`ParametricSurface`, `Sphere`, `Torus`, `Cylinder`, `Cone`, `Cube`, `Box` | quad-mesh faces, **smooth (Gouraud) or flat shading**, checkerboard/`colorFunc`, **per-pixel z-buffer** so interpenetrating surfaces resolve correctly |
 | Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)` |
 | Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ Create, Write, Uncreate | |
 | Transform | Transform, ReplacementTransform | ✅ same | automatic Bézier point-count alignment |
@@ -171,9 +172,14 @@ poking through a plane) resolve correctly per pixel rather than mis-sorting.
 Set `camera.disableZBuffer = true` to fall back to per-face painter sorting
 (see `examples/interpenetrate.js` for the side-by-side).
 
+Parametric surfaces default to **smooth (Gouraud) shading** — each corner is lit
+by an analytic surface normal and the color is interpolated across the face, so
+spheres/tori look smooth rather than faceted. Pass `smooth: false` for flat
+per-face shading, or `camera.flatShading = true` globally (`examples/smooth.js`
+shows both). `Cube`/`Box` are intentionally flat (hard edges).
+
 ### Not yet ported
 
-- Faces are flat-shaded per quad (no Gourand/Phong per-pixel smoothing).
 - A GPU/WebGL renderer — Three.js could be layered on as an optional
   browser-only accelerated backend; the CPU path already handles both targets.
 - `ImageMobject`, SVG-file import (the SVG **path** parser exists and powers

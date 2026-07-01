@@ -73,6 +73,42 @@ export class ZBuffer {
     }
   }
 
+  // Like triangle(), but each vertex carries its own color {x,y,z,r,g,b} and the
+  // color is barycentric-interpolated per pixel (Gouraud smooth shading).
+  triangleGouraud(v0, v1, v2, alpha) {
+    const { width, height, depth } = this;
+    let minX = Math.max(0, Math.floor(Math.min(v0.x, v1.x, v2.x)));
+    let maxX = Math.min(width - 1, Math.ceil(Math.max(v0.x, v1.x, v2.x)));
+    let minY = Math.max(0, Math.floor(Math.min(v0.y, v1.y, v2.y)));
+    let maxY = Math.min(height - 1, Math.ceil(Math.max(v0.y, v1.y, v2.y)));
+    if (minX > maxX || minY > maxY) return;
+
+    const edge = (ax, ay, bx, by, px, py) => (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+    const area = edge(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
+    if (area === 0) return;
+    const inv = 1 / area;
+
+    for (let y = minY; y <= maxY; y++) {
+      const py = y + 0.5;
+      for (let x = minX; x <= maxX; x++) {
+        const px = x + 0.5;
+        const w0 = edge(v1.x, v1.y, v2.x, v2.y, px, py) * inv;
+        const w1 = edge(v2.x, v2.y, v0.x, v0.y, px, py) * inv;
+        const w2 = edge(v0.x, v0.y, v1.x, v1.y, px, py) * inv;
+        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+        const z = w0 * v0.z + w1 * v1.z + w2 * v2.z;
+        const idx = y * width + x;
+        if (z > depth[idx]) {
+          const r = w0 * v0.r + w1 * v1.r + w2 * v2.r;
+          const g = w0 * v0.g + w1 * v1.g + w2 * v2.g;
+          const b = w0 * v0.b + w1 * v1.b + w2 * v2.b;
+          this._blend(idx, r, g, b, alpha);
+          depth[idx] = z;
+        }
+      }
+    }
+  }
+
   // Depth-tested thick line between pixel-space endpoints (with depth z each).
   // `bias` nudges depth toward the viewer so edges sit atop the faces they trim.
   line(p0, p1, halfWidth, color, alpha, bias = 0) {

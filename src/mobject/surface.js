@@ -40,6 +40,9 @@ export class Surface extends VGroup {
     this.colorFunc = config.colorFunc ?? null; // (u,v,point) -> color
     this.lightDirection = config.lightDirection ? V.normalize(config.lightDirection) : DEFAULT_LIGHT;
     this.shade = config.shade ?? true;
+    // Smooth (Gouraud) shading interpolates per-vertex lighting across each face,
+    // removing the faceted look. On by default; set smooth:false for flat faces.
+    this.smooth = config.smooth ?? true;
     this._faceConfig = {
       fillOpacity: this.fillOpacity,
       strokeColor: config.strokeColor ?? "#00000055",
@@ -48,8 +51,21 @@ export class Surface extends VGroup {
     };
 
     this._build();
-    if (this.shade) this.applyShading(this.lightDirection);
+    if (this.shade) {
+      this.applyShading(this.lightDirection);
+      if (this.smooth) this.applySmoothShading(this.lightDirection);
+    }
     if (config.point) this.moveTo(config.point);
+  }
+
+  // Analytic-ish surface normal at (u, v) via numerical partial derivatives.
+  _normalAt(u, v) {
+    const e = 1e-4;
+    const du = V.sub(this.func(u + e, v), this.func(u - e, v));
+    const dv = V.sub(this.func(u, v + e), this.func(u, v - e));
+    const n = V.cross(du, dv);
+    const len = V.length(n);
+    return len < 1e-9 ? [0, 0, 1] : V.scale(n, 1 / len);
   }
 
   _build() {
@@ -75,9 +91,33 @@ export class Surface extends VGroup {
         else if (this.checkerboard) color = defaultChecker[(i + j) % 2];
         else color = this.baseFill;
         const face = new Face(corners, color, this._faceConfig);
+        face._uv = [[ua, va], [ub, va], [ub, vb], [ua, vb]]; // corner params
         this.add(face);
       }
     }
+  }
+
+  // Per-vertex (Gouraud) shading: light each corner by its smooth surface normal
+  // and hand the renderer per-vertex colors so lighting interpolates across the
+  // face. Shared grid vertices get the same normal -> seamless smooth surface.
+  applySmoothShading(lightDir = this.lightDirection) {
+    const light = V.normalize(lightDir);
+    const center = this.getCenter();
+    for (const face of this.submobjects) {
+      if (!face._uv) continue;
+      const base = face.baseColor;
+      const colors = face._uv.map(([u, v], k) => {
+        let n = this._normalAt(u, v);
+        // Orient outward from the surface center for consistent lit/unlit sides.
+        const corner = this.func(u, v);
+        if (V.dot(n, V.sub(corner, center)) < 0) n = V.neg(n);
+        const b = Math.min(1, AMBIENT + DIFFUSE * Math.max(0, V.dot(n, light)));
+        return [base.r * b * 255, base.g * b * 255, base.b * b * 255];
+      });
+      // The flattened face loop is [P0,P1,P2,P3,P0]; match with a closing color.
+      face._vertexColors = [colors[0], colors[1], colors[2], colors[3], colors[0]];
+    }
+    return this;
   }
 
   // Re-shade every face using its outward normal vs the light direction. Called

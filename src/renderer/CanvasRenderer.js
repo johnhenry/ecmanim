@@ -125,14 +125,29 @@ export class CanvasRenderer {
 
     const fillAlpha = (mob.fillOpacity ?? 0) * opacity;
     if (fillAlpha > 0 && mob.fillColor) {
-      const rgb = to255(mob.fillColor);
-      for (const loop of loops) {
+      // Gouraud (smooth) fill when the face carries per-vertex colors.
+      const vc = mob._vertexColors;
+      const smooth = vc && !this.camera.flatShading && loops.length === 1 && loops[0].length === vc.length;
+      if (smooth) {
+        const loop = loops[0];
         const n = loop.length;
-        if (n < 3) continue;
+        const proj = loop.map((p, i) => {
+          const v = this._projectVertex(p);
+          v.r = vc[i][0]; v.g = vc[i][1]; v.b = vc[i][2];
+          return v;
+        });
         const c = this._projectVertex(centroid(loop));
-        const proj = loop.map((p) => this._projectVertex(p));
-        for (let i = 0; i < n; i++) {
-          zb.triangle(c, proj[i], proj[(i + 1) % n], rgb, fillAlpha);
+        c.r = c.g = c.b = 0;
+        for (let i = 0; i < n; i++) { c.r += vc[i][0] / n; c.g += vc[i][1] / n; c.b += vc[i][2] / n; }
+        for (let i = 0; i < n - 1; i++) zb.triangleGouraud(c, proj[i], proj[i + 1], fillAlpha);
+      } else {
+        const rgb = to255(mob.fillColor);
+        for (const loop of loops) {
+          const n = loop.length;
+          if (n < 3) continue;
+          const c = this._projectVertex(centroid(loop));
+          const proj = loop.map((p) => this._projectVertex(p));
+          for (let i = 0; i < n; i++) zb.triangle(c, proj[i], proj[(i + 1) % n], rgb, fillAlpha);
         }
       }
     }
