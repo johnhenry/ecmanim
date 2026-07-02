@@ -62,30 +62,40 @@ await render(Clip, { output: "out.mp4", fps: 30 });
 ```js
 import { loadVideo, play } from "manim-js/browser";
 
-const video = await loadVideo("clip.mp4", { mode: "precapture", fps: 30, width: 7 });
+const video = await loadVideo("clip.mp4", { fps: 30, width: 7 }); // mode: "auto"
 // ...add to a Scene and play()/record() as usual.
 ```
 
-Two providers back it:
+Three providers back it, selected by `mode` (default `"auto"`):
 
-- **`precapture` (default) — frame-accurate.** Dependency-free: it seeks a
-  `<video>` to each target time, waits for `seeked`, and captures the frame into
-  an `ImageBitmap`, building a flat array for synchronous lookup. Right for
-  `record()` (deterministic frames). A WebCodecs `VideoDecoder` + demuxer path is
-  a documented future upgrade (mp4 demuxing needs a library, so it is not the
-  default).
-- **`live` — real-time.** Wraps a playing `<video>` element and draws whatever it
+- **`webcodecs` — frame-accurate + single-pass (preferred).** Demuxes an mp4/mov
+  with `mp4box.js` and decodes the whole stream in one pass through a WebCodecs
+  `VideoDecoder`, then resamples the decoded frames onto the target fps grid as
+  `ImageBitmap`s. Far faster than seek-and-capture (one decode pass vs. O(frames)
+  seeks). Requires a browser with WebCodecs and an mp4/mov (h264/h265/av1) source.
+- **`precapture` — frame-accurate, dependency-free fallback.** Seeks a `<video>`
+  to each target time, waits for `seeked`, and captures the frame into an
+  `ImageBitmap`. Works for any format the `<video>` can play; slower.
+- **`live` — real-time.** Wraps a playing `<video>` and draws whatever it
   currently shows. Low-latency, not frame-accurate; right for live `play()`.
 
+`"auto"` uses `webcodecs` for a URL source when the browser supports it and
+transparently falls back to `precapture` otherwise (or on any demux/decode
+failure). Force a path with `mode: "webcodecs" | "precapture" | "live"`;
+`webcodecs` surfaces errors instead of falling back.
+
 `loadVideo` accepts a URL or an `HTMLVideoElement` and normalizes it
-(`crossOrigin`, `muted`, `playsInline`, awaits `loadedmetadata`). The module is
-Node-import-safe (all DOM/WebCodecs access is guarded); calling `loadVideo`
-without a DOM throws a clear error.
+(`crossOrigin`, `muted`, `playsInline`, awaits `loadedmetadata`). `mp4box` is
+imported lazily (never at module load), so the module stays Node-import-safe and
+unbundled-browser-safe; calling `loadVideo` without a DOM throws a clear error.
+In an unbundled browser, add `mp4box` to your import map (like `gifenc` /
+`mp4-muxer`) or use a bundler.
 
 ## Limitations
 
-- Node holds all target frames in memory (see above) — downscale/trim long clips.
-- Browser `precapture` seek-and-capture is O(frames) up front; large clips are
-  slow to prepare until the WebCodecs path lands.
+- Both backends hold all target frames in memory (see above) — downscale/trim
+  long clips.
+- Browser `webcodecs` is mp4/mov only (mp4box demux); other formats use the
+  slower `precapture` seek-and-capture fallback.
 - 3D/vector renderers draw a `VideoMobject` like any raster `ImageMobject`
   (projected bbox); it is not a textured 3D surface.

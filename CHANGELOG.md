@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.5.0 — WebCodecs browser video decode
+
+Upgrades the browser `VideoMobject` path with a WebCodecs decoder, behind the
+same synchronous `frameAt()` contract (drop-in; VideoMobject unchanged). See
+[docs/video.md](docs/video.md).
+
+- **`WebCodecsProvider`**: demuxes an mp4/mov with `mp4box.js` and decodes the
+  whole stream in a single pass through a WebCodecs `VideoDecoder`, then resamples
+  the decoded frames onto the target fps grid as `ImageBitmap`s. Much faster than
+  the seek-and-capture path (one decode pass vs. O(frames) sequential seeks).
+- **`loadVideo` mode `"auto"` (new default)**: prefers `webcodecs` for a URL
+  source when the browser supports it and mp4box can demux it, and transparently
+  falls back to the dependency-free `precapture` path otherwise (or on any
+  demux/decode failure). Explicit `mode: "webcodecs" | "precapture" | "live"`
+  still available; `webcodecs` surfaces errors instead of falling back.
+- `mp4box` added as a dependency, imported lazily (never at module load) so the
+  module stays Node-import-safe and unbundled-browser-safe. Also exports
+  `webCodecsAvailable()`.
+
+Verified in live headless Chrome (Mesa): mode `"webcodecs"` demuxed + decoded an
+h264 mp4 to 10 `ImageBitmap` frames with correct dims and frame-swapping. 4 new
+tests (492 total, WebCodecs decode itself covered by the browser e2e).
+
 ## 1.4.0 — VideoMobject (external-video ingestion)
 
 Place an external video clip inside a scene. `VideoMobject` is an `ImageMobject`

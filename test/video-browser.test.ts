@@ -14,6 +14,8 @@ import assert from "node:assert/strict";
 import {
   PreCapturedProvider,
   LiveVideoProvider,
+  WebCodecsProvider,
+  webCodecsAvailable,
   loadVideo,
 } from "../src/video-browser.ts";
 
@@ -156,6 +158,43 @@ test("LiveVideoProvider reports zero metadata for a non-finite duration element"
 });
 
 // ---------------------------------------------------------------------------
+// WebCodecs provider — indexing seam + availability (decode itself is browser-only)
+// ---------------------------------------------------------------------------
+test("webCodecsAvailable() is false under Node (no VideoDecoder)", () => {
+  assert.equal(typeof WebCodecsProvider, "function");
+  assert.equal(webCodecsAvailable(), false);
+});
+
+test("WebCodecsProvider maps time -> index like the others (injected frames)", () => {
+  const frames = ["w0", "w1", "w2", "w3"]; // 4 frames @ 8 fps => 0.5s
+  const p = new WebCodecsProvider({ frames, fps: 8 });
+  assert.equal(p.frameCount, 4);
+  assert.ok(Math.abs(p.duration - 0.5) < 1e-9);
+  assert.equal(p.frameAt(0), "w0");
+  assert.equal(p.frameAt(0.125), "w1"); // 0.125*8 = 1
+  assert.equal(p.frameAt(0.25), "w2");
+  assert.equal(p.frameAt(-1), "w0", "clamps below zero");
+  assert.equal(p.frameAt(99), "w3", "clamps past the end");
+});
+
+test("WebCodecsProvider honors explicit dims/duration and disposes frames", () => {
+  let closed = 0;
+  const frames = [{ close: () => { closed++; } }, { close: () => { closed++; } }];
+  const p = new WebCodecsProvider({ frames, fps: 30, duration: 5, width: 1920, height: 1080 });
+  assert.equal(p.duration, 5);
+  assert.equal(p.width, 1920);
+  assert.equal(p.height, 1080);
+  p.dispose();
+  assert.equal(p.frameCount, 0);
+  assert.equal(p.frameAt(0), null);
+  assert.equal(closed, 2, "dispose() closes each frame");
+});
+
+test("WebCodecsProvider.frameAt returns null with no frames", () => {
+  assert.equal(new WebCodecsProvider({ fps: 30 }).frameAt(0), null);
+});
+
+// ---------------------------------------------------------------------------
 // Real-browser end-to-end — SKIPPED under Node.
 // The orchestrator runs this separately under the GPU lock. Kept here as
 // executable documentation of the intended browser behavior.
@@ -177,6 +216,12 @@ test(
     //   mob.seekTo(mob.playDuration / 2);
     //   assert.notEqual(mob.image, first);
     //   mob.dispose();
+    //
+    // "webcodecs" mode (mp4/mov): single-pass demux+decode via mp4box + VideoDecoder.
+    //   const wc = await loadVideo("/fixtures/clip.mp4", { fps: 30, mode: "webcodecs" });
+    //   assert.ok(wc.provider instanceof WebCodecsProvider);
+    //   assert.ok(wc.provider.frameCount > 0);
+    //   assert.equal(wc.provider.frameAt(0).constructor.name, "ImageBitmap");
     //
     // "live" mode: frameAt(t) returns the <video> element and nudges currentTime.
     //   const live = await loadVideo("/fixtures/clip.mp4", { mode: "live" });

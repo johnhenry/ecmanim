@@ -31,7 +31,7 @@ export * from "./index.ts";
 export { ManimPlayerElement, defineManimPlayer } from "./web-component.ts";
 
 // VideoMobject (browser): <video>/WebCodecs-backed frame providers.
-export { loadVideo, LiveVideoProvider, PreCapturedProvider } from "./video-browser.ts";
+export { loadVideo, LiveVideoProvider, PreCapturedProvider, WebCodecsProvider, webCodecsAvailable } from "./video-browser.ts";
 export type { LoadVideoBrowserOptions } from "./video-browser.ts";
 
 // Options accepted by the browser backend's play() / record(). All optional.
