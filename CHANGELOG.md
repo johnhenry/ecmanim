@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.8.0 — adoption phase 2: captions + audio-reactive
+
+- **Captions** (`parseSrt`/`serializeSrt`, `createTikTokStyleCaptions`,
+  `captionAt`, `Caption`): a framework-agnostic caption model + SRT round-trip +
+  TikTok-style karaoke pages (token→page grouping). Transcription (Whisper/etc.)
+  stays an external step that emits `Caption[]`.
+- **`CaptionTrack`** mobject: an in-scene overlay that shows the active caption for
+  the current time with optional karaoke reveal (reuses `RasterText.revealFraction`).
+- **Audio analysis** (`getAudioData`, `visualizeAudio`, `getWaveformPortion`,
+  `createSmoothSvgPath`): decode audio to PCM (Node ffmpeg / browser
+  `decodeAudioData`) and get per-frame frequency spectra for audio-reactive
+  visuals. Ships a compact dependency-free radix-2 FFT (`fftInPlace`,
+  `magnitudeSpectrum`).
+
+12 new tests (549 total); type-clean; example `examples/audio-reactive.ts`
+(spectrum bars + captions + muxed audio), docs.
+
 ## 1.7.0 — adoption phase 1: pure primitives
 
 First phase of the tool-survey adoption program (Manim / Remotion / GSAP / Motion

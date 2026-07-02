@@ -147,6 +147,18 @@ export {
 } from "./core/presets.ts";
 export type { StylePreset, AspectRatioPreset } from "./core/presets.ts";
 
+// Captions: data model + SRT + TikTok-style karaoke pages + an overlay mobject.
+export {
+  parseSrt, serializeSrt, createTikTokStyleCaptions, captionAt,
+} from "./captions/captions.ts";
+export type { Caption, CaptionToken, CaptionPage } from "./captions/captions.ts";
+export { CaptionTrack } from "./captions/caption_track.ts";
+export type { CaptionTrackConfig } from "./captions/caption_track.ts";
+// Audio analysis for audio-reactive animation (decode + per-frame FFT).
+export { getAudioData, visualizeAudio, getWaveformPortion, createSmoothSvgPath } from "./audio/analyze.ts";
+export type { AudioData } from "./audio/analyze.ts";
+export { fftInPlace, magnitudeSpectrum, nextPow2 } from "./audio/fft.ts";
+
 // Remotion-inspired primitives: range-mapping interpolate, physics springs, and
 // composable easing combinators. `interpolate` claims the bare top-level name
 // (the 2-arg lerp stays namespaced as `bezier.interpolate`).

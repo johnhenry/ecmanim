@@ -1,6 +1,6 @@
 {
   "name": "manim-js",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "A JavaScript port of manim (Mathematical Animation Engine). Runs in Node (renders to MP4 via ffmpeg) and in the browser (live canvas + WebM export).",
   "type": "module",
   "main": "./dist/index.js",
