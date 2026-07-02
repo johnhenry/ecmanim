@@ -161,16 +161,28 @@ export class NumberLine extends VGroup {
     return makeTickRange([this.xMin, this.xMax, this.xStep]);
   }
 
-  // Data number -> world point on the line. Applies the scale base first.
+  // Data number -> world point on the line. Applies the scale base first,
+  // then interpolates between the axis line's CURRENT endpoints (rather than
+  // the frozen construction-time _leftX/unit scalars) so the result stays in
+  // sync with any shift()/rotate()/scale() applied after construction, or to
+  // a parent group this NumberLine has been nested in (issue #2).
   numberToPoint(x: number): Vec3 {
     const s = this.scaling.functionOf(x);
-    return [this._leftX + (s - this._sMin) * this.unit, 0, 0];
+    const alpha = this._sMax === this._sMin ? 0 : (s - this._sMin) / (this._sMax - this._sMin);
+    return V.lerp(this.axisLine.getStart(), this.axisLine.getEnd(), alpha);
   }
   n2p(x: number): Vec3 { return this.numberToPoint(x); }
 
-  // World point -> data number (projected onto the line's x-axis, un-scaled).
+  // World point -> data number. Projects p onto the axis line's CURRENT
+  // direction vector (not just its x-coordinate), so this works whether the
+  // line is horizontal, vertical (rotated), or has been shifted/scaled.
   pointToNumber(p: number[]): number {
-    const s = this._sMin + (p[0] - this._leftX) / this.unit;
+    const start = this.axisLine.getStart();
+    const end = this.axisLine.getEnd();
+    const dir = V.sub(end, start);
+    const denom = V.dot(dir, dir);
+    const alpha = denom === 0 ? 0 : V.dot(V.sub(p, start), dir) / denom;
+    const s = this._sMin + alpha * (this._sMax - this._sMin);
     return this.scaling.inverseFunctionOf(s);
   }
   p2n(p: number[]): number { return this.pointToNumber(p); }
@@ -216,9 +228,11 @@ export class Axes extends VGroup {
 
     // Shift each axis so its origin-reference sits at the world origin, making
     // the two axes cross there. For a log axis (where value 0 has no finite
-    // position) the reference falls back to the axis minimum.
+    // position) the reference falls back to the axis minimum. numberToPoint
+    // reads live axisLine geometry, so this correctly accounts for the
+    // rotate() just applied to yAxis.
     this.xAxis.shift(V.neg(this.xAxis.numberToPoint(this._xRef())));
-    this.yAxis.shift(V.neg(this._rawYPoint(this._yRef())));
+    this.yAxis.shift(V.neg(this.yAxis.numberToPoint(this._yRef())));
 
     this.add(this.xAxis, this.yAxis);
   }
@@ -232,51 +246,29 @@ export class Axes extends VGroup {
     return Number.isFinite(this.yAxis.scaling.functionOf(0)) ? 0 : this.yAxis.xMin;
   }
 
-  // World point of data value y on the (rotated) y-axis, before origin shift.
-  _rawYPoint(y: number): Vec3 {
-    // The unrotated point is [leftX + (s-sMin)*unit, 0, 0]; a +90deg rotation
-    // about origin maps [a,0,0] -> [0,a,0].
-    const s = this.yAxis.scaling.functionOf(y);
-    const a = this.yAxis._leftX + (s - this.yAxis._sMin) * this.yAxis.unit;
-    return [0, a, 0];
-  }
-
-  // Data coords (x,y) -> world point. Composes the two axis mappings.
+  // Data coords (x,y) -> world point. Mirrors upstream manim's
+  // CoordinateSystem.coords_to_point: sum each axis's displacement from its
+  // own reference point onto a shared origin. Since every piece is read from
+  // the axes' CURRENT (possibly shifted/rotated/scaled/nested) geometry via
+  // numberToPoint, this stays correct after any transform applied post
+  // construction — see issue #2 — not just the constructor's own shift.
   coordsToPoint(x: number, y: number): Vec3 {
-    return [this._xWorld(x), this._yWorld(y), 0];
+    const origin = this.xAxis.numberToPoint(this._xRef());
+    const dx = V.sub(this.xAxis.numberToPoint(x), origin);
+    const dy = V.sub(this.yAxis.numberToPoint(y), this.yAxis.numberToPoint(this._yRef()));
+    return V.add(origin, V.add(dx, dy));
   }
   c2p(x: number, y: number): Vec3 { return this.coordsToPoint(x, y); }
 
-  // Horizontal world coordinate for data value x (after the x-axis was
-  // shifted so its reference sits at the origin). Mirrors _yWorld below —
-  // xAxis.numberToPoint()/pointToNumber() must NOT be used directly here,
-  // since they use the NumberLine's pre-shift _leftX and ignore the shift()
-  // applied in the constructor to re-center the axis at its reference value.
-  _xWorld(x: number): number {
-    const sx = this.xAxis.scaling.functionOf(x);
-    const s0 = this.xAxis.scaling.functionOf(this._xRef());
-    return (sx - s0) * this.xAxis.unit;
-  }
+  // Horizontal/vertical world coordinate for data value x/y, i.e. the point
+  // on that axis's own current line (used by labels/grid, which anchor
+  // directly on an axis rather than needing a full (x,y) pair).
+  _xWorld(x: number): number { return this.xAxis.numberToPoint(x)[0]; }
+  _yWorld(y: number): number { return this.yAxis.numberToPoint(y)[1]; }
 
-  // Vertical world coordinate for data value y (after the y-axis was rotated
-  // and shifted so its reference sits at the origin).
-  _yWorld(y: number): number {
-    const sy = this.yAxis.scaling.functionOf(y);
-    const s0 = this.yAxis.scaling.functionOf(this._yRef());
-    return (sy - s0) * this.yAxis.unit;
-  }
-
-  // World point -> data coords (inverts coordsToPoint).
+  // World point -> data coords: project onto each axis independently.
   pointToCoords(p: number[]): number[] {
-    // Invert _xWorld: sx = p[0]/unit + s0; then un-scale.
-    const s0x = this.xAxis.scaling.functionOf(this._xRef());
-    const sx = p[0] / this.xAxis.unit + s0x;
-    const x = this.xAxis.scaling.inverseFunctionOf(sx);
-    // Invert _yWorld: sy = p[1]/unit + s0; then un-scale.
-    const s0y = this.yAxis.scaling.functionOf(this._yRef());
-    const sy = p[1] / this.yAxis.unit + s0y;
-    const y = this.yAxis.scaling.inverseFunctionOf(sy);
-    return [x, y];
+    return [this.xAxis.pointToNumber(p), this.yAxis.pointToNumber(p)];
   }
   p2c(p: number[]): number[] { return this.pointToCoords(p); }
 

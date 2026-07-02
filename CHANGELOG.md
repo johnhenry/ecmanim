@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.0.5
+
+### Fixed
+- **`Axes`/`NumberPlane`'s `c2p()` didn't track transforms applied after
+  construction** (`shift()`, `moveTo()`, nesting inside a shifted parent,
+  etc.), reported as
+  [#2](https://github.com/johnhenry/ecmanim/issues/2) — the same category of
+  bug as #1, just triggered by a different code path: the *drawn* axis line
+  moved (since `shift()` mutates a mobject's `points` directly) but
+  `c2p()`/`coordsToPoint()` still computed from frozen construction-time
+  scalars (`_leftX`/`unit`), so its output never changed. Fixed at the root:
+  `NumberLine.numberToPoint()`/`pointToNumber()` now derive from the axis
+  line's *current* rendered endpoints (`axisLine.getStart()`/`getEnd()`) via
+  affine-transform-safe interpolation/projection, instead of the frozen
+  scalars — so they stay correct under any subsequent shift/scale/rotate, or
+  nesting inside a transformed parent group. `Axes.coordsToPoint()`/
+  `pointToCoords()` were simplified to sum/project per-axis displacements
+  from a shared origin (mirroring upstream Python manim's
+  `CoordinateSystem.coords_to_point`), replacing the more fragile
+  reference-relative `_xWorld`/`_yWorld`/`_rawYPoint` scalar arithmetic added
+  for #1. Added a regression test covering a post-construction `shift()`,
+  including the #1 (asymmetric range) + #2 (shift) cases composed together.
+
 ## 0.0.4
 
 ### Fixed

@@ -129,6 +129,40 @@ test("c2p places coordinates on the rendered axis line for an asymmetric xRange 
   assert.ok(Math.abs(ry - 0.25) < 1e-9);
 });
 
+test("c2p reflects a shift() applied after construction (issue #2)", () => {
+  // Before the fix, coordsToPoint()/numberToPoint() computed from frozen
+  // construction-time scalars (_leftX/unit), so a shift() applied to the
+  // whole Axes after construction moved the rendered axis line but left
+  // c2p()'s output unchanged. numberToPoint() must read the axis line's
+  // live/current points instead.
+  const ax = new Axes({ xRange: [-4, 4, 1], yRange: [-4, 4, 1] });
+  const before = ax.c2p(0, 0.5);
+  ax.shift([-1.5, 0, 0]);
+  const after = ax.c2p(0, 0.5);
+  assert.ok(Math.abs(after[0] - (before[0] - 1.5)) < 1e-9, `expected x to shift by -1.5, got ${before[0]} -> ${after[0]}`);
+  assert.ok(Math.abs(after[1] - before[1]) < 1e-9, "y should be unaffected by a pure x shift");
+
+  // The shifted c2p() output must still land exactly on the shifted,
+  // rendered axis line.
+  const lineStartX = ax.xAxis.axisLine.points[0][0];
+  const lineEndX = ax.xAxis.axisLine.points[ax.xAxis.axisLine.points.length - 1][0];
+  assert.ok(Math.abs(ax.c2p(-4, 0)[0] - lineStartX) < 1e-9);
+  assert.ok(Math.abs(ax.c2p(4, 0)[0] - lineEndX) < 1e-9);
+
+  // p2c must still invert c2p after the shift.
+  const [rx, ry] = ax.p2c(ax.c2p(1.5, -2.5));
+  assert.ok(Math.abs(rx - 1.5) < 1e-9);
+  assert.ok(Math.abs(ry - -2.5) < 1e-9);
+
+  // Combining both bugs: an asymmetric xRange (issue #1) plus a post-
+  // construction shift (issue #2) must compose correctly.
+  const ax2 = new Axes({ xRange: [0, 70, 10], yRange: [0, 1, 0.5] });
+  ax2.shift([3, -2, 0]);
+  const l2 = ax2.xAxis.axisLine.points;
+  assert.ok(Math.abs(ax2.c2p(0, 0)[0] - l2[0][0]) < 1e-9);
+  assert.ok(Math.abs(ax2.c2p(70, 0)[0] - l2[l2.length - 1][0]) < 1e-9);
+});
+
 test("NumberPlane with LogBase scaling maps 100 correctly", () => {
   const ax = new NumberPlane({
     xRange: [0, 4, 1],
