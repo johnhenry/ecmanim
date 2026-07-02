@@ -56,7 +56,7 @@ function familyPoints(mobject: any): number[][][] {
 // half fillOpacity 0->target. Mirrors manim's DrawBorderThenFill.
 // ---------------------------------------------------------------------------
 export class DrawBorderThenFill extends Animation {
-  origFill: number[];
+  origFill!: number[];
   strokeWidth?: number;
   strokeColor?: ColorLike;
 
@@ -157,7 +157,7 @@ export class ShowIncreasingSubsets extends Animation {
   group: any;
   allSubmobs: any[];
   intFunc: (x: number) => number;
-  startOpacities: number[];
+  startOpacities!: number[];
 
   constructor(group: Mobject, config: ShowSubsetsConfig = {}) {
     super(group, { ...config, introducer: true });
@@ -317,7 +317,7 @@ export class AddTextWordByWord extends Animation {
   text: any;
   words: any[][]; // each entry is a list of glyph submobjects
   isRaster: boolean;
-  startOpacities: number[][];
+  startOpacities!: number[][];
 
   constructor(text: Mobject, config: AddTextConfig = {}) {
     const glyphs = textGlyphs(text);
@@ -470,9 +470,9 @@ export class UntypeWithCursor extends TypeWithCursor {
 export class SpiralIn extends Animation {
   spiralScale: number;
   fadeInFraction: number;
-  finalPoints: number[][][];
-  targetOpacities: Array<{ fill: number; stroke: number; op: number }>;
-  center: number[];
+  finalPoints!: number[][][];
+  targetOpacities!: Array<{ fill: number; stroke: number; op: number }>;
+  center!: number[];
 
   constructor(group: Mobject, config: SpiralInConfig = {}) {
     super(group, {

@@ -70,7 +70,8 @@ export class DecimalNumber extends RasterText {
     this.value = value;
     this.text = this._format(value);
     this._buildBox();
-    if (config.point ?? config.at) this.moveTo(config.point ?? config.at);
+    const at = config.point ?? config.at;
+    if (at) this.moveTo(at);
   }
 
   _format(value: number): string {

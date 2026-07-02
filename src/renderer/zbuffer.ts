@@ -63,7 +63,7 @@ export class ZBuffer {
     let maxY = Math.min(height - 1, Math.ceil(Math.max(v0.y, v1.y, v2.y)));
     if (minX > maxX || minY > maxY) return;
 
-    const edge = (ax, ay, bx, by, px, py) => (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+    const edge = (ax: number, ay: number, bx: number, by: number, px: number, py: number) => (bx - ax) * (py - ay) - (by - ay) * (px - ax);
     const area = edge(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
     if (area === 0) return;
     const inv = 1 / area;
@@ -97,7 +97,7 @@ export class ZBuffer {
     let maxY = Math.min(height - 1, Math.ceil(Math.max(v0.y, v1.y, v2.y)));
     if (minX > maxX || minY > maxY) return;
 
-    const edge = (ax, ay, bx, by, px, py) => (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+    const edge = (ax: number, ay: number, bx: number, by: number, px: number, py: number) => (bx - ax) * (py - ay) - (by - ay) * (px - ax);
     const area = edge(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y);
     if (area === 0) return;
     const inv = 1 / area;
@@ -113,9 +113,9 @@ export class ZBuffer {
         const z = w0 * v0.z + w1 * v1.z + w2 * v2.z;
         const idx = y * width + x;
         if (z > depth[idx]) {
-          const r = w0 * v0.r + w1 * v1.r + w2 * v2.r;
-          const g = w0 * v0.g + w1 * v1.g + w2 * v2.g;
-          const b = w0 * v0.b + w1 * v1.b + w2 * v2.b;
+          const r = w0 * (v0.r ?? 0) + w1 * (v1.r ?? 0) + w2 * (v2.r ?? 0);
+          const g = w0 * (v0.g ?? 0) + w1 * (v1.g ?? 0) + w2 * (v2.g ?? 0);
+          const b = w0 * (v0.b ?? 0) + w1 * (v1.b ?? 0) + w2 * (v2.b ?? 0);
           this._blend(idx, r, g, b, alpha);
           depth[idx] = z;
         }

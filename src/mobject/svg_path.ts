@@ -61,8 +61,9 @@ export function parsePathToSubpaths(d: string): number[][][] {
   };
 
   while (i < tokens.length) {
-    let cmd;
-    if (tokens[i].cmd !== undefined) { cmd = tokens[i].cmd; i++; }
+    let cmd: string;
+    const tok = tokens[i];
+    if (tok.cmd !== undefined) { cmd = tok.cmd; i++; }
     else cmd = /[Mm]/.test(lastCmd) ? (lastCmd === "M" ? "L" : "l") : lastCmd; // implicit repeat
     const rel = cmd === cmd.toLowerCase();
     const abs = (x: number, y: number): number[] => (rel ? [cursor[0] + x, cursor[1] + y, 0] : [x, y, 0]);
@@ -118,7 +119,7 @@ export function parsePathToSubpaths(d: string): number[][][] {
         break;
       case "T":
         while (hasNum()) {
-          const q = /[QT]/i.test(lastCmd) && lastCtrl
+          const q: number[] = /[QT]/i.test(lastCmd) && lastCtrl
             ? [2 * cursor[0] - lastCtrl[0], 2 * cursor[1] - lastCtrl[1], 0] : cursor;
           const end = abs(nextNum(), nextNum());
           const [c1, c2] = quadToCubic(cursor, q, end);

@@ -188,7 +188,7 @@ export class ThreeRenderer {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d")!;
     ctx.font = `${mob.weight ?? "normal"} ${fontPx}px ${mob.font ?? "sans-serif"}`;
-    const wPx = Math.max(1, ...lines.map((l) => ctx.measureText(l).width));
+    const wPx = Math.max(1, ...lines.map((l: string) => ctx.measureText(l).width));
     canvas.width = Math.ceil(wPx);
     canvas.height = Math.ceil(fontPx * 1.3 * lines.length);
     const c2 = canvas.getContext("2d")!;
@@ -196,7 +196,7 @@ export class ThreeRenderer {
     c2.textAlign = "center";
     c2.textBaseline = "middle";
     c2.fillStyle = mob.fillColor.toRGBAString((mob.fillOpacity ?? 1) * (mob.opacity ?? 1));
-    lines.forEach((l, i) => c2.fillText(l, canvas.width / 2, fontPx * 1.3 * (i + 0.5)));
+    lines.forEach((l: string, i: number) => c2.fillText(l, canvas.width / 2, fontPx * 1.3 * (i + 0.5)));
     const tex = new THREE.CanvasTexture(canvas);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
     const center = mob.getCenter();

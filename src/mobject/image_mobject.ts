@@ -32,7 +32,7 @@ export class ImageMobject extends Mobject {
     let h = config.height;
     let w = config.width;
     if (h == null && w == null) h = 2;
-    if (h == null) h = w / this.aspect;
+    if (h == null) h = (w as number) / this.aspect;
     if (w == null) w = h * this.aspect;
 
     // Corners: TL, TR, BR, BL (matches how the renderer reads the box).

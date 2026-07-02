@@ -254,7 +254,7 @@ export function reactive(fn: () => Mobject): Mobject {
     }
   });
 
-  current = fresh as Mobject;
+  current = fresh as unknown as Mobject;
 
   function apply(): void {
     if (!fresh) return;

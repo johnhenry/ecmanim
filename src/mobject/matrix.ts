@@ -41,7 +41,7 @@ function defaultElementToMobject(element: any, config: Record<string, any> = {})
 export class Matrix extends VGroup {
   mob_matrix: Mobject[][];
   elements: Mobject[];
-  brackets: VGroup;
+  brackets!: VGroup; // built during construction
   v_buff: number;
   h_buff: number;
   bracket_h_buff: number;

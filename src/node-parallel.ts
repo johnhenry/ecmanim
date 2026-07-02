@@ -83,7 +83,7 @@ function resolveRender(options: RenderParallelOptions): Resolved {
   }
   if (options.resolution) [pixelWidth, pixelHeight] = options.resolution;
   const fps = options.fps
-    ?? (options.quality && QUALITY_PRESETS[options.quality]?.fps)
+    ?? (options.quality ? QUALITY_PRESETS[options.quality]?.fps : undefined)
     ?? manimConfig.fps ?? q.fps;
 
   const background = options.background ?? manimConfig.background ?? "#000000";

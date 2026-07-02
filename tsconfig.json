@@ -17,11 +17,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
 
-    "strict": false,
-    "noImplicitAny": false,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "strictBindCallApply": true
+    "strict": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

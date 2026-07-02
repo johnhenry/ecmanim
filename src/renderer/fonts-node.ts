@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-function fcMatch(pattern) {
+function fcMatch(pattern: string) {
   try {
     const out = execFileSync("fc-match", ["-f", "%{file}", pattern], { encoding: "utf8" });
     return out.trim() || null;
@@ -26,8 +26,8 @@ function scanForFont() {
     join(process.env.HOME || "", ".local/share/fonts"),
   ];
   const wanted = [/DejaVuSans\.ttf$/i, /LiberationSans-Regular\.ttf$/i, /NotoSans-Regular\.ttf$/i, /Arial\.ttf$/i];
-  const found = [];
-  const walk = (dir, depth) => {
+  const found: string[] = [];
+  const walk = (dir: string, depth: number) => {
     if (depth > 6 || !existsSync(dir)) return;
     let entries;
     try { entries = readdirSync(dir); } catch { return; }
@@ -66,7 +66,7 @@ export async function loadVectorFont(pattern = "sans-serif") {
 
 let registered = false;
 
-export function autoRegisterFonts(GlobalFonts, { alias = "sans-serif", force = false } = {}) {
+export function autoRegisterFonts(GlobalFonts: any, { alias = "sans-serif", force = false } = {}) {
   if (!GlobalFonts) return false;
   if (registered && !force) return true;
   if (GlobalFonts.families && GlobalFonts.families.length > 0 && !force) {
@@ -89,7 +89,7 @@ export function autoRegisterFonts(GlobalFonts, { alias = "sans-serif", force = f
   let ok = false;
   const seen = new Set();
   for (const path of candidates) {
-    if (seen.has(path) || !existsSync(path)) continue;
+    if (!path || seen.has(path) || !existsSync(path)) continue;
     seen.add(path);
     try {
       // Register under both the alias and its own family name.

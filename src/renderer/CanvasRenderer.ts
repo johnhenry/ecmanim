@@ -353,7 +353,7 @@ export class CanvasRenderer {
     const anchorX = mob.align === "left" ? box.min[0] : mob.align === "right" ? box.max[0] : center[0];
     const [cx] = camera.toPixel([anchorX, 0, 0]);
     const [, cyTop] = camera.toPixel([0, box.max[1], 0]);
-    lines.forEach((line, i) => {
+    lines.forEach((line: string, i: number) => {
       const y = cyTop + lineStepPx * (i + 0.5);
       ctx.fillText(line, cx, y);
     });
@@ -365,7 +365,7 @@ export class CanvasRenderer {
   tracePath(mob: any, proportion = 1): void {
     const { ctx, camera } = this;
     const subpaths = mob.getSubpaths();
-    const totalCurves = subpaths.reduce((n, sp) => n + Math.max(0, Math.floor((sp.length - 1) / 3)), 0);
+    const totalCurves = subpaths.reduce((n: number, sp: number[][]) => n + Math.max(0, Math.floor((sp.length - 1) / 3)), 0);
     const drawCurves = totalCurves * Math.max(0, Math.min(1, proportion));
     let drawn = 0;
 

@@ -150,10 +150,10 @@ export class FadeTransform extends Transform {
   stretch: boolean;
   dimToMatch: number;
   group: any;
-  startFillOut: number;
-  startStrokeOut: number;
-  startFillIn: number;
-  startStrokeIn: number;
+  startFillOut!: number;
+  startStrokeOut!: number;
+  startFillIn!: number;
+  startStrokeIn!: number;
 
   constructor(
     mobject: Mobject,

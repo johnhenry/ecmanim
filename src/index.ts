@@ -222,7 +222,7 @@ export { use, registry, Registry } from "./plugins/registry.ts";
 export type { Plugin, PluginLike, RegistryKind } from "./plugins/registry.ts";
 
 // Quality presets mirroring manim's -ql / -qm / -qh flags.
-export const QUALITIES = {
+export const QUALITIES: Record<string, { pixelWidth: number; pixelHeight: number; fps: number }> = {
   low: { pixelWidth: 854, pixelHeight: 480, fps: 15 },
   medium: { pixelWidth: 1280, pixelHeight: 720, fps: 30 },
   high: { pixelWidth: 1920, pixelHeight: 1080, fps: 60 },

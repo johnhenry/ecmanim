@@ -56,8 +56,8 @@ function familyOpacities(mobject: any): Array<{ fill: number; stroke: number; op
 export class GrowFromPoint extends Animation {
   point: any;
   pointColor: any;
-  finalPoints: number[][][];
-  targetOpacities: Array<{ fill: number; stroke: number; op: number }>;
+  finalPoints!: number[][][];
+  targetOpacities!: Array<{ fill: number; stroke: number; op: number }>;
 
   constructor(mobject: Mobject, point: any, config: ExtraConfig = {}) {
     super(mobject, { ...config, introducer: true });
@@ -129,8 +129,8 @@ export class SpinInFromNothing extends GrowFromCenter {
 // Reverse of GrowFromCenter: shrink into the center and remove.
 export class ShrinkToCenter extends Animation {
   point: any;
-  startPoints: number[][][];
-  startOpacities: Array<{ fill: number; stroke: number; op: number }>;
+  startPoints!: number[][][];
+  startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
 
   constructor(mobject: any, config: ExtraConfig = {}) {
     super(mobject, { ...config, remover: true });
@@ -171,7 +171,7 @@ export class Rotating extends Animation {
   radians: number;
   axis: any;
   aboutPoint: any;
-  startPoints: number[][][];
+  startPoints!: number[][][];
   pivot: any;
 
   constructor(mobject: any, config: ExtraConfig = {}) {
@@ -209,7 +209,7 @@ export class Rotate extends Animation {
   angle: number;
   axis: any;
   aboutPoint: any;
-  startPoints: number[][][];
+  startPoints!: number[][][];
   pivot: any;
 
   constructor(mobject: any, angle: number, config: ExtraConfig = {}) {
@@ -260,9 +260,9 @@ export class MoveAlongPath extends Animation {
 export class Indicate extends Animation {
   scaleFactor: number;
   flashColor: any;
-  startPoints: number[][][];
+  startPoints!: number[][][];
   center: any;
-  startColors: Array<{ color: any; strokeColor: any; fillColor: any }>;
+  startColors!: Array<{ color: any; strokeColor: any; fillColor: any }>;
 
   constructor(mobject: any, config: ExtraConfig = {}) {
     super(mobject, { rateFunc: config.rateFunc ?? rf.thereAndBack, ...config });
@@ -322,7 +322,7 @@ export class Indicate extends Animation {
 export class Flash extends Animation {
   point: any;
   lines: any;
-  startOpacities: Array<{ fill: number; stroke: number; op: number }>;
+  startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
 
   constructor(point: any, config: ExtraConfig = {}) {
     const color = config.color ?? "#FFFFFF";
@@ -374,7 +374,7 @@ export class Wiggle extends Animation {
   rotationAngle: number;
   nWiggles: number;
   axis: any;
-  startPoints: number[][][];
+  startPoints!: number[][][];
   center: any;
 
   constructor(mobject: any, config: ExtraConfig = {}) {
@@ -421,7 +421,7 @@ export class Wiggle extends Animation {
 export class Circumscribe extends Animation {
   rect: any;
   fadeOut: boolean;
-  startOpacities: Array<{ fill: number; stroke: number; op: number }>;
+  startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
 
   constructor(mobject: any, config: ExtraConfig = {}) {
     const target = mobject;
@@ -476,8 +476,8 @@ export class FocusOn extends Animation {
   point: any;
   circle: any;
   startRadius: number;
-  startPoints: number[][][];
-  startOpacities: Array<{ fill: number; stroke: number; op: number }>;
+  startPoints!: number[][][];
+  startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
 
   constructor(point: any, config: ExtraConfig = {}) {
     const target = point instanceof Object && !Array.isArray(point) && point.getCenter

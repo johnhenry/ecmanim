@@ -63,7 +63,7 @@ export class RasterText extends Mobject {
   fillOpacity: number;
   strokeOpacity: number;
   revealFraction: number;
-  numLines: number;
+  numLines!: number; // set by _layout() in the constructor
 
   constructor(text = "", config: TextConfig = {}) {
     super(config);

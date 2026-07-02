@@ -18,9 +18,9 @@ interface Timing {
 export class AnimationGroup extends Animation {
   animations: any[];
   groupRunTime: number | null;
-  timings: Timing[];
-  maxEnd: number;
-  scaledTimings: Timing[];
+  timings!: Timing[];
+  maxEnd!: number;
+  scaledTimings!: Timing[];
 
   constructor(animations: any[], config: AnimationConfig = {}) {
     // The group's own mobject is a stand-in; real work is delegated. manim's
@@ -53,8 +53,11 @@ export class AnimationGroup extends Animation {
   begin(): this {
     this.started = true;
     for (const { anim } of this.timings) anim.begin();
-    // Rescale timings into [0,1] against the group's total runTime.
-    const scale = this.groupRunTime != null && this.maxEnd > 0 ? this.maxEnd : this.maxEnd;
+    // Rescale timings into [0,1] against the span of the built timings. This is
+    // correct whether or not an explicit group runTime was given: with no
+    // groupRunTime, runTime === maxEnd so windows map 1:1 to seconds; with one,
+    // children compress/stretch proportionally into it (manim semantics).
+    const scale = this.maxEnd;
     this.scaledTimings = this.timings.map(({ anim, start, end }) => ({
       anim,
       start: start / scale,

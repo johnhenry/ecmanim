@@ -202,7 +202,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   // outside the range as skipped so their frames are not emitted, but time still
   // advances so downstream mobject state is correct.
   if (fromNum != null || uptoNum != null) {
-    scene.onSegment = (rec) => {
+    scene.onSegment = (rec: { index: number; kind: string; hash: string; startFrame: number }) => {
       const below = fromNum != null && rec.index < fromNum;
       const above = uptoNum != null && rec.index > uptoNum;
       return (below || above) ? { skip: true } : undefined;
@@ -236,7 +236,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     if (saveLastFrame) {
       const svgPath = outPath.replace(/\.[^.]+$/, "") + ".svg";
       let last = "";
-      scene.frameHandler = async (mobjects) => { last = svg.renderToString(mobjects); };
+      scene.frameHandler = async (mobjects: any[]) => { last = svg.renderToString(mobjects); };
       await runConstruct(sceneOrConstruct, scene);
       if (!last) last = svg.renderToString(scene.mobjects);
       writeFileSync(svgPath, last);
@@ -246,7 +246,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     const frameDir = outPath.replace(/\.[^.]+$/, "") + "_svg";
     mkdirSync(frameDir, { recursive: true });
     let frameIndex = 0, emitted = 0;
-    scene.frameHandler = async (mobjects) => {
+    scene.frameHandler = async (mobjects: any[]) => {
       emitted++;
       writeFileSync(`${frameDir}/frame_${String(frameIndex++).padStart(6, "0")}.svg`, svg.renderToString(mobjects));
     };
@@ -260,7 +260,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   if (saveLastFrame) {
     const pngPath = outPath.replace(/\.[^.]+$/, "") + ".png";
     let lastBuf: any = null;
-    scene.frameHandler = async (mobjects) => {
+    scene.frameHandler = async (mobjects: any[]) => {
       renderer.renderScene(mobjects);
       lastBuf = canvas.toBuffer("image/png");
     };
@@ -277,7 +277,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     mkdirSync(frameDir, { recursive: true });
     let frameIndex = 0;
     let emitted = 0;
-    scene.frameHandler = async (mobjects) => {
+    scene.frameHandler = async (mobjects: any[]) => {
       renderer.renderScene(mobjects);
       emitted++;
       writeFileSync(`${frameDir}/frame_${String(frameIndex++).padStart(6, "0")}.png`, canvas.toBuffer("image/png"));
@@ -306,7 +306,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     const segHashes = new Map<number, string>();   // segId -> content hash
     let activeSeg = -1;
 
-    scene.onSegment = (rec) => {
+    scene.onSegment = (rec: { index: number; kind: string; hash: string; startFrame: number }) => {
       activeSeg = rec.index;
       segHashes.set(rec.index, rec.hash);
       const partialPath = join(cacheDir, `${rec.hash}.${partialExt}`);
@@ -314,7 +314,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       if (reuse) reusedPartials++;
       return reuse ? { skip: true } : undefined;
     };
-    scene.frameHandler = async (mobjects) => {
+    scene.frameHandler = async (mobjects: any[]) => {
       renderer.renderScene(mobjects);
       emitted++;
       const buf = canvas.toBuffer("image/png");
@@ -371,7 +371,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
 
   // --- Single-stream path (caching disabled or range filtering active). ---
   const ffmpeg = startFfmpeg({ fps, pixelWidth, pixelHeight, outPath, format, transparent, verbose });
-  scene.frameHandler = async (mobjects) => {
+  scene.frameHandler = async (mobjects: any[]) => {
     renderer.renderScene(mobjects);
     emitted++;
     const buf = canvas.toBuffer("image/png");

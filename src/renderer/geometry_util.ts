@@ -25,7 +25,7 @@ interface CollectedBuffers {
 // Flatten a VMobject's subpaths into world-space polygon loops.
 export function flattenMobject(mob: any): number[][][] {
   const seg = mob._straightPath ? 1 : 6;
-  const loops = [];
+  const loops: number[][][] = [];
   for (const sp of mob.getSubpaths()) {
     const nc = Math.floor((sp.length - 1) / 3);
     if (nc < 1) continue;
@@ -77,7 +77,7 @@ export function collectBuffers(mobjects: any[]): CollectedBuffers {
           if (fillAlpha < 0.99) {
             const key = Math.round(fillAlpha * 100) / 100;
             if (!tBuckets.has(key)) tBuckets.set(key, { alpha: key, positions: [], colors: [] });
-            target = tBuckets.get(key);
+            target = tBuckets.get(key)!;
           }
           const base = [m.fillColor.r, m.fillColor.g, m.fillColor.b];
           const vc = m._vertexColors; // 0..255 per loop vertex, or undefined
@@ -85,7 +85,7 @@ export function collectBuffers(mobjects: any[]): CollectedBuffers {
             const n = loop.length;
             if (n < 3) continue;
             const center = avg(loop);
-            const colorAt = (i) => vc ? [vc[i][0] / 255, vc[i][1] / 255, vc[i][2] / 255] : base;
+            const colorAt = (i: number) => vc ? [vc[i][0] / 255, vc[i][1] / 255, vc[i][2] / 255] : base;
             let cc = base;
             if (vc) {
               cc = [0, 0, 0];

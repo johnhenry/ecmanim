@@ -183,7 +183,7 @@ export class Arrow extends Line {
   maxTipLengthToLengthRatio: number;
   maxStrokeWidthToLengthRatio: number;
   _hasTip: boolean;
-  tip: VMobject;
+  tip!: VMobject; // built in _addTip() during construction
   _origStart: number[];
   _origEnd: number[];
 

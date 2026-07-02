@@ -40,7 +40,9 @@ export class Animation {
   finished: boolean;
   startState: any;
 
-  constructor(mobject: Mobject, config: AnimationConfig = {}) {
+  // `null` is allowed for group/composite animations whose own mobject is a
+  // stand-in (AnimationGroup delegates all real work to its children).
+  constructor(mobject: Mobject | null, config: AnimationConfig = {}) {
     this.mobject = mobject;
     this.runTime = config.runTime ?? 1;
     let rate = running(config.rateFunc ?? smooth);
@@ -150,7 +152,7 @@ export class Transform extends Animation {
       this.startCopy.alignPointsWith(this.targetCopy);
       this.targetCopy.alignPointsWith(this.startCopy);
       // Reset the live mobject to the aligned start geometry.
-      this.mobject.points = this.startCopy.points.map((p) => [...p]);
+      this.mobject.points = this.startCopy.points.map((p: number[]) => [...p]);
       this.mobject.subpathStarts = [...(this.startCopy.subpathStarts ?? [])];
       this.startState = this.startCopy;
     } else {
@@ -200,7 +202,7 @@ export class ReplacementTransform extends Transform {
 
 // --- creation animations ---------------------------------------------------
 export class Create extends Animation {
-  origFill: number[];
+  origFill!: number[]; // assigned in setup() (begin() guarantees it runs first)
 
   constructor(mobject: Mobject, config: AnimationConfig = {}) {
     super(mobject, { rateFunc: config.rateFunc ?? smooth, ...config, introducer: true });
@@ -280,9 +282,9 @@ export class Uncreate extends Create {
 export class FadeIn extends Animation {
   shiftVec: number[];
   scaleFactor: number;
-  targetOpacities: Array<{ fill: number; stroke: number; op: number }>;
-  finalPoints: number[][][];
-  startPoints: number[][][];
+  targetOpacities!: Array<{ fill: number; stroke: number; op: number }>;
+  finalPoints!: number[][][];
+  startPoints!: number[][][];
 
   constructor(mobject: Mobject, config: AnimationConfig & { shift?: number[]; scale?: number } = {}) {
     super(mobject, { ...config, introducer: true });
@@ -344,9 +346,9 @@ export class FadeIn extends Animation {
 export class FadeOut extends Animation {
   shiftVec: number[];
   scaleFactor: number;
-  startOpacities: Array<{ fill: number; stroke: number }>;
-  startPoints: number[][][];
-  endPoints: number[][][];
+  startOpacities!: Array<{ fill: number; stroke: number }>;
+  startPoints!: number[][][];
+  endPoints!: number[][][];
 
   constructor(mobject: Mobject, config: AnimationConfig & { shift?: number[]; scale?: number } = {}) {
     super(mobject, { ...config, remover: true });
