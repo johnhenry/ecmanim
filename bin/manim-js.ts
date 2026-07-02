@@ -280,6 +280,24 @@ async function cmdCheckhealth() {
 // render
 // ---------------------------------------------------------------------------
 
+// `manim-js plan scene.ts [Scene]` — dry-run a scene into a plan IR (JSON) without
+// rendering; prints to stdout or --output.
+async function cmdPlan(args: any) {
+  const file = args._[1];
+  if (!file || !existsSync(resolve(file))) { console.error(`Scene file not found: ${file}`); process.exit(1); }
+  const { Scene } = await import(nodePath("../src/node.ts"));
+  const { toPlanIR } = await import(nodePath("../src/authoring.ts"));
+  const mod: any = await import(pathToFileURL(resolve(file)).href);
+  const sceneName = args.scene ?? args._[2];
+  const target = (sceneName && mod[sceneName]) || mod.default ||
+    Object.values(mod).find((v: any) => typeof v === "function" && v.prototype instanceof Scene);
+  if (!target) { console.error("No scene found in " + file); process.exit(1); }
+  const plan = await toPlanIR(target, { fps: args.fps ? Number(args.fps) : 30, promise: args.promise, name: sceneName });
+  const json = JSON.stringify(plan, null, 2);
+  if (args.output) { const { writeFileSync } = await import("node:fs"); writeFileSync(resolve(args.output), json); console.error(`Wrote plan -> ${args.output}`); }
+  else console.log(json);
+}
+
 async function cmdRender(args: any) {
   const file = args._[1];
   if (!file || !existsSync(resolve(file))) {
@@ -385,6 +403,7 @@ async function main() {
 
   switch (cmd) {
     case "render": return cmdRender(args);
+    case "plan": return cmdPlan(args);
     case "cfg": return cmdCfg(args);
     case "init": return cmdInit(args);
     case "plugins": return cmdPlugins();

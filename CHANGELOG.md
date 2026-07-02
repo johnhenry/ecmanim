@@ -1,5 +1,31 @@
 # Changelog
 
+## 2.0.0 — adoption phase 7: authoring layer + Studio
+
+Two new opt-in subpath entries keep the core lean while adding a higher-level
+authoring/orchestration layer and a live-preview Studio.
+
+### `manim-js/authoring`
+- **Plan IR + dry-run** (`toPlanIR`/`toPlanString`, CLI `manim-js plan`): harvest a
+  scene's segments/sections/duration as inspectable JSON **without rendering**.
+- **Quality gates** (`runQualityGates`, `slideshowRisk`, `checkDeliveryPromise`):
+  automated checks incl. a "slideshow-risk" score (is it actually animated?) and
+  "delivery-promise" contracts (does the output match a declared intent?).
+- **Format lifecycle** (`Format` = `plan`/`generateAssets`/`compose`/`revise`) +
+  **provider abstraction** (`llm`/`tts`/`render`), and a **manim-js render
+  provider** + example `title-card` format — so manim-js can back prompt→video
+  pipelines (scrollmark/showrunner-style).
+
+### `manim-js/studio`
+- **Live-preview dev server** (`startStudio`): serves your Scene in a
+  `<manim-player>` and **hot-reloads the browser on save** (file-watch + SSE),
+  dependency-free. The foundation for checkpoint replay / mouse-camera / eval REPL.
+- **`schemaToControls`**: turn a `defineSchema` spec into props-panel control
+  descriptors (the data half of a schema-driven editor).
+
+18 new tests (590 total); type-clean; both subpaths build + import; example
+`examples/authoring.ts` (format → real render + plan dry-run).
+
 ## 1.12.0 — adoption phase 6: physics
 
 - **Analytic EM fields** (`ElectricField`, `MagneticField`, `electricFieldFunc`,

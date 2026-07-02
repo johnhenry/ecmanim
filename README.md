@@ -103,6 +103,8 @@ See `examples/browser/index.html` for a full page and
 | `manim-js/node` | Node.js | mp4, webm, gif, mov, png-sequence, png, **svg** | `@napi-rs/canvas` → PNG frames piped to `ffmpeg`; partial-movie caching + sections |
 | `manim-js/browser` | browser (Canvas-2D) | live `<canvas>` + WebM | `play()` for real-time, `record()` → WebM `Blob` via `MediaRecorder` |
 | `manim-js/browser-three` | browser (WebGL) | live `<canvas>` + WebM | Three.js: hardware depth buffer, MSAA, OrbitControls; same `play`/`record` API |
+| `manim-js/authoring` | Node | plan IR / formats | plan-IR dry-run, quality gates, pluggable Format lifecycle + llm/tts/render providers ([docs/authoring-studio.md](docs/authoring-studio.md)) |
+| `manim-js/studio` | Node + browser | live-preview dev server | hot-reloading `<manim-player>` preview + schema→props controls ([docs/authoring-studio.md](docs/authoring-studio.md)) |
 
 The Canvas-2D CPU backend is the default and the only one needed for headless
 Node video. The Three.js backend is a browser-only GPU accelerator that swaps
@@ -177,6 +179,7 @@ Render any of these with `node examples/<name>.ts` (writes to `examples/out/`):
 | `examples/diagram.ts` | diagram-as-code + animated board transition via auto-matching ([docs/animation-presentation.md](docs/animation-presentation.md)) |
 | `examples/interchange.ts` | watermarked render + `.otio` + Lottie export ([docs/interchange.md](docs/interchange.md)) |
 | `examples/physics.ts` | analytic E-field + pendulum + bouncing rigid bodies ([docs/physics.md](docs/physics.md)) |
+| `examples/authoring.ts` | Format lifecycle → real render + plan-IR dry-run ([docs/authoring-studio.md](docs/authoring-studio.md)) |
 | `examples/browser/index.html` | browser Canvas-2D backend (live + WebM export) |
 | `examples/browser-three/index.html` | browser WebGL/Three.js backend (+ "Explore" orbit mode) |
 | `examples/plugins/heart-plugin.ts` | native `use()` plugin |
