@@ -8,7 +8,31 @@
 // Converts a Python-manim scene script into TypeScript for ecmanim.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { convert, type Py2TsOptions } from "../src/tools/py2ts.ts";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+
+// Mirrors src/tools/py2ts.ts's Py2TsOptions. Kept as a local shape rather than
+// imported (even type-only) so this file's compile stays fully self-contained
+// under bin/ — see nodePath() below for why.
+interface Py2TsOptions {
+  importFrom?: string;
+  wildcardImport?: boolean;
+  indent?: string;
+}
+
+// Resolve "../src/X.ts" relative to this file for both dev (bin/py2ts.ts,
+// "../src/X.ts" is correct as-is) and published (compiled dist/bin/py2ts.js —
+// Node refuses type-stripping under node_modules, so published bins must be
+// plain JS; the library itself compiles to dist/X.js with no "src/" segment,
+// so "../src/X.ts" becomes "../X.js" relative to dist/bin/). See bin/ecmanim.ts.
+function nodePath(rel: string): string {
+  const resolved = import.meta.url.endsWith(".js")
+    ? rel.replace(/^\.\.\/src\//, "../").replace(/\.ts$/, ".js")
+    : rel;
+  return pathToFileURL(resolve(new URL(resolved, import.meta.url).pathname)).href;
+}
+
+const { convert } = await import(nodePath("../src/tools/py2ts.ts"));
 
 function usage(): never {
   process.stderr.write(

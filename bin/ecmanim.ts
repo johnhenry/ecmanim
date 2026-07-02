@@ -128,8 +128,17 @@ Examples:
 // helpers
 // ---------------------------------------------------------------------------
 
+// Resolve a "../src/X.ts"-shaped path relative to this file, for both:
+//   - dev: this file running as bin/ecmanim.ts, "../src/X.ts" is correct as-is.
+//   - published: this file running as the compiled dist/bin/ecmanim.js (Node
+//     refuses type-stripping for anything under node_modules, so published
+//     bins must be plain JS) — the library itself compiles to dist/X.js (no
+//     "src/" segment), so "../src/X.ts" becomes "../X.js" relative to dist/bin/.
 function nodePath(rel: string): string {
-  return pathToFileURL(resolve(new URL(rel, import.meta.url).pathname)).href;
+  const resolved = import.meta.url.endsWith(".js")
+    ? rel.replace(/^\.\.\/src\//, "../").replace(/\.ts$/, ".js")
+    : rel;
+  return pathToFileURL(resolve(new URL(resolved, import.meta.url).pathname)).href;
 }
 
 function parseResolution(s: string): [number, number] | undefined {
@@ -429,7 +438,9 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
 
-  if (args.help || (!cmd)) { console.log(HELP); process.exit(cmd ? 0 : 1); }
+  // Exit 0 for an explicit --help (with or without a subcommand); exit 1 only
+  // for a genuinely missing-usage invocation (bare `ecmanim`, no help flag).
+  if (args.help || (!cmd)) { console.log(HELP); process.exit(!cmd && !args.help ? 1 : 0); }
 
   switch (cmd) {
     case "render": return cmdRender(args);

@@ -41,8 +41,8 @@
     }
   },
   "bin": {
-    "ecmanim": "./bin/ecmanim.ts",
-    "py2ts": "./bin/py2ts.ts"
+    "ecmanim": "./dist/bin/ecmanim.js",
+    "py2ts": "./dist/bin/py2ts.js"
   },
   "files": [
     "dist",
@@ -51,7 +51,7 @@
     "packages"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.bin.json",
     "prepare": "npm run build",
     "type-check": "tsc --noEmit",
     "test": "node --test 'test/**/*.test.ts'",
