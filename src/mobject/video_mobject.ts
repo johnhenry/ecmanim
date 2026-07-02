@@ -12,6 +12,7 @@
 
 import { ImageMobject } from "./image_mobject.ts";
 import type { ImageMobjectConfig } from "./image_mobject.ts";
+import type { Chapter } from "../metadata.ts";
 
 /** A backend-agnostic source of decoded video frames. */
 export interface VideoFrameProvider {
@@ -45,6 +46,8 @@ export interface VideoMobjectConfig extends ImageMobjectConfig {
   loop?: boolean;
   /** Start paused (no auto-advance) until play() is called (default false). */
   paused?: boolean;
+  /** Chapters/segments (seconds) — e.g. populated from an ingested IIIF manifest. */
+  chapters?: Chapter[];
 }
 
 export class VideoMobject extends ImageMobject {
@@ -55,6 +58,8 @@ export class VideoMobject extends ImageMobject {
   playbackRate: number;
   loop: boolean;
   paused: boolean;
+  /** Chapters/segments (seconds), if known (e.g. from an ingested IIIF manifest). */
+  chapters: Chapter[];
   // Scene seconds of playback consumed so far (advanced by the updater's dt).
   _elapsed = 0;
 
@@ -70,6 +75,7 @@ export class VideoMobject extends ImageMobject {
     this.playbackRate = config.playbackRate ?? 1;
     this.loop = config.loop ?? false;
     this.paused = config.paused ?? false;
+    this.chapters = config.chapters ?? [];
 
     // Drive frames from scene time. Updaters receive dt (verified), which we
     // accumulate — deterministic because dt is fixed per fps, so this composes

@@ -44,6 +44,62 @@ test("loadVideo() rejects with a clear error when there is no DOM", async () => 
 });
 
 // ---------------------------------------------------------------------------
+// 2b. IIIF ingestion does NOT bypass the no-DOM guard
+// ---------------------------------------------------------------------------
+// A IIIF manifest OBJECT is auto-detected, but resolution happens AFTER the DOM
+// guard — so under Node (no DOM) it must still reject with the browser-only
+// error rather than attempting a decode. (In a real browser, loadVideo would
+// resolve info.url from the manifest and then decode it via the normal path.)
+test("loadVideo(manifestObject) still rejects with the browser-only error (no DOM)", async () => {
+  assert.equal(typeof document, "undefined", "test must run under Node (no DOM)");
+  const manifest = {
+    "@context": "http://iiif.io/api/presentation/3/context.json",
+    id: "https://example.org/manifest.json",
+    type: "Manifest",
+    items: [
+      {
+        id: "https://example.org/canvas/1",
+        type: "Canvas",
+        items: [
+          {
+            id: "https://example.org/canvas/1/page",
+            type: "AnnotationPage",
+            items: [
+              {
+                id: "https://example.org/canvas/1/annotation/1",
+                type: "Annotation",
+                motivation: "painting",
+                body: { id: "https://example.org/clip.mp4", type: "Video", format: "video/mp4" },
+                target: "https://example.org/canvas/1",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  await assert.rejects(
+    () => loadVideo(manifest),
+    (err: Error) => {
+      assert.match(err.message, /browser-only/i);
+      return true;
+    },
+  );
+});
+
+test("loadVideo accepts the { iiif: true } option type and still guards on no DOM", async () => {
+  // { iiif: true } is a valid option (compiles); under Node the DOM guard fires
+  // before any fetch of the manifest URL, so this rejects browser-only too.
+  await assert.rejects(
+    () => loadVideo("https://example.org/manifest.json", { iiif: true }),
+    (err: Error) => {
+      assert.match(err.message, /browser-only/i);
+      return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
 // 3. PreCapturedProvider indexing math (test seam: injected frames)
 // ---------------------------------------------------------------------------
 test("PreCapturedProvider maps time -> index with round(t*fps), clamped", () => {

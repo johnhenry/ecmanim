@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.6.0 — video metadata (schema.org · IIIF · provenance)
+
+Export the web's video metadata standards straight from a render — manim-js knows
+a video's duration, dimensions, and `nextSection()` structure at render time, so
+it doesn't have to reverse-engineer them. See [docs/metadata.md](docs/metadata.md).
+
+- **`toVideoObject`** — schema.org `VideoObject` JSON-LD (discovery); chapters
+  become `hasPart` `Clip`s. `toVideoObjectScript` returns an embeddable
+  `<script type="application/ld+json">`.
+- **`toIIIFManifest`** — IIIF Presentation 3.0 Manifest (presentation/navigation):
+  Canvas with `duration`, a painting `Video` body, and — the standout —
+  **`structures` Ranges (chapters) derived from `nextSection()`**, targeting
+  temporal fragments.
+- **Provenance sliver** — opt-in `provenance` adds a manim-js `creator`
+  `SoftwareApplication` and the IPTC digital-source-type for algorithmic media
+  (folded into both formats). Full IPTC VMH is intentionally out of scope.
+- **IIIF ingest** — `loadVideo` (Node + browser) accepts a IIIF manifest (object,
+  or a URL with `{ iiif: true }`), resolves the video body URL, and attaches the
+  manifest's chapters to the `VideoMobject` (`mob.chapters`). `resolveIIIFVideo`
+  is exported. Node reads remote URLs through ffmpeg (cached by URL).
+- **`<manim-player>`** injects the `VideoObject` JSON-LD when you set `metadata`
+  (off otherwise); also `getVideoObject()` / `injectSchema()`.
+- `render()` results now include `sections` (feeds the metadata input).
+
+All isomorphic (exported from `manim-js`). 15 new tests (510 total); type-clean;
+verified end-to-end (scene sections → VideoObject + IIIF manifest, round-tripped).
+
 ## 1.5.0 — WebCodecs browser video decode
 
 Upgrades the browser `VideoMobject` path with a WebCodecs decoder, behind the

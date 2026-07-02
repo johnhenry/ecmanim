@@ -55,6 +55,17 @@ export { MathTexImage, mathTexImage } from "./mobject/mathtex_image.ts";
 export { ImageMobject } from "./mobject/image_mobject.ts";
 export { VideoMobject } from "./mobject/video_mobject.ts";
 export type { VideoFrameProvider, VideoMobjectConfig } from "./mobject/video_mobject.ts";
+
+// Video metadata: schema.org VideoObject + IIIF Presentation manifest export (with
+// chapters from nextSection()) + a provenance sliver, and IIIF ingest. See
+// docs/metadata.md.
+export {
+  toVideoObject, toVideoObjectScript, toIIIFManifest, resolveIIIFVideo, isIIIFManifest,
+  chaptersFrom, metaDuration, toISODuration, MANIM_JS_VERSION, IPTC_ALGORITHMIC_MEDIA,
+} from "./metadata.ts";
+export type {
+  VideoMetaInput, MetaSection, Chapter, ProvenanceInput, ResolvedIIIFVideo,
+} from "./metadata.ts";
 export { SVGMobject, parseXML, parseTransform } from "./mobject/svg_mobject.ts";
 export { ThreeDScene, ThreeDCamera, ThreeDAxes } from "./scene/three_d.ts";
 export { MovingCameraScene, ScreenRectangle, FullScreenRectangle } from "./scene/moving_camera_scene.ts";

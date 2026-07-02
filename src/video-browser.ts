@@ -24,6 +24,8 @@
 
 import { VideoMobject } from "./mobject/video_mobject.ts";
 import type { VideoFrameProvider, VideoMobjectConfig } from "./mobject/video_mobject.ts";
+import { isIIIFManifest, resolveIIIFVideo } from "./metadata.ts";
+import type { Chapter } from "./metadata.ts";
 
 /** True only when a DOM is present. Never dereferences DOM types at import. */
 const hasDOM = typeof document !== "undefined";
@@ -460,6 +462,12 @@ export interface LoadVideoBrowserOptions extends VideoMobjectConfig {
   mode?: "auto" | "webcodecs" | "precapture" | "live";
   /** crossOrigin attribute for the created <video> (default "anonymous"). */
   crossOrigin?: string;
+  /**
+   * Treat a string `src` as a URL to a IIIF Presentation 3.0 Manifest: fetch it,
+   * resolve the video body URL + chapters, then decode that. A manifest OBJECT
+   * (already parsed) is auto-detected regardless of this flag.
+   */
+  iiif?: boolean;
 }
 
 // Create a VideoMobject in the browser. `mode` picks the provider; "auto"
@@ -469,10 +477,33 @@ export async function loadVideo(
   src: string | any,
   options: LoadVideoBrowserOptions = {},
 ): Promise<VideoMobject> {
+  // The no-DOM guard fires FIRST, before any IIIF handling: IIIF detection must
+  // not let a headless-Node call slip past into a decode path that needs a DOM.
   if (!hasDOM) {
     throw new Error(
       "loadVideo() is browser-only: no document available. Use the Node backend's loadVideo (ffmpeg) under Node, or run this under a browser.",
     );
+  }
+
+  // IIIF ingestion: resolve a manifest OBJECT (auto-detected) or a manifest URL
+  // string (only when { iiif: true }) into the actual media URL + chapters. The
+  // resolved URL then feeds the normal WebCodecs/precapture/live decode path.
+  let iiifChapters: Chapter[] | undefined;
+  if (isIIIFManifest(src)) {
+    const info = resolveIIIFVideo(src);
+    src = info.url;
+    iiifChapters = info.chapters;
+  } else if (typeof src === "string" && options.iiif === true) {
+    const resp = await fetch(src);
+    if (!resp.ok) throw new Error("loadVideo: IIIF manifest fetch failed " + resp.status + " for " + src);
+    const manifest = await resp.json();
+    const info = resolveIIIFVideo(manifest);
+    src = info.url;
+    iiifChapters = info.chapters;
+  }
+  // Merge any IIIF chapters into the VideoMobject config so mob.chapters is set.
+  if (iiifChapters && iiifChapters.length) {
+    options = { ...options, chapters: [...(options.chapters ?? []), ...iiifChapters] };
   }
 
   const fps = options.fps ?? 30;

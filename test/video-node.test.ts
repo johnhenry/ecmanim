@@ -217,6 +217,110 @@ test("loadVideo with audio:true but no audio stream schedules nothing", { skip }
   assert.equal(scene.sounds.length, 0);
 });
 
+// --- IIIF manifest ingestion ------------------------------------------------
+// Build a minimal IIIF Presentation 3.0 Manifest whose painting body points at
+// `mediaId` (a local path or an http URL) and with a single structures Range
+// targeting a #t=start,end temporal fragment.
+function buildIIIFManifest(mediaId: string): any {
+  const canvasId = "https://example.org/canvas/1";
+  return {
+    "@context": "http://iiif.io/api/presentation/3/context.json",
+    id: "https://example.org/manifest.json",
+    type: "Manifest",
+    label: { none: ["Test clip"] },
+    items: [
+      {
+        id: canvasId,
+        type: "Canvas",
+        width: 128,
+        height: 72,
+        duration: 1,
+        items: [
+          {
+            id: `${canvasId}/page`,
+            type: "AnnotationPage",
+            items: [
+              {
+                id: `${canvasId}/annotation/1`,
+                type: "Annotation",
+                motivation: "painting",
+                body: { id: mediaId, type: "Video", format: "video/mp4", width: 128, height: 72, duration: 1 },
+                target: canvasId,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    structures: [
+      {
+        id: "https://example.org/range/1",
+        type: "Range",
+        label: { none: ["Intro"] },
+        items: [{ id: `${canvasId}#t=0,0.5`, type: "Canvas" }],
+      },
+    ],
+  };
+}
+
+test("loadVideo ingests a IIIF manifest OBJECT (local file body) + attaches chapters", { skip }, async () => {
+  const manifest = buildIIIFManifest(silentClip);
+  const vm = await loadVideo(manifest, { fps: 10, cacheDir: join(work, "iiif-obj-cache") });
+  assert.ok(vm instanceof VideoMobject);
+
+  // Chapters came from the manifest's structures Range.
+  assert.equal(vm.chapters.length, 1, "one chapter from the Range");
+  assert.equal(vm.chapters[0].label, "Intro");
+  assert.ok(Math.abs(vm.chapters[0].start - 0) < 1e-9, "start = 0");
+  assert.ok(Math.abs(vm.chapters[0].end - 0.5) < 1e-9, "end = 0.5");
+
+  // Frames were actually extracted from the resolved local media.
+  assert.ok(vm.provider.frameAt(0), "frame 0 extracted + decoded");
+  assert.equal(vm.provider.width, 128);
+  assert.equal(vm.provider.height, 72);
+  vm.dispose();
+});
+
+test("loadVideo fetches a IIIF manifest by URL with { iiif: true } (http server)", { skip }, async () => {
+  const http = await import("node:http");
+  const { readFileSync } = await import("node:fs");
+
+  // Serve both the manifest JSON and the mp4 bytes; the manifest body points at
+  // the served /clip.mp4 so ffmpeg fetches it over http (remote-URL cache key).
+  const server = http.createServer((req, res) => {
+    if (req.url === "/manifest.json") {
+      const base = `http://127.0.0.1:${port}`;
+      const manifest = buildIIIFManifest(`${base}/clip.mp4`);
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(manifest));
+    } else if (req.url === "/clip.mp4") {
+      const bytes = readFileSync(silentClip);
+      res.setHeader("content-type", "video/mp4");
+      res.setHeader("content-length", String(bytes.length));
+      res.end(bytes);
+    } else {
+      res.statusCode = 404;
+      res.end("not found");
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as any).port;
+
+  try {
+    const url = `http://127.0.0.1:${port}/manifest.json`;
+    const vm = await loadVideo(url, { iiif: true, fps: 10, cacheDir: join(work, "iiif-url-cache") });
+    assert.ok(vm instanceof VideoMobject);
+    assert.equal(vm.chapters.length, 1, "chapters resolved from the fetched manifest");
+    assert.equal(vm.chapters[0].label, "Intro");
+    assert.ok(Math.abs(vm.chapters[0].end - 0.5) < 1e-9);
+    // The remote http body was probed + frames extracted (remote-URL cache key).
+    assert.ok(vm.provider.frameAt(0), "frame 0 extracted from remote http media");
+    vm.dispose();
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
 // --- guarded end-to-end render ----------------------------------------------
 test("e2e: render a Scene containing a VideoMobject to mp4", { skip }, async () => {
   const { render } = await import("../src/node.ts");

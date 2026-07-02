@@ -185,7 +185,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       if (!last) last = svg.renderToString(scene.mobjects);
       writeFileSync(svgPath, last);
       if (verbose) console.log(`✓ Saved SVG -> ${svgPath}`);
-      return { output: svgPath, frames: 1, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, lastFrame: true };
+      return { output: svgPath, frames: 1, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections, lastFrame: true };
     }
     const frameDir = outPath.replace(/\.[^.]+$/, "") + "_svg";
     mkdirSync(frameDir, { recursive: true });
@@ -196,7 +196,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     };
     await runConstruct(sceneOrConstruct, scene);
     if (verbose) console.log(`✓ Wrote ${emitted} SVG frames -> ${frameDir}`);
-    return { output: frameDir, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0 };
+    return { output: frameDir, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections };
   }
 
   // --- saveLastFrame: render everything, keep only the final drawn frame, write
@@ -212,7 +212,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     if (!lastBuf) { renderer.renderScene(scene.mobjects); lastBuf = canvas.toBuffer("image/png"); }
     writeFileSync(pngPath, lastBuf);
     if (verbose) console.log(`✓ Saved last frame -> ${pngPath}`);
-    return { output: pngPath, frames: 1, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, lastFrame: true };
+    return { output: pngPath, frames: 1, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections, lastFrame: true };
   }
 
   // --- png-sequence: write numbered PNGs to a directory. ---
@@ -229,7 +229,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     await runConstruct(sceneOrConstruct, scene);
     if (emitted === 0) await scene.emitFrame();
     if (verbose) console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${frameDir}`);
-    return { output: frameDir, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0 };
+    return { output: frameDir, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections };
   }
 
   // --- Caching path: render each play()/wait segment to its own partial movie
@@ -309,7 +309,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     if (verbose) {
       console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${outPath} (${reusedPartials} partial(s) reused)`);
     }
-    return { output: outPath, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, reusedPartials, cached: true };
+    return { output: outPath, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections, reusedPartials, cached: true };
   }
 
   // --- Single-stream path (caching disabled or range filtering active). ---
@@ -338,7 +338,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   if (verbose) {
     console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${outPath}`);
   }
-  return { output: outPath, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0 };
+  return { output: outPath, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections };
 }
 
 // Run a Scene subclass's construct() (or a plain construct function).

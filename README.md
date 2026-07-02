@@ -170,6 +170,7 @@ Render any of these with `node examples/<name>.ts` (writes to `examples/out/`):
 | `examples/video.ts` | VideoMobject — ingest an external clip (frames + audio), play it in-scene ([docs/video.md](docs/video.md)) |
 | `examples/svg-output.ts` | vector output — a single `.svg` + a numbered `.svg` sequence (`format: "svg"`) |
 | `examples/render-gl.ts` | opt-in headless GPU render via `renderGL` (needs a CDP Chrome; see docs/renderers.md) |
+| `examples/metadata.ts` | schema.org `VideoObject` + IIIF manifest export — chapters from `nextSection()` ([docs/metadata.md](docs/metadata.md)) |
 | `examples/browser/index.html` | browser Canvas-2D backend (live + WebM export) |
 | `examples/browser-three/index.html` | browser WebGL/Three.js backend (+ "Explore" orbit mode) |
 | `examples/plugins/heart-plugin.ts` | native `use()` plugin |

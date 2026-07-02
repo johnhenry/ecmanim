@@ -15,6 +15,7 @@
 //     HTMLElement are unavailable, and returns true after registering.
 
 import { Player, type PlayerOptions } from "./player.ts";
+import { toVideoObject, type VideoMetaInput } from "./metadata.ts";
 
 const G: any = globalThis as any;
 
@@ -57,6 +58,11 @@ function buildElementClass(): any {
     _playBtn: any = null;
     _scrubber: any = null;
     _ready = false;
+    // schema.org JSON-LD metadata the user opted into (undefined = off).
+    _metadata: VideoMetaInput | null = null;
+    // Reference to the injected <script type="application/ld+json"> child, so we
+    // replace (not stack) it when metadata is re-set or refreshed.
+    _ldScript: any = null;
 
     // --- Lifecycle ----------------------------------------------------------
     connectedCallback(): void {
@@ -91,6 +97,83 @@ function buildElementClass(): any {
 
     get scene(): any {
       return this._scene;
+    }
+
+    // --- schema.org VideoObject (JSON-LD) ----------------------------------
+    /**
+     * Opt into JSON-LD injection. Setting a VideoMetaInput injects (or replaces)
+     * a single <script type="application/ld+json"> child built from this metadata
+     * merged with what the player already knows (pixel size, fps, and — once a
+     * scene is recorded — duration/frame count). Setting to null/undefined
+     * removes any injected script. Unset by default => nothing is injected.
+     */
+    set metadata(value: VideoMetaInput | null | undefined) {
+      this._metadata = value ?? null;
+      if (this._metadata == null) {
+        this._removeSchema();
+      } else {
+        this.injectSchema();
+      }
+    }
+
+    get metadata(): VideoMetaInput | null {
+      return this._metadata;
+    }
+
+    /**
+     * The computed schema.org VideoObject for the current metadata merged with
+     * known dimensions/fps/duration. Works without a DOM (returns the plain
+     * object). Returns an empty VideoObject shell if no metadata was set.
+     */
+    getVideoObject(): Record<string, any> {
+      return toVideoObject(this._computeMetaInput());
+    }
+
+    /**
+     * Idempotently (re)create the ld+json <script> from the current metadata and
+     * known dimensions. No-op when no metadata is set or no DOM is available.
+     */
+    injectSchema(): void {
+      if (this._metadata == null) return;
+      const doc = G.document;
+      if (!doc) return; // DOM-gated; getVideoObject() still works without a DOM.
+      const json = JSON.stringify(this.getVideoObject());
+      if (this._ldScript && this._ldScript.parentNode === this) {
+        // Reuse the existing node — replace its content, no duplicate stacking.
+        this._ldScript.textContent = json;
+        return;
+      }
+      const script = doc.createElement("script");
+      script.type = "application/ld+json";
+      script.textContent = json;
+      this.appendChild(script);
+      this._ldScript = script;
+    }
+
+    _removeSchema(): void {
+      if (this._ldScript && this._ldScript.parentNode === this) {
+        try {
+          this.removeChild(this._ldScript);
+        } catch { /* ignore */ }
+      }
+      this._ldScript = null;
+    }
+
+    /** Merge the user's metadata with what the player currently knows. */
+    _computeMetaInput(): VideoMetaInput {
+      const base: VideoMetaInput = { ...(this._metadata ?? {}) };
+      const p = this._player;
+      if (p) {
+        if (base.width == null) base.width = p.pixelWidth;
+        if (base.height == null) base.height = p.pixelHeight;
+        if (base.fps == null) base.fps = p.fps;
+        // Only trust duration/frames once a recording exists (frameCount > 0).
+        if (this._ready && p.frameCount > 0) {
+          if (base.frames == null) base.frames = p.frameCount;
+          if (base.durationSeconds == null) base.durationSeconds = p.duration;
+        }
+      }
+      return base;
     }
 
     get player(): Player | null {
@@ -168,6 +251,11 @@ function buildElementClass(): any {
       if (this._scene != null) {
         this._record();
       }
+
+      // If the user set metadata before we had a DOM, inject it now that we do.
+      if (this._metadata != null) {
+        this.injectSchema();
+      }
     }
 
     _teardown(): void {
@@ -181,6 +269,7 @@ function buildElementClass(): any {
       if (this._controlsBar && this._controlsBar.parentNode === this) {
         this.removeChild(this._controlsBar);
       }
+      this._removeSchema();
       this._canvas = null;
       this._controlsBar = null;
       this._playBtn = null;
@@ -204,6 +293,13 @@ function buildElementClass(): any {
             duration: p ? p.duration : 0,
             frameCount: p ? p.frameCount : 0,
           });
+          // If the user opted into JSON-LD, refresh it now that we know the real
+          // duration/frame count. Defensive: no-op without metadata or a DOM.
+          if (this._metadata != null) {
+            try {
+              this.injectSchema();
+            } catch { /* ignore */ }
+          }
           if (this.hasAttribute("autoplay")) {
             this.play();
           }
@@ -310,10 +406,45 @@ export const ManimPlayerElement: any = (() => {
       // Fall through to placeholder if building fails for any reason.
     }
   }
-  // Node placeholder: a plain class that does not extend HTMLElement.
+  // Node placeholder: a plain class that does not extend HTMLElement. It carries
+  // the DOM-free slice of the API (metadata -> VideoObject) so callers can build
+  // JSON-LD under Node without a DOM. DOM injection is a real-element-only path.
   return class ManimPlayerElement {
+    _metadata: VideoMetaInput | null = null;
+    _player: Player | null = null;
+    _ready = false;
+
     static get observedAttributes(): string[] {
       return ["quality", "fps", "background", "autoplay", "loop", "controls", "width", "height"];
+    }
+
+    set metadata(value: VideoMetaInput | null | undefined) {
+      this._metadata = value ?? null;
+    }
+    get metadata(): VideoMetaInput | null {
+      return this._metadata;
+    }
+
+    getVideoObject(): Record<string, any> {
+      return toVideoObject(this._computeMetaInput());
+    }
+
+    /** DOM injection is a no-op without a DOM. */
+    injectSchema(): void { /* no DOM under Node */ }
+
+    _computeMetaInput(): VideoMetaInput {
+      const base: VideoMetaInput = { ...(this._metadata ?? {}) };
+      const p = this._player;
+      if (p) {
+        if (base.width == null) base.width = p.pixelWidth;
+        if (base.height == null) base.height = p.pixelHeight;
+        if (base.fps == null) base.fps = p.fps;
+        if (this._ready && p.frameCount > 0) {
+          if (base.frames == null) base.frames = p.frameCount;
+          if (base.durationSeconds == null) base.durationSeconds = p.duration;
+        }
+      }
+      return base;
     }
   };
 })();

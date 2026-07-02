@@ -37,6 +37,8 @@ import { tmpdir } from "node:os";
 import { VideoMobject } from "./mobject/video_mobject.ts";
 import type { VideoFrameProvider, VideoMobjectConfig } from "./mobject/video_mobject.ts";
 import { probeVideo, extractFrames, runFfmpeg } from "./renderer/ffmpeg.ts";
+import { isIIIFManifest, resolveIIIFVideo } from "./metadata.ts";
+import type { Chapter } from "./metadata.ts";
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -123,16 +125,25 @@ export type LoadVideoOptions = VideoMobjectConfig & {
   gain?: number;
   /** Log ffmpeg/ffprobe output. */
   verbose?: boolean;
+  /**
+   * Treat a string `src` as a URL to a IIIF Presentation 3.0 Manifest: fetch it,
+   * resolve the video body URL + chapters, then ingest that. A manifest OBJECT
+   * (already parsed) is auto-detected regardless of this flag.
+   */
+  iiif?: boolean;
 };
 
 // Cap the decode fps so a source with an absurd rate can't explode memory.
 const MAX_DECODE_FPS = 60;
 
-// Build a stable content hash for the frame cache key.
-function frameCacheKey(absPath: string, mtimeMs: number, fps: number, scale: LoadVideoOptions["scale"], start?: number, end?: number): string {
+// Build a stable content hash for the frame cache key. `mtimeMs` is null for
+// remote sources (e.g. an http(s) URL resolved from a IIIF manifest) where there
+// is no local file to stat — in that case the source string alone keys the cache.
+function frameCacheKey(src: string, mtimeMs: number | null, fps: number, scale: LoadVideoOptions["scale"], start?: number, end?: number): string {
   const h = createHash("sha1");
   const scaleKey = scale == null ? "none" : Array.isArray(scale) ? scale.join("x") : String(scale);
-  h.update([absPath, Math.round(mtimeMs), fps, scaleKey, start ?? "", end ?? ""].join("|"));
+  const mtimeKey = mtimeMs == null ? "remote" : String(Math.round(mtimeMs));
+  h.update([src, mtimeKey, fps, scaleKey, start ?? "", end ?? ""].join("|"));
   return h.digest("hex").slice(0, 16);
 }
 
@@ -155,14 +166,46 @@ function expectedFrameCount(duration: number, fps: number, start?: number, end?:
  * returns a VideoMobject wired to that provider. Optionally extracts the clip's
  * audio and schedules it on `options.scene` for the node.ts muxer.
  */
-export async function loadVideo(path: string, options: LoadVideoOptions = {}): Promise<VideoMobject> {
+export async function loadVideo(path: string | any, options: LoadVideoOptions = {}): Promise<VideoMobject> {
   const verbose = options.verbose ?? false;
-  const absPath = resolve(path);
-  if (!existsSync(absPath)) throw new Error("loadVideo: file not found: " + absPath);
-  const mtimeMs = statSync(absPath).mtimeMs;
+
+  // 0. IIIF ingestion. A manifest OBJECT is auto-detected; a URL string is
+  //    fetched + parsed only when { iiif: true }. Resolving yields the actual
+  //    media URL (local or remote) + chapters to attach to the VideoMobject.
+  let source: string = typeof path === "string" ? path : "";
+  let iiifChapters: Chapter[] | undefined;
+  if (isIIIFManifest(path)) {
+    const info = resolveIIIFVideo(path);
+    source = info.url;
+    iiifChapters = info.chapters;
+  } else if (typeof path === "string" && options.iiif === true) {
+    const resp = await fetch(path);
+    if (!resp.ok) throw new Error("loadVideo: IIIF manifest fetch failed " + resp.status + " for " + path);
+    const manifest = await resp.json();
+    const info = resolveIIIFVideo(manifest);
+    source = info.url;
+    iiifChapters = info.chapters;
+  }
+
+  // The media source may now be a local path or a remote http(s) URL. ffmpeg /
+  // ffprobe accept http(s) URLs directly, so pass those through unchanged; only
+  // local files are resolved to an absolute path and stat'd for the cache key.
+  const isLocalFile = existsSync(source) || (!/^https?:\/\//i.test(source) && existsSync(resolve(source)));
+  const mediaSrc = isLocalFile ? resolve(source) : source;
+  if (isLocalFile && !existsSync(mediaSrc)) throw new Error("loadVideo: file not found: " + mediaSrc);
+  if (!isLocalFile && !/^https?:\/\//i.test(mediaSrc)) {
+    // Not a remote URL and not an existing local file -> genuinely missing.
+    throw new Error("loadVideo: file not found: " + mediaSrc);
+  }
+  const mtimeMs = isLocalFile ? statSync(mediaSrc).mtimeMs : null;
+
+  // Merge any IIIF chapters into the VideoMobject config so mob.chapters is set.
+  if (iiifChapters && iiifChapters.length) {
+    options = { ...options, chapters: [...(options.chapters ?? []), ...iiifChapters] };
+  }
 
   // 1. Probe.
-  const probe = await probeVideo(absPath);
+  const probe = await probeVideo(mediaSrc);
   const sourceFps = probe.fps > 0 ? probe.fps : 30;
 
   // 2. Choose decode fps (option override, else source, capped).
@@ -173,7 +216,7 @@ export async function loadVideo(path: string, options: LoadVideoOptions = {}): P
 
   // 3. Content-hash cache dir.
   const baseDir = options.cacheDir ?? join(tmpdir(), "manim-js-video");
-  const key = frameCacheKey(absPath, mtimeMs, decodeFps, options.scale, start, end);
+  const key = frameCacheKey(mediaSrc, mtimeMs, decodeFps, options.scale, start, end);
   const cacheDir = join(baseDir, key);
 
   // 4. Extract frames unless the cache already looks complete.
@@ -190,7 +233,7 @@ export async function loadVideo(path: string, options: LoadVideoOptions = {}): P
   } else {
     mkdirSync(cacheDir, { recursive: true });
     if (verbose) console.log(`[loadVideo] extracting frames @ ${decodeFps}fps -> ${cacheDir}`);
-    files = await extractFrames(absPath, {
+    files = await extractFrames(mediaSrc, {
       fps: decodeFps,
       scale: options.scale,
       dir: cacheDir,
@@ -235,7 +278,7 @@ export async function loadVideo(path: string, options: LoadVideoOptions = {}): P
   //    node.ts's muxAudio() lays it over the rendered video. Copy the stream when
   //    possible; fall back to an AAC re-encode.
   if (options.audio && probe.hasAudio && options.scene) {
-    const audioFile = await extractAudio(absPath, cacheDir, start, end, verbose);
+    const audioFile = await extractAudio(mediaSrc, cacheDir, start, end, verbose);
     if (audioFile) {
       options.scene.addSound(audioFile, {
         timeOffset: options.audioOffset ?? options.scene.time ?? 0,
