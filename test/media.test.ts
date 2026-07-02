@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsSync, rmSync } from "node:fs";
+import { rmSync, mkdtempSync } from "node:fs";
 import { ImageMobject } from "../src/mobject/image_mobject.ts";
 import { SVGMobject, parseXML, parseTransform } from "../src/mobject/svg_mobject.ts";
 import { Scene } from "../src/scene/Scene.ts";
@@ -56,8 +56,13 @@ test("Node render muxes sound into the video (audio stream present)", async () =
   const { render } = await import("../src/node.ts");
   const { Circle } = await import("../src/mobject/geometry.ts");
   const { Create } = await import("../src/animation/Animation.ts");
-  const wav = join(tmpdir(), `mjtone_${process.pid}.wav`);
-  const out = join(tmpdir(), `mjmedia_${process.pid}.mp4`);
+  // Render into a unique subdirectory, not the bare OS tmpdir: render()'s
+  // partial-movie cache lives at dirname(output)/partial, and a shared
+  // directory races with other test files rendering (and cleaning up)
+  // concurrently.
+  const dir = mkdtempSync(join(tmpdir(), "mjs-media-"));
+  const wav = join(dir, `mjtone_${process.pid}.wav`);
+  const out = join(dir, `mjmedia_${process.pid}.mp4`);
   execFileSync("ffmpeg", ["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.4", wav], { stdio: "ignore" });
   await render(async (scene) => {
     scene.addSound(wav);
@@ -67,5 +72,5 @@ test("Node render muxes sound into the video (audio stream present)", async () =
   const streams = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", out], { encoding: "utf8" });
   assert.ok(streams.includes("audio"), "output has an audio stream");
   assert.ok(streams.includes("video"));
-  for (const f of [wav, out]) if (existsSync(f)) rmSync(f);
+  rmSync(dir, { recursive: true, force: true });
 });

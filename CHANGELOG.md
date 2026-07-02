@@ -15,6 +15,18 @@ Version reset to 0.0.1 — the package has never been published; the earlier
   compatibility, not this package's brand.
 
 ### Fixed
+- **macOS: vector-text font resolution.** `loadVectorFont()`'s fallback font
+  scanner only checked Linux font directories, so on macOS (where `fc-match`
+  commonly resolves `sans-serif` to a rejected `.ttc` collection) `VText`,
+  `MathTex`, and `VectorDecimalNumber` failed with "needs a font" even though
+  `checkhealth` reported fonts as OK. The scanner now also checks the standard
+  macOS font directories. See [docs/external-tools.md](docs/external-tools.md#macos-notes).
+- **Test suite: partial-cache race across concurrently-run test files.**
+  `test/media.test.ts` and `test/cli-config.test.ts` both rendered into the
+  bare OS tmpdir, so they shared `render()`'s `dirname(output)/partial` cache
+  directory; one test's cleanup could delete it while another was mid-render
+  under the default parallel test runner, corrupting the ffmpeg concat step.
+  Each now renders into its own unique subdirectory.
 - **Cache soundness — container mobjects.** Segment hashes fingerprinted only an
   animation target's own `points`, which are empty for containers (VGroup,
   vector Text, diagram boards) — so moving/re-styling them between renders

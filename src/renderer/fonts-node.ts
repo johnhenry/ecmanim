@@ -24,6 +24,11 @@ function scanForFont() {
     "/usr/local/share/fonts",
     join(process.env.HOME || "", ".nix-profile/share/fonts"),
     join(process.env.HOME || "", ".local/share/fonts"),
+    // macOS
+    "/System/Library/Fonts/Supplemental",
+    "/System/Library/Fonts",
+    "/Library/Fonts",
+    join(process.env.HOME || "", "Library/Fonts"),
   ];
   const wanted = [/DejaVuSans\.ttf$/i, /LiberationSans-Regular\.ttf$/i, /NotoSans-Regular\.ttf$/i, /Arial\.ttf$/i];
   const found: string[] = [];

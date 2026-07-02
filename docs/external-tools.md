@@ -73,3 +73,31 @@ TTS with word timings) via `registerTTSProvider`
   feature needs the capability (`command -v`, version calls, key presence, CDP
   probe, `import()` in try/catch) and picks the fallback silently where one
   exists. `checkhealth` is the eager version of those probes.
+
+## macOS notes
+
+The project is developed primarily on Linux; two gaps show up on macOS.
+
+- **Vector-text glyph outlines (`VText`, `MathTex`, `VectorDecimalNumber`) need a
+  concrete `.ttf`/`.otf` file** for `opentype.js` to extract paths from —
+  `loadVectorFont()` resolves one via `fc-match sans-serif`, then falls back to
+  scanning common font directories (`src/renderer/fonts-node.ts`). On Linux,
+  `fc-match` typically resolves straight to a `.ttf` (DejaVu Sans, Liberation
+  Sans, …). On macOS, `fc-match` (from Homebrew's `fontconfig`, if installed)
+  commonly resolves `sans-serif` to a `.ttc` **font collection** (e.g. Hiragino),
+  which is intentionally rejected — `opentype.js` doesn't parse collections —
+  and the old fallback scanner only checked Linux font directories, so
+  resolution failed outright with "VText needs a font." The scanner now also
+  checks the standard macOS font directories (`/System/Library/Fonts`,
+  `/System/Library/Fonts/Supplemental`, `/Library/Fonts`, `~/Library/Fonts`) and
+  finds `Arial.ttf` there. `checkhealth`'s font check was unaffected by this bug
+  — `@napi-rs/canvas` discovers macOS system fonts fine for *raster* text; only
+  the separate vector-outline path needed a real file path.
+- **The watermark filter (`applyWatermark`, `drawtext`) needs an ffmpeg build
+  with `libfreetype`.** Homebrew's default `ffmpeg` formula does **not**
+  compile that in (`ffmpeg -filters | grep drawtext` returns nothing); the
+  separate `ffmpeg-full` formula does. This is an ffmpeg build limitation, not
+  something ecmanim can detect-and-fall-back for beyond skipping — install
+  `ffmpeg-full` (`brew install ffmpeg-full`) if you need text watermarks. Most
+  Linux ffmpeg packages (including the standard `apt`/`dnf` builds) ship with
+  `libfreetype` enabled by default, which is why this doesn't surface there.

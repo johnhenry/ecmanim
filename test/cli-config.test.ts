@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsSync, rmSync, statSync } from "node:fs";
+import { existsSync, rmSync, statSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { resolveConfig, config } from "../src/_config.ts";
@@ -47,8 +47,15 @@ test("render(saveLastFrame) writes a PNG and no video", async () => {
 });
 
 test("render still muxes audio when a sound is scheduled", async () => {
-  const wav = tmp("tone.wav");
-  const out = tmp("audio.mp4");
+  // Render into a dedicated subdirectory, not the bare OS tmpdir: render()'s
+  // partial-movie cache lives at dirname(output)/partial, and a shared
+  // directory races with other test files rendering (and cleaning up)
+  // concurrently.
+  const dir = tmp("audio-dir");
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  const wav = join(dir, "tone.wav");
+  const out = join(dir, "audio.mp4");
   execFileSync("ffmpeg", ["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.4", wav], { stdio: "ignore" });
   await render(async (s: any) => {
     s.addSound(wav);
@@ -57,9 +64,7 @@ test("render still muxes audio when a sound is scheduled", async () => {
   const streams = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", out], { encoding: "utf8" });
   assert.ok(streams.includes("audio"), "output has an audio stream");
   assert.ok(streams.includes("video"), "output has a video stream");
-  for (const f of [wav, out]) if (existsSync(f)) rmSync(f, { force: true });
-  const partial = join(tmpdir(), "partial");
-  if (existsSync(partial)) rmSync(partial, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test("Scene.nextSection records a boundary", () => {

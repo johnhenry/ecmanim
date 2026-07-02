@@ -13,6 +13,14 @@ function ffmpegAvailable() {
   try { execSync("ffmpeg -version", { stdio: "ignore" }); return true; } catch { return false; }
 }
 
+// Some ffmpeg builds (e.g. Homebrew's default `ffmpeg` formula on macOS) are
+// compiled without libfreetype, so the `drawtext` filter used by the
+// text-watermark path doesn't exist. `ffmpeg -filters` lists it only when built in.
+function ffmpegHasDrawtext() {
+  try { return execSync("ffmpeg -filters", { stdio: ["ignore", "pipe", "ignore"] }).includes("drawtext"); }
+  catch { return false; }
+}
+
 const fakeScene = {
   fps: 30,
   sections: [],
@@ -87,7 +95,7 @@ test("vmobjectToLottieJSON produces a valid-looking Lottie doc; loadLottie impor
 
 // --- Watermark (guarded) --------------------------------------------------
 
-test("applyWatermark burns text into a clip (skips without ffmpeg)", { skip: !ffmpegAvailable() }, async () => {
+test("applyWatermark burns text into a clip (skips without ffmpeg)", { skip: !ffmpegAvailable() || !ffmpegHasDrawtext() }, async () => {
   const { applyWatermark } = await import("../src/core/watermark.ts");
   const { mkdtempSync, rmSync, statSync } = await import("node:fs");
   const os = await import("node:os"); const path = await import("node:path");
