@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.12.0 — adoption phase 6: physics
+
+- **Analytic EM fields** (`ElectricField`, `MagneticField`, `electricFieldFunc`,
+  `magneticFieldFunc`): formula-based vector fields (Coulomb / out-of-plane
+  currents) as `ArrowVectorField` subclasses — cheap and deterministic.
+- **Waves** (`LinearWave`, `StandingWave`, `WaveCurve`): time-parameterized sine
+  curves that advance via an updater.
+- **Optics**: `thinLensRefract` (paraxial thin-lens ray bending).
+- **Rigid-body**: a dependency-free `SimpleEngine` (semi-implicit Euler + gravity
+  + floor collision) stepped per frame (`physics(scene, opts)`), plus an ODE
+  `Pendulum`. The engine is pluggable — swap in planck.js (pure-JS Box2D,
+  recommended optional dep) or @dimforge/rapier2d for heavy collision/determinism.
+
+10 new tests (582 total); type-clean; example `examples/physics.ts` (field +
+pendulum + bouncing bodies).
+
 ## 1.11.0 — adoption phase 5: interchange + fidelity
 
 - **OTIO** (`sceneToOtio`, `toOtioJSON`/`fromOtioJSON`, `RationalTime`): export a

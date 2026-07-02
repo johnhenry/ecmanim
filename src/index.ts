@@ -174,6 +174,16 @@ export {
 } from "./interchange/lottie.ts";
 export type { LottieShape, LottieExportOptions } from "./interchange/lottie.ts";
 
+// Physics: analytic EM/wave/optics fields + a pluggable rigid-body engine.
+export {
+  electricFieldFunc, magneticFieldFunc, ElectricField, MagneticField, thinLensRefract,
+} from "./physics/fields.ts";
+export type { PointCharge, PointCurrent } from "./physics/fields.ts";
+export { WaveCurve, LinearWave, StandingWave } from "./physics/waves.ts";
+export type { WaveConfig } from "./physics/waves.ts";
+export { SimpleEngine, physics, Pendulum } from "./physics/rigid.ts";
+export type { PhysicsBody, PhysicsEngineOptions, PhysicsEngineLike, PendulumConfig } from "./physics/rigid.ts";
+
 // Remotion-inspired primitives: range-mapping interpolate, physics springs, and
 // composable easing combinators. `interpolate` claims the bare top-level name
 // (the 2-arg lerp stays namespaced as `bezier.interpolate`).
