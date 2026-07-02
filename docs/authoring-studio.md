@@ -27,19 +27,40 @@ mostly stills fails). `toPlanIR` runs these automatically.
 
 ### Formats + providers (prompt→video)
 
-```js
-import { runFormat, manimRenderProvider, registerFormat } from "manim-js/authoring";
+A `Format` runs `plan → generateAssets → compose` (with an optional `revise`
+feedback step) against swappable `llm`/`tts`/`render` providers. The `render`
+provider is backed by manim-js, so manim-js can be the renderer for
+scrollmark/showrunner-style pipelines. Register your own with `registerFormat`
+/ `registerProvider`.
 
-const res = await runFormat("title-card", {
-  topic: "manim-js",
-  params: { bullets: ["a", "b"], renderOptions: { output: "out.mp4" } },
-  providers: { render: manimRenderProvider },   // llm / tts / render are swappable
+Four formats ship built in. All of them run with **zero network access** — an
+LLM provider only ever *enhances* the plan (e.g. expanding a topic into
+sections); every format has a deterministic fallback.
+
+| format | params | output |
+|--------|--------|--------|
+| `explainer` | `title`, `subtitle?`, `sections: [{heading, bullets?, diagram?, narration?, holdSeconds?}]`, `outro?`, `tts?`, `style?` | multi-section explainer: title card → per-section heading + bullets (+ inline diagram DSL) with optional TTS narration → outro. Emits real scene `sections`. |
+| `chart-reveal` | `title?`, `data: [{label, value}]`, `unit?`, `color?`, `holdSeconds?` | animated bar chart — bars `GrowFromEdge` the baseline, staggered, with value labels scaled to the max. Validates data. |
+| `quote-card` | `quote`, `attribution?`, `aspectRatio?` (`16:9`/`1:1`/`9:16`), `holdSeconds?` | social-format quote clip using the aspect-ratio presets. |
+| `title-card` | `title?`, `bullets?` | the original minimal example. |
+
+```js
+import { runFormat, manimRenderProvider } from "manim-js/authoring";
+
+const res = await runFormat("explainer", {
+  params: {
+    title: "How caching works",
+    sections: [
+      { heading: "The problem", bullets: ["recomputing is slow"], narration: "Recomputing every frame is slow." },
+      { heading: "The idea", diagram: "A[Input] --> B[Hash]\nB --> C[Store]" },
+    ],
+    outro: "Cache it.",
+    tts: "system",                                  // or "silent" | "openai" | "elevenlabs"
+    renderOptions: { output: "out.mp4", quality: "high" },
+  },
+  providers: { render: manimRenderProvider },
 });
 ```
-A `Format` runs `plan → generateAssets → compose` (with an optional `revise`
-feedback step). The `render` provider is backed by manim-js, so manim-js can be
-the renderer for scrollmark/showrunner-style pipelines. Register your own formats
-and providers.
 
 ## `manim-js/studio`
 

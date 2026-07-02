@@ -21,3 +21,8 @@ export type { Provider, ProviderKind, ProviderSet, Format, FormatContext, Format
 
 export { manimRenderProvider, titleCardFormat } from "./authoring/showrunner.ts";
 export type { TitleCardPlan } from "./authoring/showrunner.ts";
+
+export { explainerFormat, chartRevealFormat, quoteCardFormat } from "./authoring/formats_builtin.ts";
+export type {
+  ExplainerPlan, ExplainerSection, ChartRevealPlan, ChartDatum, QuoteCardPlan,
+} from "./authoring/formats_builtin.ts";
