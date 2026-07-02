@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.2.0 — Remotion-inspired features
+
+Eight features borrowed from studying [Remotion](https://www.remotion.dev)'s
+philosophy and source, adapted to manim-js's imperative, GPU-less architecture
+(no React/DOM authoring model, no Chromium-screenshot capture):
+
+- **`interpolate(input, inputRange, outputRange, opts)`** — Remotion-style range
+  mapping with `easing` and `extrapolateLeft`/`extrapolateRight` (`clamp` /
+  `extend` / `identity` / `wrap`). Claims the bare top-level name; the existing
+  2-arg lerp stays namespaced as `bezier.interpolate`.
+- **`spring()` / `measureSpring()` / `springRate()`** — analytic (closed-form)
+  damped-harmonic-oscillator easing where the duration is *derived* from the
+  physics (`mass`/`damping`/`stiffness`/`overshootClamping`). Pure function of
+  frame, so it preserves the deterministic content-hash render cache.
+- **`Easing.in/out/inOut(fn)` + `Easing.bezier(x1,y1,x2,y2)`** — composable
+  easing combinators over any base curve, plus a CSS-style cubic-bezier factory.
+- **`renderParallel()` / `discoverSegments()` / `partitionSegments()`** —
+  worker-thread parallel rendering that shards play()/wait() *segments* across
+  cores and reuses the existing partial-movie-file cache + ffmpeg concat. (The
+  segment is the parallel unit; per-frame parallelism is impossible since frame
+  N depends on 0..N-1 within a play.)
+- **`delayRender()` / `continueRender()` / `waitForRender()`** — a unified
+  async-asset gate; the Node renderer now registers font/MathJax warm-up as
+  blockers and awaits the gate before running `construct()`.
+- **`Sequence()` + `crossFade`/`slide`/`wipe`** — a frame-origin time-shift
+  wrapper (extends the AnimationGroup timings machinery) and a mobject-level
+  transition catalogue that keeps timing orthogonal to visual presentation.
+- **`<manim-player>` Web Component** (`defineManimPlayer()`) — a
+  framework-agnostic custom element wrapping `Player`, with attributes,
+  imperative `seekTo`/`play`/`pause`, and `ready`/`frame`/`ended` events.
+  Node-import-safe (the `HTMLElement` reference is lazily guarded).
+- **Typed scene params + `calculateMetadata`** — `defineSchema()` (a tiny local
+  validator, no Zod) plus `resolveSceneMetadata()`; the Node renderer resolves a
+  scene's static `schema`/`calculateMetadata` to fill fps/width/height defaults.
+
+80 new tests (435 total); type-clean; browser `<manim-player>` verified headless.
+
 ## 1.1.0 — prior-art learnings
 
 Features informed by studying other manim/web ports (JazonJiao/Manim.js,

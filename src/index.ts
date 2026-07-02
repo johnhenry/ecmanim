@@ -113,6 +113,34 @@ export { Broadcast, ChangeSpeed } from "./animation/specialized.ts";
 export { ComplexValueTracker } from "./mobject/complex_value_tracker.ts";
 export * as rate_functions from "./animation/rate_functions.ts";
 
+// Remotion-inspired primitives: range-mapping interpolate, physics springs, and
+// composable easing combinators. `interpolate` claims the bare top-level name
+// (the 2-arg lerp stays namespaced as `bezier.interpolate`).
+export { interpolate } from "./animation/interpolate.ts";
+export type { Extrapolation, InterpolateOptions } from "./animation/interpolate.ts";
+export { spring, measureSpring, springRate } from "./animation/spring.ts";
+export type { SpringConfig, SpringParams } from "./animation/spring.ts";
+export { Easing } from "./animation/easing.ts";
+export type { EaseFn } from "./animation/easing.ts";
+
+// Sequence time-shift + mobject-level transitions (timing orthogonal to presentation).
+export { Sequence, SequenceAnimation } from "./animation/sequence.ts";
+export type { SequenceConfig } from "./animation/sequence.ts";
+export { crossFade, slide, wipe, Slide, Wipe } from "./animation/transitions.ts";
+export type { TransitionConfig } from "./animation/transitions.ts";
+
+// Async-asset gate (Remotion-style delayRender/continueRender).
+export {
+  delayRender, continueRender, delayRenderUntil, waitForRender, getPendingRenders,
+} from "./core/async_gate.ts";
+export type { DelayHandle } from "./core/async_gate.ts";
+
+// Typed scene params + calculateMetadata hook.
+export { defineSchema } from "./core/schema.ts";
+export type { Schema, SchemaSpec, FieldSpec, FieldType } from "./core/schema.ts";
+export { resolveSceneMetadata } from "./scene/scene_params.ts";
+export type { SceneMetadata, CalculateMetadata } from "./scene/scene_params.ts";
+
 // Plugin system: register the built-ins, then expose use()/registry.
 import { registerBuiltins } from "./plugins/builtins.ts";
 registerBuiltins();

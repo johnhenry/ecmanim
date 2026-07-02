@@ -25,6 +25,11 @@ async function loadMp4Muxer(): Promise<any> {
 
 export * from "./index.ts";
 
+// The <manim-player> Web Component wraps the Player. It references HTMLElement,
+// so it lives on the browser entry only (never index.ts). Import is Node-safe:
+// the class body is built lazily and defineManimPlayer() no-ops without a DOM.
+export { ManimPlayerElement, defineManimPlayer } from "./web-component.ts";
+
 // Options accepted by the browser backend's play() / record(). All optional.
 export interface BrowserOptions {
   canvas?: any;

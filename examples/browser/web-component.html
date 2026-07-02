@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>manim-js — &lt;manim-player&gt; Web Component</title>
+  <script type="importmap">
+  { "imports": { "manim-js/browser": "/dist/browser.js" } }
+  </script>
+</head>
+<body>
+  <manim-player id="p" quality="low" fps="12" background="#0d1117" controls></manim-player>
+  <pre id="out">running…</pre>
+  <script type="module">
+    import { defineManimPlayer, Scene, Circle, Square, Create, Transform, BLUE, GREEN } from "manim-js/browser";
+    const out = document.getElementById("out");
+    const log = (s) => { out.textContent += "\n" + s; };
+
+    // Register the custom element.
+    const registered = defineManimPlayer();
+    log("defineManimPlayer(): " + registered);
+
+    class Demo extends Scene {
+      async construct() {
+        const c = new Circle({ radius: 1.2, color: BLUE, fillColor: BLUE, fillOpacity: 0.5 });
+        await this.play(new Create(c), { _playConfig: true, runTime: 0.4 });
+        await this.play(new Transform(c, new Square({ sideLength: 2, color: GREEN })), { _playConfig: true, runTime: 0.4 });
+      }
+    }
+
+    window.__result = { ready: null, frames: 0, error: null };
+    const el = document.getElementById("p");
+    el.addEventListener("ready", (e) => {
+      window.__result.ready = e.detail;
+      log("ready: " + JSON.stringify(e.detail));
+      // exercise imperative API
+      el.seekTo(0);
+      el.seekTo((e.detail.frameCount || 1) - 1);
+      log("currentFrame after seek: " + el.currentFrame);
+      window.__done = true;
+    });
+    el.addEventListener("frame", () => { window.__result.frames++; });
+    el.addEventListener("error", (e) => { window.__result.error = String(e.detail); log("error: " + window.__result.error); window.__done = true; });
+
+    // Provide the scene imperatively (a Scene class can't ride an attribute).
+    try { el.scene = Demo; } catch (e) { window.__result.error = e.message; window.__done = true; log("throw: " + e.message); }
+  </script>
+</body>
+</html>

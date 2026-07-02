@@ -14,6 +14,10 @@ import { config as manimConfig, resolveConfig, loadConfigFile, QUALITY_PRESETS }
 export * from "./index.ts";
 export { MathTexDvisvgm, mathTexDvisvgm, mathTexDvisvgmOrFallback, texToSVGViaDvisvgm, detectDvisvgmToolchain } from "./mobject/mathtex_dvisvgm.ts";
 export { config, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
+// Parallel segment rendering (worker_threads over the partial-movie cache).
+export { renderParallel, renderSegmentRange } from "./node-parallel.ts";
+export { discoverSegments, partitionSegments } from "./scene/render_frame.ts";
+export type { SegmentRecord } from "./scene/render_frame.ts";
 
 // Options accepted by render(). All fields are optional; sensible defaults are
 // applied inside the function.
@@ -37,6 +41,8 @@ export interface RenderOptions {
   uptoAnimationNumber?: number | null; // render only play() indices <= this
   disableCaching?: boolean;           // bypass the partial-movie-file cache
   saveSections?: boolean;             // write per-section videos + JSON index
+  // Remotion-style additions:
+  params?: Record<string, any>;       // scene params validated by a static `schema`
   [key: string]: any;
 }
 
@@ -60,19 +66,32 @@ async function loadCanvas(): Promise<any> {
 export async function render(sceneOrConstruct: any, options: RenderOptions = {}) {
   const verbose = options.verbose ?? true;
 
+  // F8: resolve schema-validated params + calculateMetadata (Remotion-style). A
+  // scene may expose a static `schema` (validates options.params) and/or a
+  // static/instance `calculateMetadata` computing fps/width/height. Its result
+  // is a fallback layer below explicit options.
+  let sceneMeta: any = {};
+  try {
+    const { resolveSceneMetadata } = await import("./scene/scene_params.ts");
+    const resolved = await resolveSceneMetadata(sceneOrConstruct, options.params);
+    sceneMeta = resolved.metadata ?? {};
+  } catch (e) {
+    if (options.params !== undefined) throw e; // opted in -> surface schema errors
+  }
+
   // Resolve dimensions / fps: resolution > pixel* > quality preset. We use the
   // layered config so a loaded manim.config file's defaults participate, but
   // explicit options always win.
   const quality = options.quality ?? "medium";
   const q = QUALITIES[quality] ?? QUALITIES.medium;
-  let pixelWidth = options.pixelWidth ?? manimConfig.pixelWidth ?? q.pixelWidth;
-  let pixelHeight = options.pixelHeight ?? manimConfig.pixelHeight ?? q.pixelHeight;
+  let pixelWidth = options.pixelWidth ?? sceneMeta.width ?? manimConfig.pixelWidth ?? q.pixelWidth;
+  let pixelHeight = options.pixelHeight ?? sceneMeta.height ?? manimConfig.pixelHeight ?? q.pixelHeight;
   if (options.quality && QUALITY_PRESETS[options.quality]) {
     pixelWidth = options.pixelWidth ?? QUALITY_PRESETS[options.quality].pixelWidth;
     pixelHeight = options.pixelHeight ?? QUALITY_PRESETS[options.quality].pixelHeight;
   }
   if (options.resolution) { [pixelWidth, pixelHeight] = options.resolution; }
-  const fps = options.fps ?? (options.quality && QUALITY_PRESETS[options.quality]?.fps) ?? manimConfig.fps ?? q.fps;
+  const fps = options.fps ?? (options.quality && QUALITY_PRESETS[options.quality]?.fps) ?? sceneMeta.fps ?? manimConfig.fps ?? q.fps;
 
   const background = options.background ?? manimConfig.background ?? "#000000";
   const transparent = options.transparent ?? false;
@@ -99,9 +118,14 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
 
   const { createCanvas, GlobalFonts } = await loadCanvas();
   autoRegisterFonts(GlobalFonts);
-  await loadVectorFont(options.vectorFont ?? "sans-serif").catch(() => null); // for VText
+  // F5: register the async-asset preloads as delayRender blockers, then await the
+  // gate. This unifies font/MathJax warm-up with any user delayRender() calls so
+  // render() only proceeds once every registered asset has resolved.
+  const { delayRenderUntil, waitForRender } = await import("./core/async_gate.ts");
+  delayRenderUntil(loadVectorFont(options.vectorFont ?? "sans-serif").catch(() => null), "font"); // for VText
   // Warm MathJax so MathTex(...) construction is synchronous inside construct().
-  await import("./mobject/mathtex.ts").then((m) => m.initMathTex()).catch(() => null);
+  delayRenderUntil(import("./mobject/mathtex.ts").then((m) => m.initMathTex()).catch(() => null), "mathjax");
+  await waitForRender();
   if (options.fonts && GlobalFonts) {
     for (const f of options.fonts) GlobalFonts.registerFromPath(f.path, f.name);
   }
