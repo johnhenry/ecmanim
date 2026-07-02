@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.4
 
 ### Fixed
 - **`Axes`/`NumberPlane` placed points at the wrong x-coordinate for any
