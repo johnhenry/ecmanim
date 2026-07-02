@@ -152,19 +152,31 @@ export class Scene {
     // structural shape/position of their targets — NOT object identity — so the
     // same construct() re-run produces the same hash and reuses partials.
     const parts: string[] = [kind, `mob:${this.mobjects.length}`, `fps:${this.fps}`];
+    const r = (v: any) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v);
     for (const a of anims) {
       const cls = a?.constructor?.name ?? "anon";
       const mob = a?.mobject;
-      const npts = Array.isArray(mob?.points) ? mob.points.length : 0;
-      const nsub = Array.isArray(mob?.submobjects) ? mob.submobjects.length : 0;
-      // A coarse position/scale fingerprint from the first & last point.
-      let geom = "";
-      if (Array.isArray(mob?.points) && mob.points.length) {
-        const p0 = mob.points[0], pL = mob.points[mob.points.length - 1];
-        const r = (v: any) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v);
-        geom = `${(p0 ?? []).map?.(r).join(",") ?? ""}~${(pL ?? []).map?.(r).join(",") ?? ""}`;
+      // Fingerprint the WHOLE family, not just the top-level mobject: container
+      // mobjects (VGroup, vector Text, diagram boards) keep their geometry in
+      // submobjects and have no own points — fingerprinting only `mob.points`
+      // made their hashes position-blind, which caused stale partial reuse when
+      // e.g. a Text moved between renders.
+      const fam: any[] = typeof mob?.getFamily === "function" ? mob.getFamily() : (mob ? [mob] : []);
+      let npts = 0;
+      let firstPt: any[] | null = null;
+      let lastPt: any[] | null = null;
+      for (const m of fam) {
+        const pts = Array.isArray(m?.points) ? m.points : [];
+        npts += pts.length;
+        if (pts.length) {
+          if (!firstPt) firstPt = pts[0];
+          lastPt = pts[pts.length - 1];
+        }
       }
-      parts.push(`${cls}:${npts}:${nsub}:${geom}:${a?.runTime ?? ""}`);
+      const geom = firstPt && lastPt
+        ? `${firstPt.map(r).join(",")}~${lastPt.map(r).join(",")}`
+        : "";
+      parts.push(`${cls}:${npts}:${fam.length}:${geom}:${a?.runTime ?? ""}`);
     }
     return fnv1a(parts.join("|"));
   }

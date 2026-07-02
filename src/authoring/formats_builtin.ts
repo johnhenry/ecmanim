@@ -105,8 +105,12 @@ export const explainerFormat: Format = {
       for (const [i, sec] of plan.sections.entries()) {
         scene.nextSection(sec.heading || `section-${i + 1}`);
         const heading = new idx.Text(wrap(sec.heading, 30), { fontSize: 0.6, point: [0, 2.6, 0], color: "#58C4DD" });
-        const items = (sec.bullets ?? []).map((b, j) =>
-          new idx.Text("• " + wrap(b, 44), { fontSize: 0.4, point: [-5.6, 1.4 - j * 0.75, 0], align: "left" }));
+        const items = (sec.bullets ?? []).map((b, j) => {
+          const t = new idx.Text("• " + wrap(b, 44), { fontSize: 0.4, point: [0, 1.4 - j * 0.75, 0], align: "left" });
+          // Anchor the LEFT edge at x = -5.6 (Text's `point` positions the center).
+          t.shift([-5.6 - t.getBoundaryPoint([-1, 0, 0])[0], 0, 0]);
+          return t;
+        });
         const board = sec.diagram
           ? (await import("../diagram/diagram.ts")).diagram(sec.diagram)
           : null;

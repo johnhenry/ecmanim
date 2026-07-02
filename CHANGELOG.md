@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased (0.0.1 pre-release hardening)
+
+Version reset to 0.0.1 — the package has never been published; the earlier
+1.x/2.0 numbers tracked development phases, not releases.
+
+### Fixed
+- **Cache soundness — container mobjects.** Segment hashes fingerprinted only an
+  animation target's own `points`, which are empty for containers (VGroup,
+  vector Text, diagram boards) — so moving/re-styling them between renders
+  silently reused stale partial movie files. The fingerprint now walks the whole
+  family (found by dogfooding the explainer video; regression-tested in
+  `test/hash-invalidation.test.ts`). All existing partial caches invalidate once.
+- `AnimationGroup.begin()` had a tautological ternary in the timing rescale.
+- Browser backends dropped `finalizeSections()` for construct-function scenes
+  (drifted copies of `makeScene`/`runConstruct` — now shared in
+  `scene/orchestrate.ts`).
+- Explainer/diagram polish: bullets left-anchor instead of centering off-screen;
+  diagram arrows trim to node-box boundaries; layered layout gained barycenter
+  crossing-reduction sweeps.
+
+### Added
+- **TypeScript `strict: true`** across the codebase (was `strict: false`).
+- **Frame-snapshot visual regression tests** (`test/snapshot.test.ts` + golden
+  PNGs): the first tests that catch "renders but looks wrong"; includes a
+  byte-determinism guard for the render cache.
+- **Real Format-layer payload**: `explainer` (sections + bullets + diagrams +
+  TTS narration), `chart-reveal` (animated bar charts), `quote-card` (social
+  aspect presets) — all zero-network with optional LLM enhancement.
+- `VoiceoverTracker.timingSource` (`"word-boundaries" | "proportional"`).
+- `SimpleEngine` bodies accept `angularVelocity` (kinematic spin).
+- `examples/explainer-video.ts` — a real explainer about manim-js, made by the
+  explainer format (dogfooding).
+
+### Docs
+- Honesty pass: Lottie static-only scope, OTIO skeleton scope, voiceover
+  bookmark-drift warning, SimpleEngine limits, Studio's actual feature set,
+  diagram layout limits.
+
 ## 2.0.0 — adoption phase 7: authoring layer + Studio
 
 Two new opt-in subpath entries keep the core lean while adding a higher-level

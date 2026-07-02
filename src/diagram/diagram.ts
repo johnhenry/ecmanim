@@ -181,8 +181,16 @@ export function buildBoard(graph: DiagramGraph, opts: BoardOptions = {}): VGroup
     nodeMobs.set(node.id, group);
   }
   for (const e of graph.edges) {
-    const a = pos.get(e.from) ?? [0, 0, 0];
-    const b = pos.get(e.to) ?? [0, 0, 0];
+    let a = pos.get(e.from) ?? [0, 0, 0];
+    let b = pos.get(e.to) ?? [0, 0, 0];
+    // Trim endpoints to the node boxes' boundaries so arrowheads land on the
+    // box edge instead of piercing to its center.
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy) || 1;
+    const dir = [dx / len, dy / len, 0];
+    const fromMob = nodeMobs.get(e.from), toMob = nodeMobs.get(e.to);
+    try { if (fromMob) a = fromMob.getBoundaryPoint(dir); } catch { /* keep center */ }
+    try { if (toMob) b = toMob.getBoundaryPoint([-dir[0], -dir[1], 0]); } catch { /* keep center */ }
     const arrow = new Arrow(a, b, { color: edgeColor });
     (arrow as any).matchId = `edge:${e.from}->${e.to}`;
     board.add(arrow);
