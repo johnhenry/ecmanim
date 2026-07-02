@@ -5,7 +5,7 @@
 //   node bin/py2ts.ts input.py            # prints TS to stdout
 //   node bin/py2ts.ts --wildcard input.py # emit `import * as mn`
 //
-// Converts a Python-manim scene script into TypeScript for manim-js.
+// Converts a Python-manim scene script into TypeScript for ecmanim.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { convert, type Py2TsOptions } from "../src/tools/py2ts.ts";

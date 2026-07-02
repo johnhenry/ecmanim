@@ -1,4 +1,4 @@
-// manim-js Studio — a live-preview dev server. It serves a page that renders your
+// ecmanim Studio — a live-preview dev server. It serves a page that renders your
 // Scene in a <manim-player>, watches the scene file, and hot-reloads the browser
 // (via Server-Sent Events) on every save. Node-only. No dependency: uses node:http
 // + node:fs.watch. The heavier Studio pieces (checkpoint replay, mouse camera, an
@@ -20,14 +20,14 @@ export interface StudioOptions {
 
 /** The live-reload harness page HTML (importmap + <manim-player> + SSE reload). */
 export function buildStudioHarness(opts: { sceneModuleUrl: string; sceneExport: string; browserUrl: string; quality: string; background: string }): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>manim-js Studio</title>
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ecmanim Studio</title>
 <style>body{margin:0;background:#0b0d12;color:#cdd6f4;font:14px system-ui;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px}manim-player{max-width:96vw;box-shadow:0 4px 30px #0008}#bar{opacity:.7}</style>
-<script type="importmap">{"imports":{"manim-js/browser":"${opts.browserUrl}"}}</script></head>
+<script type="importmap">{"imports":{"ecmanim/browser":"${opts.browserUrl}"}}</script></head>
 <body>
-<div id="bar">manim-js Studio — editing <code>${opts.sceneExport}</code> · saves hot-reload</div>
+<div id="bar">ecmanim Studio — editing <code>${opts.sceneExport}</code> · saves hot-reload</div>
 <manim-player id="p" quality="${opts.quality}" background="${opts.background}" controls></manim-player>
 <script type="module">
-  import { defineManimPlayer } from "manim-js/browser";
+  import { defineManimPlayer } from "ecmanim/browser";
   defineManimPlayer();
   const el = document.getElementById("p");
   async function load() {

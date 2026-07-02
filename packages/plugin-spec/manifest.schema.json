@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://manim-js.dev/schemas/plugin-manifest.schema.json",
+  "$id": "https://ecmanim.dev/schemas/plugin-manifest.schema.json",
   "title": "Manim Portable Plugin Manifest",
-  "description": "A portable, language-neutral description of the shareable subset of a manim plugin: color palettes, rate functions (as expressions), parametric surfaces (as expressions), and SVG shape libraries. Loaded by both manim-js (TypeScript) and Python manim via thin adapters.",
+  "description": "A portable, language-neutral description of the shareable subset of a manim plugin: color palettes, rate functions (as expressions), parametric surfaces (as expressions), and SVG shape libraries. Loaded by both ecmanim (TypeScript) and Python manim via thin adapters.",
   "type": "object",
   "required": ["name", "version"],
   "additionalProperties": false,

@@ -1,6 +1,6 @@
 """Load the shared manim WASM math core (``manim_core.wasm``) from Python.
 
-The SAME ``manim_core.wasm`` is consumed by manim-js in Node/browser (via the
+The SAME ``manim_core.wasm`` is consumed by ecmanim in Node/browser (via the
 ``WebAssembly`` API, see ``src/wasm.ts``) and here by Python via ``wasmtime`` —
 proving the core is genuinely cross-language. The module is ``no_std`` with
 static linear buffers and a C ABI:

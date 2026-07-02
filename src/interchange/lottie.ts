@@ -88,7 +88,7 @@ export function vmobjectToLottieJSON(mob: VMobject | VGroup, opts: LottieExportO
     if (shapes.length) shapeGroups.push(...shapes);
   }
   return {
-    v: "5.7.0", fr: fps, ip: 0, op: dur, w, h, nm: "manim-js", ddd: 0,
+    v: "5.7.0", fr: fps, ip: 0, op: dur, w, h, nm: "ecmanim", ddd: 0,
     assets: [],
     layers: [{
       ddd: 0, ind: 1, ty: 4, nm: "shape", sr: 1,

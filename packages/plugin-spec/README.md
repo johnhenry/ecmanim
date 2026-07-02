@@ -3,7 +3,7 @@
 A **portable, language-neutral** description of the *shareable* subset of a manim
 plugin. The same JSON manifest is loaded by:
 
-- **manim-js** (TypeScript) via `src/plugins/manifest.ts` → `loadManifest()`
+- **ecmanim** (TypeScript) via `src/plugins/manifest.ts` → `loadManifest()`
 - **Python manim** via `packages/manim-portable-plugins` → `load_manifest()`
 
 so a plugin authored once runs on both engines. Anything engine-specific
@@ -38,7 +38,7 @@ Schema: [`manifest.schema.json`](./manifest.schema.json) (JSON Schema draft-07).
 
 Each value is a hex string: `#rgb`, `#rgba`, `#rrggbb`, or `#rrggbbaa`.
 
-- **manim-js**: `registry.registerColor(name, hex)`; resolvable via `Color.parse(name)`.
+- **ecmanim**: `registry.registerColor(name, hex)`; resolvable via `Color.parse(name)`.
 - **Python**: a module-level `manim.ManimColor` constant (and returned in a dict).
 
 ### `rateFunctions` — easing curves as expressions
@@ -52,7 +52,7 @@ Each value is a hex string: `#rgb`, `#rgba`, `#rrggbb`, or `#rrggbbaa`.
 Each value is an **expression in the single variable `t`** (conventionally
 `0..1`). Compiled to `(t) => number` / `callable(t) -> float`.
 
-- **manim-js**: `registry.registerRateFunction(name, fn)`.
+- **ecmanim**: `registry.registerRateFunction(name, fn)`.
 - **Python**: entry in the returned `rate_functions` dict.
 
 ### `surfaces` — parametric surfaces as expressions
@@ -75,7 +75,7 @@ Each value is an **expression in the single variable `t`** (conventionally
 `resolution` and `fillColor` are optional; `fillColor` may name a color from
 this manifest's `colors` or be a hex string.
 
-- **manim-js**: registered as a mobject class extending `Surface`; `new MobiusStrip()`.
+- **ecmanim**: registered as a mobject class extending `Surface`; `new MobiusStrip()`.
 - **Python**: a factory `MobiusStrip(**overrides)` → `manim.Surface(func, u_range, v_range, …)`.
 
 ### `shapes` — SVG shape library
@@ -88,7 +88,7 @@ this manifest's `colors` or be a hex string.
 
 Each value is a complete **SVG document string**.
 
-- **manim-js**: registered as a mobject class extending `SVGMobject`; `new NeonStar()`.
+- **ecmanim**: registered as a mobject class extending `SVGMobject`; `new NeonStar()`.
 - **Python**: a factory `NeonStar(**kwargs)` → `manim.SVGMobject` (the string is
   written to a temp file, since Python manim's `SVGMobject` reads a path).
 

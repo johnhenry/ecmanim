@@ -1,17 +1,17 @@
 # Plugins
 
-manim-js is extensible three ways, each aimed at a different portability level:
+ecmanim is extensible three ways, each aimed at a different portability level:
 
 1. **Native plugins** — full JavaScript/TypeScript power via `use({ install })`:
    register custom mobjects, animations, rate functions, colors, and scenes.
 2. **Portable manifests** — a language-neutral JSON file (`loadManifest`) whose
-   colors / rate functions / surfaces / SVG shapes load into **both** manim-js
+   colors / rate functions / surfaces / SVG shapes load into **both** ecmanim
    and **Python manim**.
 3. **The shared WASM math core** — a Rust→WASM module callable from JS *and*
    Python, verified byte-identical across the two.
 
 All three share the singleton `Registry` (`src/plugins/registry.ts`); the CLI's
-`manim-js plugins` subcommand lists everything currently registered.
+`ecmanim plugins` subcommand lists everything currently registered.
 
 ---
 
@@ -48,10 +48,10 @@ The shipped example registers a `Heart` VMobject, a `Heartbeat` animation, a
 `thump` rate function, and a `brandPink` color:
 
 ```ts
-import type { Plugin, Registry } from "manim-js";   // (or ../../src/plugins/registry.ts)
+import type { Plugin, Registry } from "ecmanim";   // (or ../../src/plugins/registry.ts)
 
 const heartPlugin: Plugin = {
-  name: "manim-js-heart",
+  name: "ecmanim-heart",
   version: "1.0.0",
   install(api: Registry) {
     const { VMobject, Animation } = api.bases;
@@ -94,7 +94,7 @@ export default heartPlugin;
 Use it:
 
 ```ts
-import { use, registry, Scene, Create } from "manim-js";
+import { use, registry, Scene, Create } from "ecmanim";
 import heartPlugin from "./examples/plugins/heart-plugin.ts";
 
 use(heartPlugin);
@@ -126,7 +126,7 @@ A `manim.config.{js,mjs}` may export `{ config, plugins }`; the loader merges
 
 A **manifest** is the language-neutral, shareable subset of a plugin: a plain
 JSON object with four declarative categories. The *same* file loads into
-manim-js (`src/plugins/manifest.ts`) and Python manim
+ecmanim (`src/plugins/manifest.ts`) and Python manim
 (`packages/manim-portable-plugins`), so a plugin's portable subset is authored
 once and runs on both engines. Nothing in a manifest executes arbitrary code —
 expressions are parsed by a safe recursive-descent evaluator (no `eval`).
@@ -148,11 +148,11 @@ The full spec (JSON Schema + grammar) lives in
 }
 ```
 
-- **`colors`** → `registry.registerColor` (manim-js) / `ManimColor` constants (Python).
+- **`colors`** → `registry.registerColor` (ecmanim) / `ManimColor` constants (Python).
 - **`rateFunctions`** → compiled `(t) => number`; expression in the single var `t`.
-- **`surfaces`** → a `Surface` subclass (manim-js) / a `manim.Surface` factory
+- **`surfaces`** → a `Surface` subclass (ecmanim) / a `manim.Surface` factory
   (Python); `x`/`y`/`z` are expressions in `u`,`v`.
-- **`shapes`** → an `SVGMobject` subclass (manim-js) / `manim.SVGMobject` factory
+- **`shapes`** → an `SVGMobject` subclass (ecmanim) / `manim.SVGMobject` factory
   (Python) from a complete SVG document string.
 
 ### Expression grammar
@@ -165,10 +165,10 @@ variadic `min`/`max`. Any undeclared name, unknown function, or wrong arity is a
 `src/plugins/expr.ts` (TS, re-exported by `packages/plugin-spec/expr.ts`) and
 `manim_portable_plugins.compile_expr` (Python) — verified to agree bit-for-bit.
 
-### Loading in manim-js — `examples/plugins/cyberpunk.manifest.json`
+### Loading in ecmanim — `examples/plugins/cyberpunk.manifest.json`
 
 ```ts
-import { loadManifest, loadManifestFromFile, registry } from "manim-js";
+import { loadManifest, loadManifestFromFile, registry } from "ecmanim";
 import cyberpunk from "./examples/plugins/cyberpunk.manifest.json" with { type: "json" };
 
 const summary = loadManifest(cyberpunk);
@@ -216,7 +216,7 @@ are consumed from JavaScript and Python, so both engines compute identically.
 ### From JavaScript
 
 ```ts
-import { loadWasm, isWasmLoaded, bezierEvalWasm, earclipWasm, mat3VecWasm } from "manim-js";
+import { loadWasm, isWasmLoaded, bezierEvalWasm, earclipWasm, mat3VecWasm } from "ecmanim";
 
 const ok = await loadWasm();        // Node reads the .wasm via fs, browser via fetch
 if (isWasmLoaded()) {

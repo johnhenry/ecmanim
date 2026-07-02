@@ -61,7 +61,7 @@ test("Format lifecycle: plan → generateAssets → compose, requiredProviders e
 
 test("showrunner: titleCardFormat + manim render provider registered", async () => {
   assert.ok(getFormat("title-card"));
-  assert.ok(listProviders("render").some((p) => p.name === "manim-js"));
+  assert.ok(listProviders("render").some((p) => p.name === "ecmanim"));
   // Run the format with a FAKE render provider (no real render) to check plan/compose.
   let composed: any = null;
   const fakeRender = { kind: "render" as const, name: "fake", invoke: async (input: any) => { composed = input; return "video.mp4"; } };

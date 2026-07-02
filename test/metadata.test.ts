@@ -59,7 +59,7 @@ test("toVideoObject emits schema.org JSON-LD with duration, chapters, provenance
   assert.equal(v.hasPart[1].startOffset, 2);
   // provenance
   assert.equal(v.creator["@type"], "SoftwareApplication");
-  assert.equal(v.creator.name, "manim-js");
+  assert.equal(v.creator.name, "ecmanim");
   assert.equal(v.creator.softwareVersion, MANIM_JS_VERSION);
   assert.equal(v.additionalProperty[0].value, IPTC_ALGORITHMIC_MEDIA);
 });
@@ -104,7 +104,7 @@ test("toIIIFManifest builds a valid v3 shape: Manifest -> Canvas -> painting Vid
   assert.match(m.structures[0].items[0].id, /#t=0,2$/);
   assert.match(m.structures[1].items[0].id, /#t=2,5$/);
   // provenance metadata
-  assert.ok(m.metadata.some((e: any) => e.value.none[0].includes("manim-js")));
+  assert.ok(m.metadata.some((e: any) => e.value.none[0].includes("ecmanim")));
 });
 
 test("resolveIIIFVideo round-trips toIIIFManifest (url, dims, duration, chapters)", () => {

@@ -1,5 +1,5 @@
 {
-  "name": "manim-js",
+  "name": "ecmanim",
   "version": "0.0.1",
   "description": "A JavaScript port of manim (Mathematical Animation Engine). Runs in Node (renders to MP4 via ffmpeg) and in the browser (live canvas + WebM export).",
   "type": "module",
@@ -32,7 +32,7 @@
     }
   },
   "bin": {
-    "manim-js": "./bin/manim-js.ts",
+    "ecmanim": "./bin/ecmanim.ts",
     "py2ts": "./bin/py2ts.ts"
   },
   "files": [

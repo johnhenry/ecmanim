@@ -1,4 +1,4 @@
-// py2ts — a pragmatic Python-manim -> TypeScript-manim-js scene transpiler.
+// py2ts — a pragmatic Python-manim -> TypeScript-ecmanim scene transpiler.
 //
 // This is NOT a full Python parser. It is a best-effort line/regex +
 // light-tokenizer converter that handles the common ~80% subset of manim
@@ -11,7 +11,7 @@
 // See test/py2ts.test.ts for the covered constructs.
 
 export interface Py2TsOptions {
-  /** Import specifier for the manim-js package (default "manim-js"). */
+  /** Import specifier for the ecmanim package (default "ecmanim"). */
   importFrom?: string;
   /** If true, emit a single `import * as mn from ...` wildcard instead of a
    *  named import of detected identifiers. Default false. */
@@ -21,8 +21,8 @@ export interface Py2TsOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Known manim-js identifiers. Constructor calls to these get a `new ` prefix.
-// Kept broad; extracted from the manim-js public API surface.
+// Known ecmanim identifiers. Constructor calls to these get a `new ` prefix.
+// Kept broad; extracted from the ecmanim public API surface.
 // ---------------------------------------------------------------------------
 
 const KNOWN_CLASSES = new Set<string>([
@@ -379,7 +379,7 @@ function rewriteStatement(body: string): string {
 /**
  * For `this.play(<args>)`, mark the trailing config object (already produced by
  * the generic call rewriter from run_time=... etc.) with `_playConfig: true`,
- * matching manim-js's play() signature. Runs after rewriteExpr, so keyword args
+ * matching ecmanim's play() signature. Runs after rewriteExpr, so keyword args
  * have already been folded into a `{ ... }` object argument.
  */
 function foldPlayConfig(s: string): string {
@@ -435,7 +435,7 @@ interface Block {
 }
 
 export function convert(pythonSource: string, opts: Py2TsOptions = {}): string {
-  const importFrom = opts.importFrom ?? "manim-js";
+  const importFrom = opts.importFrom ?? "ecmanim";
   const indentUnit = opts.indent ?? "  ";
 
   const rawLines = pythonSource.replace(/\r\n/g, "\n").split("\n");

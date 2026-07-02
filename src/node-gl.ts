@@ -139,7 +139,7 @@ export function transcodeArgs(tmpWebm: string, output: string, format: string): 
 }
 
 // Build the harness HTML. Pure — no I/O. The returned document:
-//   * declares an import map so `three` and `manim-js/browser-three` resolve to
+//   * declares an import map so `three` and `ecmanim/browser-three` resolve to
 //     the served URLs (browser-three.js imports `three` bare);
 //   * imports { record } from browser-three and the scene module's export;
 //   * creates a <canvas> sized to the pixel dims and calls record();
@@ -168,13 +168,13 @@ export function buildGLHarness(opts: {
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>manim-js GL harness</title>
+<title>ecmanim GL harness</title>
 <script type="importmap">
 {
   "imports": {
     "three": ${JSON.stringify(threeUrl)},
     "three/addons/": "/node_modules/three/examples/jsm/",
-    "manim-js/browser-three": ${JSON.stringify(browserThreeUrl)}
+    "ecmanim/browser-three": ${JSON.stringify(browserThreeUrl)}
   }
 }
 </script>
@@ -187,7 +187,7 @@ export function buildGLHarness(opts: {
   window.__glResult = { b64: null, type: null, error: null };
   try {
     const THREE = await import("three");
-    const { record } = await import("manim-js/browser-three");
+    const { record } = await import("ecmanim/browser-three");
     ${importSpec}
     const canvas = document.getElementById("stage");
     const recordOptions = Object.assign({}, ${recordJson}, { canvas, three: THREE });
@@ -234,7 +234,7 @@ export async function renderGL(options: RenderGLOptions): Promise<RenderGLResult
       `The GPU/WebGL render path needs a headless Chrome exposing the DevTools Protocol ` +
       `(e.g. \`google-chrome --headless --remote-debugging-port=9222\`, WebGL2 via Mesa llvmpipe). ` +
       `Set it via options.cdpUrl or env MANIM_CDP_URL. ` +
-      `If you don't have one, use the default CPU renderer (render() in "manim-js/node"), which needs no browser.`,
+      `If you don't have one, use the default CPU renderer (render() in "ecmanim/node"), which needs no browser.`,
     );
   }
 

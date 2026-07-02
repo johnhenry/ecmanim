@@ -1,9 +1,9 @@
 # Voiceover / TTS-synced narration
 
-Phase-3 adoption (manim-voiceover style). Exported from `manim-js/node`.
+Phase-3 adoption (manim-voiceover style). Exported from `ecmanim/node`.
 
 ```js
-import { render, voiceover } from "manim-js/node";
+import { render, voiceover } from "ecmanim/node";
 
 class Narrated extends Scene {
   async construct() {

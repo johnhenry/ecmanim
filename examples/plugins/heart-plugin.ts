@@ -1,12 +1,12 @@
-// A sample manim-js plugin. Import it and `use()` it (Node or browser) to add a
+// A sample ecmanim plugin. Import it and `use()` it (Node or browser) to add a
 // Heart mobject, a custom animation, a rate function, and a brand color.
-//   import { use } from "manim-js";
+//   import { use } from "ecmanim";
 //   import heartPlugin from "./heart-plugin.ts";
 //   use(heartPlugin);
 import type { Plugin, Registry } from "../../src/plugins/registry.ts";
 
 const heartPlugin: Plugin = {
-  name: "manim-js-heart",
+  name: "ecmanim-heart",
   version: "1.0.0",
   install(api: Registry) {
     const { VMobject } = api.bases;

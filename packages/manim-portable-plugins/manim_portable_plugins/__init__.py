@@ -2,7 +2,7 @@
 
 This is the Python adapter for the language-neutral plugin manifest format
 described in ``packages/plugin-spec/manifest.schema.json``. The SAME manifest is
-loaded into manim-js (TypeScript) by ``src/plugins/manifest.ts``; this module is
+loaded into ecmanim (TypeScript) by ``src/plugins/manifest.ts``; this module is
 its mirror so a plugin authored once runs on both engines.
 
 The manifest's shareable subset:

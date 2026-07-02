@@ -87,8 +87,8 @@ test("getVideoObject() returns a schema.org VideoObject from metadata without a 
   assert.equal(obj["@context"], "https://schema.org");
   assert.equal(obj.name, "Sine Wave");
   assert.equal(obj.description, "An animated sine wave");
-  // provenance:true adds a manim-js creator + IPTC digital-source-type.
-  assert.equal(obj.creator?.name, "manim-js");
+  // provenance:true adds a ecmanim creator + IPTC digital-source-type.
+  assert.equal(obj.creator?.name, "ecmanim");
   assert.ok(Array.isArray(obj.additionalProperty));
 
   // Reading back the metadata getter returns what we set.

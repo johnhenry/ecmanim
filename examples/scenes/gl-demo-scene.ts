@@ -1,12 +1,12 @@
 // A browser-importable scene for the headless GPU render (examples/render-gl.ts).
-// It imports from "manim-js/browser-three" (the WebGL backend) because it is
+// It imports from "ecmanim/browser-three" (the WebGL backend) because it is
 // loaded and executed inside the headless Chrome page, not in Node. The
 // renderGL harness maps that specifier to the built dist/browser-three.js.
 
 import {
   Scene, Sphere, Torus, Create, Rotating, FadeIn,
   ThreeDCamera, BLUE, TEAL, DEGREES,
-} from "manim-js/browser-three";
+} from "ecmanim/browser-three";
 
 export default class GLDemo extends Scene {
   async construct() {

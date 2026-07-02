@@ -1,14 +1,14 @@
-// The dogfood test: a short explainer about manim-js, made BY the manim-js
+// The dogfood test: a short explainer about ecmanim, made BY the ecmanim
 // explainer format. Narration pacing comes from the voiceover system (silent
 // provider by default — set OPENAI_API_KEY or install espeak-ng and pass
 // tts: "openai" / "system" for spoken narration).
-// Run: node examples/explainer-video.ts  ->  examples/out/manim-js-explainer.mp4
+// Run: node examples/explainer-video.ts  ->  examples/out/ecmanim-explainer.mp4
 
 import { runFormat, manimRenderProvider } from "../src/authoring.ts";
 
 const res = await runFormat("explainer", {
   params: {
-    title: "manim-js",
+    title: "ecmanim",
     subtitle: "code → animation, in TypeScript",
     sections: [
       {
@@ -19,7 +19,7 @@ const res = await runFormat("explainer", {
           "WebGL: Three.js, same Scene code",
         ],
         narration:
-          "You write one Scene. manim-js renders it headlessly in Node, live on a browser canvas, or on the GPU through Three.js.",
+          "You write one Scene. ecmanim renders it headlessly in Node, live on a browser canvas, or on the GPU through Three.js.",
       },
       {
         heading: "Animation as code",
@@ -42,12 +42,12 @@ const res = await runFormat("explainer", {
           "Narration, captions, physics, charts, LaTeX, and timeline interchange ship in the box.",
       },
     ],
-    outro: "github.com/johnhenry/manim-js",
+    outro: "github.com/johnhenry/ecmanim",
     // Prefer OpenAI TTS when a key is present, else local espeak-ng ("system");
     // resolveTTSProvider falls back to "silent" if neither is available.
     tts: process.env.OPENAI_API_KEY ? "openai" : "system",
     renderOptions: {
-      output: "examples/out/manim-js-explainer.mp4",
+      output: "examples/out/ecmanim-explainer.mp4",
       quality: "medium",
       verbose: true,
     },

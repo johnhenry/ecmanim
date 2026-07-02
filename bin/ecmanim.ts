@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// manim-js CLI — a JavaScript port of manim's `manim` command.
+// ecmanim CLI — a JavaScript port of manim's `manim` command.
 //
-//   manim-js render <file> [scene] [flags]
-//   manim-js cfg [--write]
-//   manim-js init [file]
-//   manim-js plugins
-//   manim-js checkhealth
+//   ecmanim render <file> [scene] [flags]
+//   ecmanim cfg [--write]
+//   ecmanim init [file]
+//   ecmanim plugins
+//   ecmanim checkhealth
 //
 // The scene file may either:
 //   (a) export a Scene subclass (default export, or named via [scene]/-a), or
@@ -83,14 +83,14 @@ const BOOL_LONG = new Set([
 // help text
 // ---------------------------------------------------------------------------
 
-const HELP = `manim-js — a JavaScript port of manim (Mathematical Animation Engine)
+const HELP = `ecmanim — a JavaScript port of manim (Mathematical Animation Engine)
 
 Usage:
-  manim-js render <file> [scene] [options]
-  manim-js cfg [--write]
-  manim-js init [file]
-  manim-js plugins
-  manim-js checkhealth
+  ecmanim render <file> [scene] [options]
+  ecmanim cfg [--write]
+  ecmanim init [file]
+  ecmanim plugins
+  ecmanim checkhealth
 
 Render options:
   -o, --output <path>        Output file (default: media/<Scene>.<ext>)
@@ -118,10 +118,10 @@ Subcommands:
   checkhealth  Report node / ffmpeg / @napi-rs/canvas / font availability
 
 Examples:
-  manim-js render examples/basic.ts BasicScene -q high -o out.mp4
-  manim-js render myscene.js --scene IntroScene --format webm
-  manim-js render scene.js -s               # just the final frame as PNG
-  manim-js render scene.js -n 2,5           # only animations 2..5
+  ecmanim render examples/basic.ts BasicScene -q high -o out.mp4
+  ecmanim render myscene.js --scene IntroScene --format webm
+  ecmanim render scene.js -s               # just the final frame as PNG
+  ecmanim render scene.js -n 2,5           # only animations 2..5
 `;
 
 // ---------------------------------------------------------------------------
@@ -165,13 +165,13 @@ async function cmdCfg(args: any) {
   }
 }
 
-const STARTER = `// A starter manim-js scene. Render with:
-//   manim-js render scene.js MyScene -q medium
-import { Scene, Circle, Square, Text, Create, Transform, FadeOut, BLUE, YELLOW } from "manim-js/node";
+const STARTER = `// A starter ecmanim scene. Render with:
+//   ecmanim render scene.js MyScene -q medium
+import { Scene, Circle, Square, Text, Create, Transform, FadeOut, BLUE, YELLOW } from "ecmanim/node";
 
 export class MyScene extends Scene {
   async construct() {
-    const title = new Text("Hello, manim-js", { fontSize: 0.8, color: YELLOW, point: [0, 3, 0] });
+    const title = new Text("Hello, ecmanim", { fontSize: 0.8, color: YELLOW, point: [0, 3, 0] });
     await this.play(new Create(title));
 
     const circle = new Circle({ radius: 1.5, color: BLUE, fillColor: BLUE, fillOpacity: 0.5 });
@@ -196,7 +196,7 @@ function cmdInit(args: any) {
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, STARTER);
   console.log(`Scaffolded starter scene -> ${out}`);
-  console.log(`Render it with:  manim-js render ${file} MyScene`);
+  console.log(`Render it with:  ecmanim render ${file} MyScene`);
 }
 
 async function cmdPlugins() {
@@ -293,7 +293,7 @@ async function cmdCheckhealth() {
   } catch { /* unreachable */ }
   opt.push(["Chrome (CDP)", cdpOk, cdpOk ? `reachable at ${cdpUrl}` : `no DevTools endpoint at ${cdpUrl} — renderGL unavailable`]);
 
-  console.log("manim-js checkhealth\n");
+  console.log("ecmanim checkhealth\n");
   for (const [name, ok, info] of rows) {
     console.log(`  [${ok ? "OK " : "!! "}] ${name.padEnd(16)} ${info}`);
   }
@@ -310,7 +310,7 @@ async function cmdCheckhealth() {
 // render
 // ---------------------------------------------------------------------------
 
-// `manim-js plan scene.ts [Scene]` — dry-run a scene into a plan IR (JSON) without
+// `ecmanim plan scene.ts [Scene]` — dry-run a scene into a plan IR (JSON) without
 // rendering; prints to stdout or --output.
 async function cmdPlan(args: any) {
   const file = args._[1];

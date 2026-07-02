@@ -1,24 +1,24 @@
 # Authoring layer & Studio
 
-Phase-7 adoption. Two opt-in subpath entries (`manim-js/authoring`,
-`manim-js/studio`) keep the core `manim-js` entry lean.
+Phase-7 adoption. Two opt-in subpath entries (`ecmanim/authoring`,
+`ecmanim/studio`) keep the core `ecmanim` entry lean.
 
-## `manim-js/authoring`
+## `ecmanim/authoring`
 
 ### Plan IR + dry-run
 
 ```js
-import { toPlanIR } from "manim-js/authoring";
+import { toPlanIR } from "ecmanim/authoring";
 const plan = await toPlanIR(MyScene, { fps: 30, width: 1920, height: 1080, promise: "motion-led" });
 // { version, config, segments[], chapters[], estimatedFrames, durationSeconds, quality }
 ```
 Harvests structure **without rendering** (dry-runs `construct()`). CLI:
-`manim-js plan scene.ts [Scene] [--fps 30] [--promise motion-led] [--output plan.json]`.
+`ecmanim plan scene.ts [Scene] [--fps 30] [--promise motion-led] [--output plan.json]`.
 
 ### Quality gates
 
 ```js
-import { runQualityGates, slideshowRisk } from "manim-js/authoring";
+import { runQualityGates, slideshowRisk } from "ecmanim/authoring";
 const report = runQualityGates(ctx);           // { ok, slideshowRisk, results[] }
 ```
 `slideshowRisk` scores how static the output is; `checkDeliveryPromise` asserts the
@@ -29,7 +29,7 @@ mostly stills fails). `toPlanIR` runs these automatically.
 
 A `Format` runs `plan → generateAssets → compose` (with an optional `revise`
 feedback step) against swappable `llm`/`tts`/`render` providers. The `render`
-provider is backed by manim-js, so manim-js can be the renderer for
+provider is backed by ecmanim, so ecmanim can be the renderer for
 scrollmark/showrunner-style pipelines. Register your own with `registerFormat`
 / `registerProvider`.
 
@@ -45,7 +45,7 @@ sections); every format has a deterministic fallback.
 | `title-card` | `title?`, `bullets?` | the original minimal example. |
 
 ```js
-import { runFormat, manimRenderProvider } from "manim-js/authoring";
+import { runFormat, manimRenderProvider } from "ecmanim/authoring";
 
 const res = await runFormat("explainer", {
   params: {
@@ -62,12 +62,12 @@ const res = await runFormat("explainer", {
 });
 ```
 
-## `manim-js/studio`
+## `ecmanim/studio`
 
 ### Live-preview dev server
 
 ```js
-import { startStudio } from "manim-js/studio";
+import { startStudio } from "ecmanim/studio";
 const studio = await startStudio({ sceneModule: "scenes/demo.js", root: process.cwd() });
 console.log(studio.url); // open it; edit the scene file → the browser hot-reloads
 // studio.close() when done
@@ -85,7 +85,7 @@ exist; nothing draws them). These are planned on top of this foundation.
 ### Schema → props controls
 
 ```js
-import { schemaToControls } from "manim-js/studio";
+import { schemaToControls } from "ecmanim/studio";
 const controls = schemaToControls(MyScene.schema); // [{ name, control, min, max, options, ... }]
 ```
 Turns a `defineSchema` spec into control descriptors for a props panel. This is

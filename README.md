@@ -1,4 +1,4 @@
-# manim-js
+# ecmanim
 
 A **TypeScript** port of [manim](https://github.com/ManimCommunity/manim) — the
 Mathematical Animation Engine popularized by 3Blue1Brown — that renders the same
@@ -6,7 +6,7 @@ Mathematical Animation Engine popularized by 3Blue1Brown — that renders the sa
 (live Canvas-2D playback + WebM, plus an optional WebGL/Three.js backend).
 
 ```js
-import { render, Scene, Circle, Square, Transform, Create, BLUE, GREEN } from "manim-js/node";
+import { render, Scene, Circle, Square, Transform, Create, BLUE, GREEN } from "ecmanim/node";
 
 class Demo extends Scene {
   async construct() {
@@ -32,7 +32,7 @@ await render(Demo, { output: "demo.mp4", quality: "high" });
   renders headlessly with no GPU.
 - **Plugins, three ways.** A native `use(plugin)` registry (register mobjects,
   animations, rate functions, colors, scenes), a portable **JSON manifest** that
-  loads into *both* manim-js and Python manim, and a shared **Rust→WASM math
+  loads into *both* ecmanim and Python manim, and a shared **Rust→WASM math
   core** callable from JS and Python (verified byte-identical). See
   [docs/plugins.md](docs/plugins.md).
 - **Near-complete manim parity.** ~390 exports, ~120 registered mobjects, ~67
@@ -47,9 +47,9 @@ npm install            # pulls @napi-rs/canvas + three as optional deps
 ```
 
 `@napi-rs/canvas` ships prebuilt binaries — **no system Cairo required**, so it
-works on NixOS out of the box. Run `npx manim-js checkhealth` to verify node,
+works on NixOS out of the box. Run `npx ecmanim checkhealth` to verify node,
 ffmpeg, ffprobe, canvas, and fonts — plus the optional tools (system TTS, TeX,
-headless Chrome). manim-js shells out to a few system programs rather than
+headless Chrome). ecmanim shells out to a few system programs rather than
 bundling them; see [docs/external-tools.md](docs/external-tools.md) for the
 full list and what degrades when each is missing.
 
@@ -58,11 +58,11 @@ full list and what degrades when each is missing.
 ### Node (render to a file)
 
 ```js
-import { render, Scene, Circle, Text, Create, YELLOW, BLUE } from "manim-js/node";
+import { render, Scene, Circle, Text, Create, YELLOW, BLUE } from "ecmanim/node";
 
 class Intro extends Scene {
   async construct() {
-    const t = new Text("Hello, manim-js", { fontSize: 0.8, color: YELLOW, point: [0, 3, 0] });
+    const t = new Text("Hello, ecmanim", { fontSize: 0.8, color: YELLOW, point: [0, 3, 0] });
     await this.play(new Create(t));
     await this.play(new Create(new Circle({ radius: 1.5, color: BLUE })));
     await this.wait(0.5);
@@ -75,7 +75,7 @@ await render(Intro, { output: "intro.mp4", quality: "medium" });   // low | medi
 Or from the CLI (see [docs/cli.md](docs/cli.md)):
 
 ```bash
-npx manim-js render intro.ts Intro -q high -o intro.mp4
+npx ecmanim render intro.ts Intro -q high -o intro.mp4
 ```
 
 ### Browser (live playback + WebM)
@@ -83,7 +83,7 @@ npx manim-js render intro.ts Intro -q high -o intro.mp4
 ```html
 <canvas id="stage" width="1280" height="720"></canvas>
 <script type="module">
-  import { play, record, Scene, Circle, Create } from "manim-js/browser";
+  import { play, record, Scene, Circle, Create } from "ecmanim/browser";
 
   class Demo extends Scene {
     async construct() { await this.play(new Create(new Circle({ radius: 2 }))); }
@@ -102,12 +102,12 @@ See `examples/browser/index.html` for a full page and
 
 | Entry point | Target | Output | Notes |
 |-------------|--------|--------|-------|
-| `manim-js` | isomorphic core | — | all mobjects/animations/scenes/colors + the plugin API; no renderer glue |
-| `manim-js/node` | Node.js | mp4, webm, gif, mov, png-sequence, png, **svg** | `@napi-rs/canvas` → PNG frames piped to `ffmpeg`; partial-movie caching + sections |
-| `manim-js/browser` | browser (Canvas-2D) | live `<canvas>` + WebM | `play()` for real-time, `record()` → WebM `Blob` via `MediaRecorder` |
-| `manim-js/browser-three` | browser (WebGL) | live `<canvas>` + WebM | Three.js: hardware depth buffer, MSAA, OrbitControls; same `play`/`record` API |
-| `manim-js/authoring` | Node | plan IR / formats | plan-IR dry-run, quality gates, pluggable Format lifecycle + llm/tts/render providers ([docs/authoring-studio.md](docs/authoring-studio.md)) |
-| `manim-js/studio` | Node + browser | live-preview dev server | hot-reloading `<manim-player>` preview + schema→props controls ([docs/authoring-studio.md](docs/authoring-studio.md)) |
+| `ecmanim` | isomorphic core | — | all mobjects/animations/scenes/colors + the plugin API; no renderer glue |
+| `ecmanim/node` | Node.js | mp4, webm, gif, mov, png-sequence, png, **svg** | `@napi-rs/canvas` → PNG frames piped to `ffmpeg`; partial-movie caching + sections |
+| `ecmanim/browser` | browser (Canvas-2D) | live `<canvas>` + WebM | `play()` for real-time, `record()` → WebM `Blob` via `MediaRecorder` |
+| `ecmanim/browser-three` | browser (WebGL) | live `<canvas>` + WebM | Three.js: hardware depth buffer, MSAA, OrbitControls; same `play`/`record` API |
+| `ecmanim/authoring` | Node | plan IR / formats | plan-IR dry-run, quality gates, pluggable Format lifecycle + llm/tts/render providers ([docs/authoring-studio.md](docs/authoring-studio.md)) |
+| `ecmanim/studio` | Node + browser | live-preview dev server | hot-reloading `<manim-player>` preview + schema→props controls ([docs/authoring-studio.md](docs/authoring-studio.md)) |
 
 The Canvas-2D CPU backend is the default and the only one needed for headless
 Node video. The Three.js backend is a browser-only GPU accelerator that swaps
@@ -129,14 +129,14 @@ Two **alternate render targets** share the same scene graph — see
 ## CLI
 
 ```bash
-npx manim-js render scene.ts MyScene -q high -o out.mp4
-npx manim-js render scene.ts --scene IntroScene --format webm
-npx manim-js render scene.ts -s            # just the final frame as PNG
-npx manim-js render scene.ts -n 2,5        # only play() indices 2..5
-npx manim-js cfg --write                   # write manim.config.json
-npx manim-js init scene.ts                 # scaffold a starter scene
-npx manim-js plugins                       # list registered mobjects/animations/…
-npx manim-js checkhealth                   # node / ffmpeg / canvas / fonts
+npx ecmanim render scene.ts MyScene -q high -o out.mp4
+npx ecmanim render scene.ts --scene IntroScene --format webm
+npx ecmanim render scene.ts -s            # just the final frame as PNG
+npx ecmanim render scene.ts -n 2,5        # only play() indices 2..5
+npx ecmanim cfg --write                   # write manim.config.json
+npx ecmanim init scene.ts                 # scaffold a starter scene
+npx ecmanim plugins                       # list registered mobjects/animations/…
+npx ecmanim checkhealth                   # node / ffmpeg / canvas / fonts
 ```
 
 Full flag and subcommand reference, config-file format, caching, and sections:
@@ -147,7 +147,7 @@ Full flag and subcommand reference, config-file format, caching, and sections:
 Extend the engine three ways — see [docs/plugins.md](docs/plugins.md):
 
 ```js
-import { use, loadManifest, loadWasm } from "manim-js";
+import { use, loadManifest, loadWasm } from "ecmanim";
 import heartPlugin from "./examples/plugins/heart-plugin.ts";
 import cyberpunk from "./examples/plugins/cyberpunk.manifest.json" with { type: "json" };
 
@@ -283,7 +283,7 @@ Deeper module map, rendering pipeline, and registry mechanics:
 
 ## API parity with manim
 
-| Area | manim | manim-js | Notes |
+| Area | manim | ecmanim | Notes |
 |------|-------|----------|-------|
 | Scene | `class S(Scene): def construct` | `class S extends Scene { async construct() }` | `await this.play(...)`, `await this.wait(t)` |
 | Play | `self.play(a, b, run_time=2)` | `await this.play(a, b, { _playConfig: true, runTime: 2 })` | parallel by default |
@@ -334,7 +334,7 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | Config / caching | `manim.cfg`, partial-movie cache | ✅ `manim.config.{js,json}`, partial-movie cache | layered config, content-hash partials, `--disable_caching`/`--flush_cache` |
 | Render targets | `-ql/-qm/-qh`, mp4/gif/png | ✅ quality presets, mp4/webm/gif/mov/png | **+ browser (Canvas live + WebM), + WebGL (Three.js) GPU backend** |
 | Renderers | Cairo (2D) / OpenGL (GL) | ✅ Canvas-2D (CPU, Node+browser, z-buffer for 3D) + Three.js (WebGL, browser) | same Scene/mobjects drive both |
-| Plugins | `manim.plugins` entry points | ✅ `use()` + portable JSON manifest + WASM core | manifest loads in manim-js *and* Python manim; WASM callable from both |
+| Plugins | `manim.plugins` entry points | ✅ `use()` + portable JSON manifest + WASM core | manifest loads in ecmanim *and* Python manim; WASM callable from both |
 
 ### Honest divergences
 

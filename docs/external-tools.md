@@ -1,10 +1,10 @@
 # External tools & optional capabilities
 
-manim-js delegates a number of jobs to things outside the package — system
+ecmanim delegates a number of jobs to things outside the package — system
 programs, optional npm packages, network APIs, a WASM module, system fonts.
 The pattern is the same everywhere: **probe lazily at the moment a feature
 needs the capability, fall back gracefully where a fallback exists**. This page
-is the index of every instance. Run `npx manim-js checkhealth` for an eager
+is the index of every instance. Run `npx ecmanim checkhealth` for an eager
 all-at-once report of what your machine has.
 
 ## System programs (shelled out to; npm does not provide these)
@@ -22,7 +22,7 @@ all-at-once report of what your machine has.
 | package | used for | when missing |
 |---------|----------|--------------|
 | `@napi-rs/canvas` | all Node rasterization (render, renderStill, snapshots) + font registration | Node rendering unavailable (`checkhealth` flags it); pure-data features (plan IR, interchange, captions parsing…) still work |
-| `three` | the browser WebGL backend (`manim-js/browser-three`) and `renderGL`'s in-page renderer | WebGL backend unavailable; Canvas-2D browser backend and CPU 3D unaffected |
+| `three` | the browser WebGL backend (`ecmanim/browser-three`) and `renderGL`'s in-page renderer | WebGL backend unavailable; Canvas-2D browser backend and CPU 3D unaffected |
 
 (The regular `dependencies` — mathjax-full, opentype.js, gifenc, mp4-muxer,
 mp4box, polygon-clipping — are also lazy-imported for startup speed, but npm
@@ -69,7 +69,7 @@ TTS with word timings) via `registerTTSProvider`
 
 - **ffmpeg and @napi-rs/canvas are the two that matter** for the core use case
   (Node video). Everything else is an enhancement with a fallback.
-- **Detection is lazy and per-feature.** manim-js probes at the moment a
+- **Detection is lazy and per-feature.** ecmanim probes at the moment a
   feature needs the capability (`command -v`, version calls, key presence, CDP
   probe, `import()` in try/catch) and picks the fallback silently where one
   exists. `checkhealth` is the eager version of those probes.

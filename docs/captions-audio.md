@@ -6,7 +6,7 @@ Phase-2 adoption additions (from Remotion's `@remotion/captions` and
 ## Captions
 
 ```js
-import { parseSrt, serializeSrt, createTikTokStyleCaptions, CaptionTrack } from "manim-js";
+import { parseSrt, serializeSrt, createTikTokStyleCaptions, CaptionTrack } from "ecmanim";
 
 const captions = parseSrt(srtString);          // Caption[] { text, startMs, endMs, ... }
 const { pages } = createTikTokStyleCaptions({   // karaoke pages (word-by-word)
@@ -25,7 +25,7 @@ step that produces `Caption[]`.
 ## Audio-reactive
 
 ```js
-import { getAudioData, visualizeAudio, alwaysRedraw } from "manim-js";
+import { getAudioData, visualizeAudio, alwaysRedraw } from "ecmanim";
 // (getAudioData: Node decodes via ffmpeg; browser via decodeAudioData)
 
 const audioData = await getAudioData("music.mp3", { sampleRate: 44100, channels: 1 });

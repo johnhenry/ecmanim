@@ -12,7 +12,7 @@ import { render } from "../src/node.ts";
 import { Circle } from "../src/mobject/geometry.ts";
 import { Create } from "../src/animation/Animation.ts";
 
-const CLI = fileURLToPath(new URL("../bin/manim-js.ts", import.meta.url));
+const CLI = fileURLToPath(new URL("../bin/ecmanim.ts", import.meta.url));
 
 function tmp(name: string): string {
   return join(tmpdir(), `mjcfg_${process.pid}_${name}`);

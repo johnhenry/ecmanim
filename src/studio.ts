@@ -1,6 +1,6 @@
-// manim-js/studio — a live-preview dev server (file-watch → browser hot-reload of
+// ecmanim/studio — a live-preview dev server (file-watch → browser hot-reload of
 // your Scene in a <manim-player>) plus a schema→props-controls helper for a
-// props panel. Import from "manim-js/studio". Node-only for the server.
+// props panel. Import from "ecmanim/studio". Node-only for the server.
 //
 // Foundation for the interactive Studio: the dev server + schema controls land
 // here; checkpoint replay, mouse-camera orbit, and an in-page eval REPL build on

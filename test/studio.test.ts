@@ -6,7 +6,7 @@ import { schemaToControls } from "../src/studio/props.ts";
 test("buildStudioHarness embeds importmap, scene import, player, and SSE reload", () => {
   const html = buildStudioHarness({ sceneModuleUrl: "/scene.js", sceneExport: "default", browserUrl: "/dist/browser.js", quality: "medium", background: "#000" });
   assert.match(html, /importmap/);
-  assert.match(html, /"manim-js\/browser":"\/dist\/browser\.js"/);
+  assert.match(html, /"ecmanim\/browser":"\/dist\/browser\.js"/);
   assert.match(html, /<manim-player/);
   assert.match(html, /import\("\/scene\.js\?t="/); // cache-busted dynamic import
   assert.match(html, /EventSource\("\/__studio_events"\)/);

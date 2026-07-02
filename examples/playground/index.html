@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>manim-js — live playground</title>
+  <title>ecmanim — live playground</title>
   <!--
     HOW TO SERVE
     ============
@@ -62,7 +62,7 @@
 </head>
 <body>
   <div class="left">
-    <h1>manim-js playground</h1>
+    <h1>ecmanim playground</h1>
     <label class="small">construct(scene) — the whole library is in scope as <code>m</code></label>
     <textarea id="code" spellcheck="false"></textarea>
     <div class="row">
@@ -103,13 +103,13 @@
     const playpause = $("playpause");
     const canvas = $("stage");
 
-    // Prefilled example: uses globals from the manim-js module (in scope as `m`).
+    // Prefilled example: uses globals from the ecmanim module (in scope as `m`).
     // `scene` is the live Scene — call scene.play / scene.wait / scene.add etc.
-    codeEl.value = `// 'scene' is the manim-js Scene; 'm' is the whole library.
+    codeEl.value = `// 'scene' is the ecmanim Scene; 'm' is the whole library.
 const { Circle, Square, Text, Create, Write, Transform, FadeOut, BLUE, YELLOW, RED } = m;
 
 scene.nextSection("intro");
-const title = new Text("manim-js", { fontSize: 1, color: YELLOW, point: [0, 2.5, 0] });
+const title = new Text("ecmanim", { fontSize: 1, color: YELLOW, point: [0, 2.5, 0] });
 await scene.play(new Write(title));
 
 scene.nextSection("shapes");

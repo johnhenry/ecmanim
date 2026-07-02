@@ -1,6 +1,6 @@
 # Architecture
 
-manim-js is a TypeScript port of ManimCommunity manim built around one principle:
+ecmanim is a TypeScript port of ManimCommunity manim built around one principle:
 **one isomorphic core, multiple render backends.** The same `Scene`, mobject, and
 animation objects run unchanged in Node (headless video) and the browser (live
 canvas + WebM), including an optional WebGL/Three.js path. This document maps the
@@ -10,7 +10,7 @@ setup.
 ## The isomorphic core
 
 Everything that does not touch a filesystem or a specific rendering context lives
-under `src/` and is re-exported from `src/index.ts`. Importing `manim-js`
+under `src/` and is re-exported from `src/index.ts`. Importing `ecmanim`
 (i.e. `src/index.ts`) gives you the full library **and** registers all built-ins
 into the shared registry (`registerBuiltins()` runs at import time).
 
@@ -18,10 +18,10 @@ The three backend entry points wrap that core with the glue their target needs:
 
 | Entry | File | Adds |
 |-------|------|------|
-| `manim-js` | `src/index.ts` | isomorphic core; registers built-ins on import |
-| `manim-js/node` | `src/node.ts` | `render()` → `@napi-rs/canvas` → PNG frames → `ffmpeg`; caching + sections |
-| `manim-js/browser` | `src/browser.ts` | `play()` (rAF loop) + `record()` (`MediaRecorder` → WebM) on Canvas-2D |
-| `manim-js/browser-three` | `src/browser-three.ts` | `play()`/`record()` on a Three.js WebGL renderer |
+| `ecmanim` | `src/index.ts` | isomorphic core; registers built-ins on import |
+| `ecmanim/node` | `src/node.ts` | `render()` → `@napi-rs/canvas` → PNG frames → `ffmpeg`; caching + sections |
+| `ecmanim/browser` | `src/browser.ts` | `play()` (rAF loop) + `record()` (`MediaRecorder` → WebM) on Canvas-2D |
+| `ecmanim/browser-three` | `src/browser-three.ts` | `play()`/`record()` on a Three.js WebGL renderer |
 
 Because the core never imports `node:fs`, `@napi-rs/canvas`, `three`, or DOM
 globals directly, the browser bundles stay clean. Node-only helpers (config file
@@ -169,7 +169,7 @@ authors can extend without deep imports.
 - **`loadManifest(json)`** parses a portable JSON manifest and registers its
   colors/rateFunctions/surfaces/shapes into the registry (expressions compiled by
   the safe evaluator — never `eval`). See [plugins.md](plugins.md).
-- **`manim-js plugins`** (CLI) prints `registry.list(kind)` for each kind, so you
+- **`ecmanim plugins`** (CLI) prints `registry.list(kind)` for each kind, so you
   can see everything currently registered.
 
 Registered names are what the CLI's `plugins` subcommand lists and what a
@@ -179,7 +179,7 @@ manifest's `fillColor` references resolve against; the public typed exports in
 ## TypeScript & build setup
 
 - **Sources are `.ts` and run directly.** Node 25+ strips types at load time, so
-  the CLI (`bin/manim-js.ts`), the examples, and the tests all run against the
+  the CLI (`bin/ecmanim.ts`), the examples, and the tests all run against the
   `.ts` sources with no build step. Imports use explicit `.ts` extensions
   (`allowImportingTsExtensions` + `rewriteRelativeImportExtensions` in
   `tsconfig.json`), which `tsc` rewrites to `.js` in `dist/`.
@@ -198,7 +198,7 @@ manifest's `fillColor` references resolve against; the public typed exports in
 
 ## The cross-language core (`packages/`)
 
-Two artifacts are shared verbatim between manim-js and Python manim:
+Two artifacts are shared verbatim between ecmanim and Python manim:
 
 - **The manifest spec** (`packages/plugin-spec`): a JSON Schema plus a small
   arithmetic-expression grammar with reference evaluators in both TypeScript

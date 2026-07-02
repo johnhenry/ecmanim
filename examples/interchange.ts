@@ -26,7 +26,7 @@ const r = await render(
     output: "examples/out/interchange.mp4",
     style: "midnight",
     quality: "low",
-    watermark: { text: "@manim-js", position: "bottom-right", opacity: 0.7 },
+    watermark: { text: "@ecmanim", position: "bottom-right", opacity: 0.7 },
   },
 );
 

@@ -13,13 +13,13 @@ the exact frame for a target time up front. The core (`VideoMobject`) is
 isomorphic and depends only on a small `VideoFrameProvider` interface; the Node
 and browser entry points each supply a provider.
 
-## Node (`manim-js/node`)
+## Node (`ecmanim/node`)
 
 Frames are extracted with **ffmpeg** into a content-hash-keyed decode cache, then
 pre-decoded into memory so per-frame lookup is a synchronous index.
 
 ```js
-import { render, loadVideo, Scene, Text, Write } from "manim-js/node";
+import { render, loadVideo, Scene, Text, Write } from "ecmanim/node";
 
 class Clip extends Scene {
   async construct() {
@@ -46,7 +46,7 @@ await render(Clip, { output: "out.mp4", fps: 30 });
   when `loadVideo` is called); the existing audio-mux path folds it into the
   render. The output mp4 then carries both video and audio streams.
 - **Decode cache.** Keyed by `(abs path + mtime + fps + scale + trim)` under
-  `<tmpdir>/manim-js-video/<hash>` (override with `cacheDir`). A warm cache skips
+  `<tmpdir>/ecmanim-video/<hash>` (override with `cacheDir`). A warm cache skips
   ffmpeg entirely and is byte-identical, so it plays nicely with the content-hash
   partial-movie cache.
 - **Memory.** All target frames are decoded to RGBA in memory
@@ -57,10 +57,10 @@ await render(Clip, { output: "out.mp4", fps: 30 });
 - Lower-level helpers `probeVideo(path)` and `extractFrames(path, opts)` are
   exported too.
 
-## Browser (`manim-js/browser`)
+## Browser (`ecmanim/browser`)
 
 ```js
-import { loadVideo, play } from "manim-js/browser";
+import { loadVideo, play } from "ecmanim/browser";
 
 const video = await loadVideo("clip.mp4", { fps: 30, width: 7 }); // mode: "auto"
 // ...add to a Scene and play()/record() as usual.

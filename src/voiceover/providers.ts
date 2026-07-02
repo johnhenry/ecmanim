@@ -85,7 +85,7 @@ function estimateDuration(text: string, wordsPerSecond = 2.6): number {
 
 async function cacheFile(text: string, provider: string, ext: string, cacheDir?: string): Promise<string> {
   const { fs, os, path, crypto } = await nodeMods();
-  const dir = cacheDir ?? path.join(os.tmpdir(), "manim-js-voiceover");
+  const dir = cacheDir ?? path.join(os.tmpdir(), "ecmanim-voiceover");
   fs.mkdirSync(dir, { recursive: true });
   const hash = crypto.createHash("sha1").update(provider + "|" + text).digest("hex").slice(0, 16);
   return path.join(dir, `${hash}.${ext}`);

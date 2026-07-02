@@ -1,24 +1,24 @@
 # CLI reference
 
-The `manim-js` command (`bin/manim-js.ts`) is a JavaScript port of manim's
+The `ecmanim` command (`bin/ecmanim.ts`) is a JavaScript port of manim's
 `manim` command. It runs directly on the `.ts` source under Node 25+.
 
 ```
-manim-js render <file> [scene] [options]
-manim-js cfg [--write]
-manim-js init [file]
-manim-js plugins
-manim-js checkhealth
+ecmanim render <file> [scene] [options]
+ecmanim cfg [--write]
+ecmanim init [file]
+ecmanim plugins
+ecmanim checkhealth
 ```
 
-Run `manim-js` (or `-h` / `--help`) with no command to print usage.
+Run `ecmanim` (or `-h` / `--help`) with no command to print usage.
 
 ---
 
 ## `render`
 
 ```
-manim-js render <file> [scene] [options]
+ecmanim render <file> [scene] [options]
 ```
 
 Loads a scene file and renders one or more scenes to video (or a PNG). The scene
@@ -72,13 +72,13 @@ Notes:
 ### Examples
 
 ```bash
-manim-js render examples/basic.ts BasicScene -q high -o out.mp4
-manim-js render myscene.ts --scene IntroScene --format webm
-manim-js render scene.ts -s                 # just the final frame as PNG
-manim-js render scene.ts -n 2,5             # only play() indices 2..5
-manim-js render scene.ts -a                 # render every exported Scene
-manim-js render scene.ts --save_sections    # per-section videos + JSON index
-manim-js render scene.ts --flush_cache -q high
+ecmanim render examples/basic.ts BasicScene -q high -o out.mp4
+ecmanim render myscene.ts --scene IntroScene --format webm
+ecmanim render scene.ts -s                 # just the final frame as PNG
+ecmanim render scene.ts -n 2,5             # only play() indices 2..5
+ecmanim render scene.ts -a                 # render every exported Scene
+ecmanim render scene.ts --save_sections    # per-section videos + JSON index
+ecmanim render scene.ts --flush_cache -q high
 ```
 
 ---
@@ -86,7 +86,7 @@ manim-js render scene.ts --flush_cache -q high
 ## `cfg`
 
 ```
-manim-js cfg [--config <file>] [--quality <q>] [--format <f>] [--bg <color>] [--write]
+ecmanim cfg [--config <file>] [--quality <q>] [--format <f>] [--bg <color>] [--write]
 ```
 
 Prints the resolved default config as JSON (defaults < loaded config file <
@@ -98,7 +98,7 @@ instead of printing.
 ## `init`
 
 ```
-manim-js init [file] [--force]
+ecmanim init [file] [--force]
 ```
 
 Scaffolds a starter scene file (default `scene.js`). Refuses to overwrite an
@@ -111,7 +111,7 @@ marker, and prints the render command to run next.
 ## `plugins`
 
 ```
-manim-js plugins
+ecmanim plugins
 ```
 
 Lists everything currently registered in the shared registry: the installed
@@ -124,7 +124,7 @@ for discovering names added by `use()` or `loadManifest()`.
 ## `checkhealth`
 
 ```
-manim-js checkhealth
+ecmanim checkhealth
 ```
 
 Reports the environment the Node backend needs and exits non-zero if any check

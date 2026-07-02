@@ -2,7 +2,7 @@
 //
 // The spring is ANALYTIC: value(frame) is a pure, closed-form function of the
 // frame number with no hidden step-by-step integration state. This preserves
-// manim-js's deterministic content-hash render cache — the same frame always
+// ecmanim's deterministic content-hash render cache — the same frame always
 // yields the same value.
 //
 // We use the closed-form solution of a damped harmonic oscillator with the

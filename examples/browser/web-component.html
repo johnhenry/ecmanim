@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>manim-js — &lt;manim-player&gt; Web Component</title>
+  <title>ecmanim — &lt;manim-player&gt; Web Component</title>
   <script type="importmap">
-  { "imports": { "manim-js/browser": "/dist/browser.js" } }
+  { "imports": { "ecmanim/browser": "/dist/browser.js" } }
   </script>
 </head>
 <body>
   <manim-player id="p" quality="low" fps="12" background="#0d1117" controls></manim-player>
   <pre id="out">running…</pre>
   <script type="module">
-    import { defineManimPlayer, Scene, Circle, Square, Create, Transform, BLUE, GREEN } from "manim-js/browser";
+    import { defineManimPlayer, Scene, Circle, Square, Create, Transform, BLUE, GREEN } from "ecmanim/browser";
     const out = document.getElementById("out");
     const log = (s) => { out.textContent += "\n" + s; };
 

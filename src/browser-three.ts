@@ -1,7 +1,7 @@
 // WebGL browser backend: same API as ./browser.js (play / record) but renders
 // with Three.js on the GPU. Reuses the identical Scene / mobjects / animations.
 //
-//   import { play, Scene, Sphere, Create } from "manim-js/browser-three";
+//   import { play, Scene, Sphere, Create } from "ecmanim/browser-three";
 //   await play(MyScene, { canvas, camera: new ThreeDCamera({ phi: 70*DEGREES }) });
 //
 // Three.js is loaded lazily (via an import map or bundler) or can be injected as

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>manim-js — WebGL (Three.js) backend</title>
+  <title>ecmanim — WebGL (Three.js) backend</title>
   <style>
     body { margin: 0; background: #0d1117; color: #c9d1d9; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 1.5rem; }
     canvas { width: 80vw; max-width: 960px; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.5); background:#000; }
@@ -21,7 +21,7 @@
   </script>
 </head>
 <body>
-  <h1>manim-js on the GPU (WebGL / Three.js)</h1>
+  <h1>ecmanim on the GPU (WebGL / Three.js)</h1>
   <p>Same <code>Scene</code> and mobjects as the CPU backend — hardware depth buffer, MSAA, real-time.</p>
   <canvas id="stage" width="1280" height="720"></canvas>
   <div class="row">
@@ -77,7 +77,7 @@
     document.getElementById("download").onclick = async () => {
       const blob = await record(Demo, { three: THREE, quality: "high", background: "#0d1117", camera: camera() });
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob); a.download = "manim-js-webgl.webm"; a.click();
+      a.href = URL.createObjectURL(blob); a.download = "ecmanim-webgl.webm"; a.click();
     };
   </script>
 </body>

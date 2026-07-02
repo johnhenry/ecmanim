@@ -1,5 +1,5 @@
 """Standalone unit tests for the portable expression evaluator (stdlib only,
-no manim required). These mirror the assertions in the manim-js test
+no manim required). These mirror the assertions in the ecmanim test
 `test/manifest.test.ts`, keeping the two evaluators in lock-step.
 
 Run:  python3 -m unittest packages/manim-portable-plugins/test_expr.py

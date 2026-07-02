@@ -113,7 +113,7 @@ export type LoadVideoOptions = VideoMobjectConfig & {
   fps?: number;
   /** Downscale to [w,h] or a target width (height auto). Bounds memory. */
   scale?: [number, number] | number;
-  /** Base cache directory (default: <os.tmpdir()>/manim-js-video). */
+  /** Base cache directory (default: <os.tmpdir()>/ecmanim-video). */
   cacheDir?: string;
   /** Scene to schedule audio into (required for audio muxing). */
   scene?: any;
@@ -215,7 +215,7 @@ export async function loadVideo(path: string | any, options: LoadVideoOptions = 
   const end = options.end;
 
   // 3. Content-hash cache dir.
-  const baseDir = options.cacheDir ?? join(tmpdir(), "manim-js-video");
+  const baseDir = options.cacheDir ?? join(tmpdir(), "ecmanim-video");
   const key = frameCacheKey(mediaSrc, mtimeMs, decodeFps, options.scale, start, end);
   const cacheDir = join(baseDir, key);
 

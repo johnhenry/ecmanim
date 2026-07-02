@@ -1,5 +1,5 @@
 // Load a portable plugin MANIFEST (a plain JSON object, see
-// packages/plugin-spec/manifest.schema.json) into the manim-js registry.
+// packages/plugin-spec/manifest.schema.json) into the ecmanim registry.
 //
 // The manifest is the language-neutral, shareable subset of a plugin — color
 // palettes, rate functions (as expressions in `t`), parametric surfaces (as

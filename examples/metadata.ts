@@ -44,7 +44,7 @@ const input = {
   id: "https://example.org/manim/chapters",
   contentUrl: "https://example.org/manim/chapters.mp4",
   name: "Chapters demo",
-  description: "A manim-js scene whose nextSection() boundaries become chapters.",
+  description: "A ecmanim scene whose nextSection() boundaries become chapters.",
   uploadDate: "2026-07-02",
   encodingFormat: "video/mp4",
   provenance: true,

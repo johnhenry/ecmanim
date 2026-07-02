@@ -92,7 +92,7 @@ export function sceneToOtio(scene: any, opts: { name?: string; mediaUrl?: string
       mediaReference: opts.mediaUrl ? { targetUrl: opts.mediaUrl } : undefined,
     });
   }
-  return { name: opts.name ?? "manim-js", globalStartRate: fps, tracks: [{ kind: "Video", children: clips }] };
+  return { name: opts.name ?? "ecmanim", globalStartRate: fps, tracks: [{ kind: "Video", children: clips }] };
 }
 
 /** Convenience: a scene's `.otio` JSON string. */

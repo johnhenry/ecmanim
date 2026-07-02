@@ -5,6 +5,15 @@
 Version reset to 0.0.1 — the package has never been published; the earlier
 1.x/2.0 numbers tracked development phases, not releases.
 
+### Renamed
+- **Project renamed from `manim-js` to `ecmanim`** ("ecma" + "manim") — package
+  name, CLI binary (`ecmanim`, formerly `manim-js`; `bin/ecmanim.ts`), GitHub
+  repo (`github.com/johnhenry/ecmanim`), and all docs/examples/import
+  specifiers updated. Not yet published, so no compatibility shim or deprecated
+  alias was needed. The bundled `manim-wasm` and `manim-portable-plugins`
+  sub-packages keep their names — they describe Manim-ecosystem/Python-manim
+  compatibility, not this package's brand.
+
 ### Fixed
 - **Cache soundness — container mobjects.** Segment hashes fingerprinted only an
   animation target's own `points`, which are empty for containers (VGroup,
@@ -30,7 +39,7 @@ Version reset to 0.0.1 — the package has never been published; the earlier
   aspect presets) — all zero-network with optional LLM enhancement.
 - `VoiceoverTracker.timingSource` (`"word-boundaries" | "proportional"`).
 - `SimpleEngine` bodies accept `angularVelocity` (kinematic spin).
-- `examples/explainer-video.ts` — a real explainer about manim-js, made by the
+- `examples/explainer-video.ts` — a real explainer about ecmanim, made by the
   explainer format (dogfooding).
 
 ### Docs
@@ -43,18 +52,18 @@ Version reset to 0.0.1 — the package has never been published; the earlier
 Two new opt-in subpath entries keep the core lean while adding a higher-level
 authoring/orchestration layer and a live-preview Studio.
 
-### `manim-js/authoring`
-- **Plan IR + dry-run** (`toPlanIR`/`toPlanString`, CLI `manim-js plan`): harvest a
+### `ecmanim/authoring`
+- **Plan IR + dry-run** (`toPlanIR`/`toPlanString`, CLI `ecmanim plan`): harvest a
   scene's segments/sections/duration as inspectable JSON **without rendering**.
 - **Quality gates** (`runQualityGates`, `slideshowRisk`, `checkDeliveryPromise`):
   automated checks incl. a "slideshow-risk" score (is it actually animated?) and
   "delivery-promise" contracts (does the output match a declared intent?).
 - **Format lifecycle** (`Format` = `plan`/`generateAssets`/`compose`/`revise`) +
-  **provider abstraction** (`llm`/`tts`/`render`), and a **manim-js render
-  provider** + example `title-card` format — so manim-js can back prompt→video
+  **provider abstraction** (`llm`/`tts`/`render`), and a **ecmanim render
+  provider** + example `title-card` format — so ecmanim can back prompt→video
   pipelines (scrollmark/showrunner-style).
 
-### `manim-js/studio`
+### `ecmanim/studio`
 - **Live-preview dev server** (`startStudio`): serves your Scene in a
   `<manim-player>` and **hot-reloads the browser on save** (file-watch + SSE),
   dependency-free. The foundation for checkpoint replay / mouse-camera / eval REPL.
@@ -171,7 +180,7 @@ Canvas / showrunner / …). Small, dependency-free, isomorphic wins:
 
 ## 1.6.0 — video metadata (schema.org · IIIF · provenance)
 
-Export the web's video metadata standards straight from a render — manim-js knows
+Export the web's video metadata standards straight from a render — ecmanim knows
 a video's duration, dimensions, and `nextSection()` structure at render time, so
 it doesn't have to reverse-engineer them. See [docs/metadata.md](docs/metadata.md).
 
@@ -182,7 +191,7 @@ it doesn't have to reverse-engineer them. See [docs/metadata.md](docs/metadata.m
   Canvas with `duration`, a painting `Video` body, and — the standout —
   **`structures` Ranges (chapters) derived from `nextSection()`**, targeting
   temporal fragments.
-- **Provenance sliver** — opt-in `provenance` adds a manim-js `creator`
+- **Provenance sliver** — opt-in `provenance` adds a ecmanim `creator`
   `SoftwareApplication` and the IPTC digital-source-type for algorithmic media
   (folded into both formats). Full IPTC VMH is intentionally out of scope.
 - **IIIF ingest** — `loadVideo` (Node + browser) accepts a IIIF manifest (object,
@@ -193,7 +202,7 @@ it doesn't have to reverse-engineer them. See [docs/metadata.md](docs/metadata.m
   (off otherwise); also `getVideoObject()` / `injectSchema()`.
 - `render()` results now include `sections` (feeds the metadata input).
 
-All isomorphic (exported from `manim-js`). 15 new tests (510 total); type-clean;
+All isomorphic (exported from `ecmanim`). 15 new tests (510 total); type-clean;
 verified end-to-end (scene sections → VideoObject + IIIF manifest, round-tripped).
 
 ## 1.5.0 — WebCodecs browser video decode
@@ -275,7 +284,7 @@ Chrome producing valid H.264/VP9).
 ## 1.2.0 — Remotion-inspired features
 
 Eight features borrowed from studying [Remotion](https://www.remotion.dev)'s
-philosophy and source, adapted to manim-js's imperative, GPU-less architecture
+philosophy and source, adapted to ecmanim's imperative, GPU-less architecture
 (no React/DOM authoring model, no Chromium-screenshot capture):
 
 - **`interpolate(input, inputRange, outputRange, opts)`** — Remotion-style range
@@ -315,7 +324,7 @@ Features informed by studying other manim/web ports (JazonJiao/Manim.js,
 maloyan/manim-web, the Dart manim-web, Motion Canvas, MathBox, ManimGL):
 
 - **Python→TypeScript scene converter** (`py2ts` / `bin/py2ts.ts`): transpiles the
-  common manim-scene subset to manim-js (imports, `Scene` subclass, `self.play`
+  common manim-scene subset to ecmanim (imports, `Scene` subclass, `self.play`
   → `await this.play`, kwargs → config objects, snake_case → camelCase).
 - **Signals reactivity** (`createSignal`/`computed`/`effect`/`reactive`/`bind`): a
   lazy dependency-tracking alternative to updaters/`always_redraw`.
@@ -375,7 +384,7 @@ mobjects, ~67 animations, ~2200 colors, 318 tests, type-clean.
   MultiCamera; layered config, partial-movie-file caching, sections; a full CLI
   (`render` flags + `cfg`/`init`/`plugins`/`checkhealth`).
 - **Phase 7 — cross-language plugins.** A portable JSON manifest (colors/rate-funcs/
-  surfaces/shapes as portable expressions) loadable by both manim-js and Python
+  surfaces/shapes as portable expressions) loadable by both ecmanim and Python
   manim, plus a shared Rust→WASM math core callable from JS and Python (wasmtime),
   verified byte-identical.
 - **Phase 8 — parity suite, docs, release.** A structural parity/coverage harness,

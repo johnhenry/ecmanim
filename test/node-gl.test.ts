@@ -42,7 +42,7 @@ test("buildGLHarness embeds import map, scene import, record() call, and sentine
 
   // Import map maps three + the browser-three bundle URL.
   assert.match(html, /<script type="importmap">/);
-  assert.match(html, /"manim-js\/browser-three":\s*"\/dist\/browser-three\.js"/);
+  assert.match(html, /"ecmanim\/browser-three":\s*"\/dist\/browser-three\.js"/);
   assert.match(html, /"three":\s*"[^"]*three[^"]*"/);
 
   // Scene module is imported (dynamic import) with the requested named export.
@@ -185,14 +185,14 @@ test("renderGL produces a nonzero video via headless Chrome (WebGL)", { timeout:
   const { renderGL } = await import("../src/node-gl.ts");
 
   // Write a tiny fixture scene module. It imports from the import-map alias
-  // "manim-js/browser-three" and default-exports a Scene drawing a Sphere with
+  // "ecmanim/browser-three" and default-exports a Scene drawing a Sphere with
   // one short play(). Served from a directory UNDER the project root so its
   // relative dist/ + node_modules/ imports resolve over the same server.
   const fixtureDir = mkdtempSync(join(PROJECT_ROOT, "test-gl-fixture-"));
   const sceneFile = join(fixtureDir, "scene.js");
   const fixtureRel = "/" + sceneFile.slice(PROJECT_ROOT.length + 1).replace(/\\/g, "/");
   writeFileSync(sceneFile, `
-    import { ThreeDScene, Sphere, FadeIn, BLUE, DEGREES } from "manim-js/browser-three";
+    import { ThreeDScene, Sphere, FadeIn, BLUE, DEGREES } from "ecmanim/browser-three";
     export default class GLFixtureScene extends ThreeDScene {
       async construct() {
         this.setCameraOrientation({ phi: 65 * DEGREES, theta: -90 * DEGREES });

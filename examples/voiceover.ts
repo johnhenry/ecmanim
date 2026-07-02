@@ -10,7 +10,7 @@ import {
 
 class Narrated extends Scene {
   async construct() {
-    const title = new Text("manim-js", { fontSize: 0.9, color: YELLOW, point: [0, 3, 0] });
+    const title = new Text("ecmanim", { fontSize: 0.9, color: YELLOW, point: [0, 3, 0] });
     const circle = new Circle({ radius: 1.3, color: BLUE, fillColor: BLUE, fillOpacity: 0.5 });
     circle.moveTo([-3, 0, 0]);
     const square = new Square({ sideLength: 2.2, color: GREEN, fillColor: GREEN, fillOpacity: 0.5 });

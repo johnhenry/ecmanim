@@ -24,8 +24,8 @@ test("class + construct: Scene subclass -> extends Scene / async construct()", (
   assert.match(ts, /async construct\(\) \{/);
   assert.match(ts, /this\.add\(c\)/);
   // import header references detected identifiers.
-  assert.match(ts, /import \{[^}]*\bCircle\b[^}]*\} from "manim-js"/);
-  assert.match(ts, /import \{[^}]*\bScene\b[^}]*\} from "manim-js"/);
+  assert.match(ts, /import \{[^}]*\bCircle\b[^}]*\} from "ecmanim"/);
+  assert.match(ts, /import \{[^}]*\bScene\b[^}]*\} from "ecmanim"/);
 });
 
 test("self.play(Create(Circle(radius=2, color=RED)), run_time=2) folds config objects", () => {

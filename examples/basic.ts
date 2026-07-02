@@ -8,7 +8,7 @@ import {
 
 class BasicScene extends Scene {
   async construct() {
-    const title = new Text("manim-js", { fontSize: 1, color: YELLOW, point: [0, 3, 0] });
+    const title = new Text("ecmanim", { fontSize: 1, color: YELLOW, point: [0, 3, 0] });
     await this.play(new Write(title));
 
     const circle = new Circle({ radius: 1.5, color: BLUE, fillColor: BLUE, fillOpacity: 0.5 });

@@ -1,6 +1,6 @@
 # Renderers
 
-manim-js's scene graph is backend-agnostic: every renderer consumes the same
+ecmanim's scene graph is backend-agnostic: every renderer consumes the same
 `mobjects[]` tree that `Scene` produces. The default is a CPU Canvas-2D
 rasterizer, and two alternate targets share the same scenes.
 
@@ -30,7 +30,7 @@ editable.
 ### Node (`format: "svg"`)
 
 ```js
-import { render } from "manim-js/node";
+import { render } from "ecmanim/node";
 
 // A single final frame -> one .svg
 await render(MyScene, { output: "out.svg", format: "svg", saveLastFrame: true });
@@ -44,7 +44,7 @@ await render(MyScene, { output: "out.svg", format: "svg" });
 Available from the core entry (works in Node and the browser):
 
 ```js
-import { Camera, SVGRenderer, mobjectsToSVG } from "manim-js";
+import { Camera, SVGRenderer, mobjectsToSVG } from "ecmanim";
 
 const camera = new Camera({ pixelWidth: 1920, pixelHeight: 1080 });
 const svg = new SVGRenderer(camera, { precision: 2, background: "#0d1117" });
@@ -73,19 +73,19 @@ Options: `precision` (coordinate decimal places, default 2) and `background`
 ## Headless GPU (`renderGL`, Node)
 
 The GPU-quality alternative to the CPU renderer: it runs the existing
-Three.js/WebGL backend (`manim-js/browser-three`) inside a headless Chrome that
+Three.js/WebGL backend (`ecmanim/browser-three`) inside a headless Chrome that
 exposes WebGL2, then captures the video back to disk in Node. You get real
 per-pixel lighting, MSAA, and GPU strokes — headless, with **no physical GPU**
 (Chrome's ANGLE + Mesa llvmpipe is a software rasterizer).
 
-This is *not* the Remotion "screenshot the DOM" model: manim-js renders its own
+This is *not* the Remotion "screenshot the DOM" model: ecmanim renders its own
 mobjects via `ThreeRenderer` onto a canvas and reads that canvas back. The
 browser is used only as a WebGL host.
 
 ### Usage
 
 ```js
-import { renderGL } from "manim-js/node";
+import { renderGL } from "ecmanim/node";
 
 const res = await renderGL({
   sceneModule: "scenes/my-gl-scene.ts", // browser-importable ES module (runs in the page)
@@ -101,7 +101,7 @@ const res = await renderGL({
 ```
 
 Because the scene executes in the browser page, it must be its own
-**browser-importable module** that imports from `"manim-js/browser-three"` (the
+**browser-importable module** that imports from `"ecmanim/browser-three"` (the
 `renderGL` harness maps that specifier to the built `dist/browser-three.js`).
 This mirrors how `renderParallel` takes a scene by module path rather than an
 in-process class. Run `npm run build` first so `dist/browser-three.js` exists.
@@ -119,7 +119,7 @@ google-chrome --headless=new --remote-debugging-port=9222 \
 
 If no CDP endpoint is reachable, `renderGL` throws with an actionable message
 (and the default CPU `render(...)` needs none). `probeCDP(cdpUrl)` is exported
-from `manim-js/node` for a graceful check.
+from `ecmanim/node` for a graceful check.
 
 > **Shared-machine coordination (trycooy).** On this workstation the CDP Chrome
 > (`gl-chrome.service`, port 9222) is a single instance shared by concurrent

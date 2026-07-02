@@ -1,4 +1,4 @@
-// A manim-js `render` provider + a minimal example Format, so manim-js can act as
+// A ecmanim `render` provider + a minimal example Format, so ecmanim can act as
 // the renderer for prompt→video pipelines (scrollmark/showrunner-style). The
 // render provider takes a scene "spec" (a construct function or Scene class) and
 // renders it; the example titleCard format plans a title/bullets from a topic and
@@ -7,10 +7,10 @@
 import { registerProvider, registerFormat } from "./formats.ts";
 import type { Provider, Format } from "./formats.ts";
 
-/** A render provider backed by manim-js's Node renderer. */
+/** A render provider backed by ecmanim's Node renderer. */
 export const manimRenderProvider: Provider = {
   kind: "render",
-  name: "manim-js",
+  name: "ecmanim",
   available() { return true; },
   async invoke(input: { scene: any; options?: any }): Promise<any> {
     const { render } = await import("../node.ts");

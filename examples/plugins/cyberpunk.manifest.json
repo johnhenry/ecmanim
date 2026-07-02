@@ -1,7 +1,7 @@
 {
   "name": "cyberpunk",
   "version": "1.0.0",
-  "description": "A neon cyberpunk plugin: hot palette, a punchy 'thump' rate function, a Mobius strip surface, and a five-point star SVG shape. Portable across manim-js and Python manim.",
+  "description": "A neon cyberpunk plugin: hot palette, a punchy 'thump' rate function, a Mobius strip surface, and a five-point star SVG shape. Portable across ecmanim and Python manim.",
   "colors": {
     "NEON_PINK": "#ff2d95",
     "NEON_CYAN": "#0ff0fc",

@@ -9,7 +9,7 @@ Author two states; the engine pairs pieces by **identity** and tweens the delta
 element still matches).
 
 ```js
-import { TransformMatchingAuto } from "manim-js";
+import { TransformMatchingAuto } from "ecmanim";
 circle.matchId = "hero"; bigCircle.matchId = "hero";   // explicit id (best)
 await scene.play(new TransformMatchingAuto(stateA, stateB));
 ```
@@ -34,7 +34,7 @@ sections loop until you advance.
 ## Diagram-as-code
 
 ```js
-import { diagram, parseDiagram, buildBoard, TransformMatchingAuto } from "manim-js";
+import { diagram, parseDiagram, buildBoard, TransformMatchingAuto } from "ecmanim";
 
 const board = diagram(`
   A[Start]

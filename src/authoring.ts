@@ -1,7 +1,7 @@
-// manim-js/authoring — the higher-level authoring/orchestration layer: a plan IR
+// ecmanim/authoring — the higher-level authoring/orchestration layer: a plan IR
 // (dry-run), quality gates, a pluggable Format lifecycle + provider abstraction
-// (llm/tts/render), and a manim-js render provider so it can back prompt→video
-// pipelines. Kept out of the lean core entry; import from "manim-js/authoring".
+// (llm/tts/render), and a ecmanim render provider so it can back prompt→video
+// pipelines. Kept out of the lean core entry; import from "ecmanim/authoring".
 
 export {
   toPlanIR, toPlanString,

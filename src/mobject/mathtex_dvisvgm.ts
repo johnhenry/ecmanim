@@ -96,7 +96,7 @@ function buildLatexDoc(tex: string, texEnvironment?: string): string {
 
 async function cacheDir(): Promise<string> {
   const { os, path, fs } = await nodeModules();
-  const dir = path.join(os.tmpdir(), "manim-js-dvisvgm-cache");
+  const dir = path.join(os.tmpdir(), "ecmanim-dvisvgm-cache");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

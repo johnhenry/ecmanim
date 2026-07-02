@@ -1,5 +1,5 @@
 // manim shared math core, compiled to a dependency-free WebAssembly module with
-// a C ABI. The same .wasm is loaded by manim-js (Node/browser via WebAssembly)
+// a C ABI. The same .wasm is loaded by ecmanim (Node/browser via WebAssembly)
 // and by Python manim (via wasmtime) — a genuinely cross-language computational
 // core. No_std + static linear buffers so it needs no allocator and no libm
 // (only +,-,*,/, and comparisons are used).

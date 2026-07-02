@@ -96,7 +96,7 @@ test("applyWatermark burns text into a clip (skips without ffmpeg)", { skip: !ff
   execSync(`ffmpeg -v error -f lavfi -i "testsrc=duration=0.5:size=320x180:rate=10" -pix_fmt yuv420p -y ${clip}`);
   const before = statSync(clip).size;
   try {
-    await applyWatermark(clip, { text: "@manim-js", position: "bottom-right" });
+    await applyWatermark(clip, { text: "@ecmanim", position: "bottom-right" });
     assert.ok(statSync(clip).size > 0);
     // Still a valid video.
     execSync(`ffprobe -v error ${clip}`);

@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>manim-js — GIF/MP4 export test</title>
+  <title>ecmanim — GIF/MP4 export test</title>
   <script type="importmap">
   {
     "imports": {
-      "manim-js/browser": "/dist/browser.js",
+      "ecmanim/browser": "/dist/browser.js",
       "gifenc": "/node_modules/gifenc/dist/gifenc.esm.js",
       "mp4-muxer": "/node_modules/mp4-muxer/build/mp4-muxer.mjs"
     }
@@ -17,7 +17,7 @@
   <canvas id="stage" width="480" height="270"></canvas>
   <pre id="out">running…</pre>
   <script type="module">
-    import { recordGif, recordMp4, Scene, Circle, Square, Create, Transform, BLUE, GREEN } from "manim-js/browser";
+    import { recordGif, recordMp4, Scene, Circle, Square, Create, Transform, BLUE, GREEN } from "ecmanim/browser";
     const out = document.getElementById("out");
     const log = (s) => { out.textContent += "\n" + s; };
     class Demo extends Scene {

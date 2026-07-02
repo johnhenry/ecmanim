@@ -9,7 +9,7 @@ to OTIO JSON — round-trips to DaVinci Resolve / Premiere / FCPXML / EDL / AAF 
 OTIO's adapters.
 
 ```js
-import { sceneToOtioString, sceneToOtio, toOtioJSON, fromOtioJSON } from "manim-js";
+import { sceneToOtioString, sceneToOtio, toOtioJSON, fromOtioJSON } from "ecmanim";
 writeFileSync("out.otio", sceneToOtioString(scene, { name: "demo", mediaUrl: "out.mp4" }));
 ```
 
@@ -24,7 +24,7 @@ not a full project interchange.
 ## Lottie import/export
 
 ```js
-import { vmobjectToLottieJSON, loadLottie } from "manim-js";
+import { vmobjectToLottieJSON, loadLottie } from "ecmanim";
 const doc = vmobjectToLottieJSON(shape, { width: 512, height: 512 });  // -> a .json Lottie
 const mob = loadLottie(existingLottieJson);                            // -> a VMobject
 ```
@@ -46,10 +46,10 @@ is negated on export/import.
 ## Watermark
 
 ```js
-import { render } from "manim-js/node";
+import { render } from "ecmanim/node";
 await render(MyScene, { watermark: { text: "@channel", position: "bottom-right", opacity: 0.7 } });
 // or an image logo: { image: "logo.png", position: "top-left", opacity: 0.9 }
-// or standalone: import { applyWatermark } from "manim-js/node"; await applyWatermark("v.mp4", {...});
+// or standalone: import { applyWatermark } from "ecmanim/node"; await applyWatermark("v.mp4", {...});
 ```
 
 Positions: `top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`.
@@ -60,4 +60,4 @@ For publication-grade LaTeX (full package/`align` support), the Node backend can
 shell out to a real TeX toolchain — `latex → dvi → dvisvgm → SVG → Béziers` — with
 an on-disk cache, detecting the toolchain and falling back to MathJax when TeX
 isn't installed. See `texToSVGViaDvisvgm` / `mathTexDvisvgmOrFallback`
-(`manim-js/node`). MathJax remains the zero-dependency default.
+(`ecmanim/node`). MathJax remains the zero-dependency default.

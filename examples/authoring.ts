@@ -1,5 +1,5 @@
 // Authoring layer: run a pluggable Format (title-card) through its lifecycle with
-// the manim-js render provider to produce a real video, and dry-run a plan IR.
+// the ecmanim render provider to produce a real video, and dry-run a plan IR.
 // Run: node examples/authoring.ts  ->  examples/out/authoring.mp4 (+ plan JSON)
 
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -10,7 +10,7 @@ mkdirSync("examples/out", { recursive: true });
 
 // 1) Run the built-in "title-card" format: plan → compose (render) via a provider.
 const res = await runFormat("title-card", {
-  topic: "manim-js",
+  topic: "ecmanim",
   params: {
     bullets: ["code → animation", "Node + browser", "now with an authoring layer"],
     style: "3b1b-dark",

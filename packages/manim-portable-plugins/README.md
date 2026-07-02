@@ -1,7 +1,7 @@
 # manim-portable-plugins
 
 Load **portable plugin manifests** into **Python manim**. The exact same JSON
-manifest also loads into [manim-js](../../) via `src/plugins/manifest.ts`, so a
+manifest also loads into [ecmanim](../../) via `src/plugins/manifest.ts`, so a
 plugin's shareable subset — color palettes, rate functions, parametric surfaces,
 and SVG shape libraries — is authored once and runs on both engines.
 
@@ -41,7 +41,7 @@ star = result["shapes"]["NeonStar"]()             # a manim.SVGMobject
 
 `load_manifest` accepts a **file path**, a **JSON string**, or an already-parsed
 **dict**. It returns a dict with `name`, `version`, `colors`, `rate_functions`,
-`surfaces`, `shapes`, and a `summary` of counts (mirroring the manim-js loader).
+`surfaces`, `shapes`, and a `summary` of counts (mirroring the ecmanim loader).
 Color constants and surface/shape factories are also set as module-level
 attributes, so `from manim_portable_plugins import NEON_PINK, MobiusStrip` works
 after loading.
