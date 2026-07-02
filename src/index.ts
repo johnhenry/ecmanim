@@ -128,6 +128,25 @@ export { Broadcast, ChangeSpeed } from "./animation/specialized.ts";
 export { ComplexValueTracker } from "./mobject/complex_value_tracker.ts";
 export * as rate_functions from "./animation/rate_functions.ts";
 
+// After-Effects-style expression/driver helpers (pure, deterministic).
+export { wiggle, remap, ramp, valueAtTime, compose, mulberry32 } from "./animation/expressions.ts";
+export type { Driver } from "./animation/expressions.ts";
+// GSAP-style Timeline builder (relative/absolute placement -> one AnimationGroup).
+export { Timeline, timeline } from "./animation/timeline.ts";
+export type { TimelineOptions } from "./animation/timeline.ts";
+// Vector (glyph-outline) DecimalNumber — crisp/SVG-friendly live numbers.
+export { VectorDecimalNumber, vectorDecimalNumber } from "./mobject/vector_value_tracker.ts";
+export type { VectorDecimalNumberConfig } from "./mobject/vector_value_tracker.ts";
+// Composition registry (renderable scenes with metadata) + style/aspect presets.
+export {
+  registerComposition, getComposition, listCompositions, compositionsToJSON, unregisterComposition,
+} from "./scene/compositions.ts";
+export type { CompositionDescriptor } from "./scene/compositions.ts";
+export {
+  STYLE_PRESETS, ASPECT_RATIO_PRESETS, resolveStyle, resolveAspectRatio,
+} from "./core/presets.ts";
+export type { StylePreset, AspectRatioPreset } from "./core/presets.ts";
+
 // Remotion-inspired primitives: range-mapping interpolate, physics springs, and
 // composable easing combinators. `interpolate` claims the bare top-level name
 // (the 2-arg lerp stays namespaced as `bezier.interpolate`).

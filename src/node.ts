@@ -54,6 +54,10 @@ export interface RenderOptions {
   saveSections?: boolean;             // write per-section videos + JSON index
   // Remotion-style additions:
   params?: Record<string, any>;       // scene params validated by a static `schema`
+  // Phase 1 additions:
+  style?: string;                     // named STYLE_PRESET (e.g. "3b1b-dark")
+  aspectRatio?: string;               // named ASPECT_RATIO_PRESET (e.g. "9:16") or "W:H"
+  stillFrame?: number;                // capture exactly this frame index as PNG (see renderStill)
   [key: string]: any;
 }
 
@@ -69,6 +73,17 @@ async function loadCanvas(): Promise<any> {
       "(prebuilt binaries, no system Cairo needed).\nOriginal error: " + e.message,
     );
   }
+}
+
+// Render a single still frame (by frame index or time in seconds) to a PNG.
+//   await renderStill(MyScene, { output: "poster.png", time: 1.5 })
+export async function renderStill(
+  sceneOrConstruct: any,
+  options: RenderOptions & { frame?: number; time?: number } = {},
+) {
+  const fps = options.fps ?? (options.quality ? QUALITIES[options.quality]?.fps : undefined) ?? QUALITIES.medium.fps;
+  const frame = options.frame ?? Math.round((options.time ?? 0) * fps);
+  return render(sceneOrConstruct, { ...options, output: options.output ?? "still.png", stillFrame: frame });
 }
 
 // Render a Scene subclass (or a construct function) to a video file.
@@ -102,9 +117,20 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     pixelHeight = options.pixelHeight ?? QUALITY_PRESETS[options.quality].pixelHeight;
   }
   if (options.resolution) { [pixelWidth, pixelHeight] = options.resolution; }
+  // Phase 1: style/aspect presets. Aspect ratio overrides dimensions; the style
+  // preset supplies a background/font look. Explicit options still win.
+  const { resolveStyle, resolveAspectRatio } = await import("./core/presets.ts");
+  const stylePreset = resolveStyle(options.style);
+  if (options.aspectRatio) {
+    const ar = resolveAspectRatio(options.aspectRatio, options.pixelHeight ?? undefined);
+    if (ar) {
+      pixelWidth = options.pixelWidth ?? ar.pixelWidth;
+      pixelHeight = options.pixelHeight ?? ar.pixelHeight;
+    }
+  }
   const fps = options.fps ?? (options.quality && QUALITY_PRESETS[options.quality]?.fps) ?? sceneMeta.fps ?? manimConfig.fps ?? q.fps;
 
-  const background = options.background ?? manimConfig.background ?? "#000000";
+  const background = options.background ?? stylePreset?.background ?? manimConfig.background ?? "#000000";
   const transparent = options.transparent ?? false;
   const saveLastFrame = options.saveLastFrame ?? false;
   const disableCaching = options.disableCaching ?? manimConfig.disable_caching ?? false;
@@ -133,7 +159,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   // gate. This unifies font/MathJax warm-up with any user delayRender() calls so
   // render() only proceeds once every registered asset has resolved.
   const { delayRenderUntil, waitForRender } = await import("./core/async_gate.ts");
-  delayRenderUntil(loadVectorFont(options.vectorFont ?? "sans-serif").catch(() => null), "font"); // for VText
+  delayRenderUntil(loadVectorFont(options.vectorFont ?? stylePreset?.font ?? "sans-serif").catch(() => null), "font"); // for VText
   // Warm MathJax so MathTex(...) construction is synchronous inside construct().
   delayRenderUntil(import("./mobject/mathtex.ts").then((m) => m.initMathTex()).catch(() => null), "mathjax");
   await waitForRender();
@@ -169,6 +195,24 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       const above = uptoNum != null && rec.index > uptoNum;
       return (below || above) ? { skip: true } : undefined;
     };
+  }
+
+  // --- renderStill: capture exactly one frame (by index) as PNG and return. ---
+  if (options.stillFrame != null) {
+    const target = Math.max(0, Math.floor(options.stillFrame));
+    const pngPath = outPath.replace(/\.[^.]+$/, "") + ".png";
+    let captured: any = null;
+    scene.frameHandler = async (mobjects: any, frame: number) => {
+      if (frame === target && captured == null) {
+        renderer.renderScene(mobjects);
+        captured = canvas.toBuffer("image/png");
+      }
+    };
+    await runConstruct(sceneOrConstruct, scene);
+    if (captured == null) { renderer.renderScene(scene.mobjects); captured = canvas.toBuffer("image/png"); }
+    writeFileSync(pngPath, captured);
+    if (verbose) console.log(`✓ Saved still frame ${target} -> ${pngPath}`);
+    return { output: pngPath, frame: target, fps, pixelWidth, pixelHeight, sounds: 0, still: true };
   }
 
   // --- svg: emit resolution-independent vector output. With saveLastFrame a

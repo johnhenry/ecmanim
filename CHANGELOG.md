@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.0 — adoption phase 1: pure primitives
+
+First phase of the tool-survey adoption program (Manim / Remotion / GSAP / Motion
+Canvas / showrunner / …). Small, dependency-free, isomorphic wins:
+
+- **AE-style expression helpers** (`wiggle`, `remap`, `ramp`, `valueAtTime`,
+  `compose`, `mulberry32`): pure, deterministic (order-independent) drivers for
+  animating properties from updaters. `wiggle` is value-noise, safe under scrubbing.
+- **GSAP-style `Timeline`** (`timeline()`): place animations with a compact
+  position grammar (`"+=1"`, `"-=0.5"`, `"<"`/`">"` with offsets, labels, absolute
+  seconds) → one `AnimationGroup` for `scene.play()`. Removes manual `t` bookkeeping.
+- **`VectorDecimalNumber`**: a live number rendered as crisp vector glyph outlines
+  (SVG-friendly, individually animatable digits), mirroring `DecimalNumber`'s
+  formatting + edge-fix — fixes the raster gap.
+- **`renderStill(scene, {frame|time})`** + a **composition registry**
+  (`registerComposition`/`listCompositions`/`compositionsToJSON`) for thumbnails,
+  poster frames, and enumerable renderable scenes.
+- **Style + aspect-ratio presets**: `STYLE_PRESETS` (named looks incl. `3b1b-dark`)
+  and `ASPECT_RATIO_PRESETS` (`16:9`/`9:16`/`1:1`/…); `render()` gains `style` and
+  `aspectRatio` options (aspect overrides dimensions; style sets background/font).
+
+27 new tests (537 total); type-clean; verified end-to-end (still + preset renders).
+
 ## 1.6.0 — video metadata (schema.org · IIIF · provenance)
 
 Export the web's video metadata standards straight from a render — manim-js knows
