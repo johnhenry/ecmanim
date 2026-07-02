@@ -48,7 +48,10 @@ npm install            # pulls @napi-rs/canvas + three as optional deps
 
 `@napi-rs/canvas` ships prebuilt binaries — **no system Cairo required**, so it
 works on NixOS out of the box. Run `npx manim-js checkhealth` to verify node,
-ffmpeg, ffprobe, canvas, and fonts.
+ffmpeg, ffprobe, canvas, and fonts — plus the optional tools (system TTS, TeX,
+headless Chrome). manim-js shells out to a few system programs rather than
+bundling them; see [docs/external-tools.md](docs/external-tools.md) for the
+full list and what degrades when each is missing.
 
 ## Quickstart
 

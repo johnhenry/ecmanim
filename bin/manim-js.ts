@@ -267,12 +267,42 @@ async function cmdCheckhealth() {
   } catch (e: any) { fontInfo = e?.message?.split("\n")[0] ?? "unavailable"; }
   rows.push(["fonts", fontOk, fontInfo]);
 
+  // Optional external tools — reported for information, never fail the check.
+  // (See docs/external-tools.md for what each enables and the fallback.)
+  const opt: Array<[string, boolean, string]> = [];
+  const which = async (bin: string): Promise<boolean> => {
+    try {
+      const { execFileSync } = await import("node:child_process");
+      execFileSync("sh", ["-c", `command -v ${bin}`], { stdio: "ignore" });
+      return true;
+    } catch { return false; }
+  };
+  const sayOk = await which("say");
+  const espeakOk = (await which("espeak-ng")) || (await which("espeak"));
+  opt.push(["system TTS", sayOk || espeakOk,
+    sayOk ? "say (macOS)" : espeakOk ? "espeak-ng" : "not found — voiceover falls back to silent pacing"]);
+  const latexOk = (await which("latex")) || (await which("pdflatex"));
+  const dvisvgmOk = await which("dvisvgm");
+  opt.push(["TeX toolchain", latexOk && dvisvgmOk,
+    latexOk && dvisvgmOk ? "latex + dvisvgm" : "not found — MathTex uses MathJax (default)"]);
+  const cdpUrl = process.env.MANIM_CDP_URL ?? "http://localhost:9222";
+  let cdpOk = false;
+  try {
+    const { probeCDP } = await import(nodePath("../src/renderer/cdp.ts"));
+    cdpOk = await probeCDP(cdpUrl, 1500);
+  } catch { /* unreachable */ }
+  opt.push(["Chrome (CDP)", cdpOk, cdpOk ? `reachable at ${cdpUrl}` : `no DevTools endpoint at ${cdpUrl} — renderGL unavailable`]);
+
   console.log("manim-js checkhealth\n");
   for (const [name, ok, info] of rows) {
     console.log(`  [${ok ? "OK " : "!! "}] ${name.padEnd(16)} ${info}`);
   }
+  console.log("\n  optional:");
+  for (const [name, ok, info] of opt) {
+    console.log(`  [${ok ? "OK " : " - "}] ${name.padEnd(16)} ${info}`);
+  }
   const allOk = rows.every((r) => r[1]);
-  console.log(`\n${allOk ? "All checks passed." : "Some checks failed (see above)."}`);
+  console.log(`\n${allOk ? "All required checks passed." : "Some required checks failed (see above)."}`);
   return allOk;
 }
 
