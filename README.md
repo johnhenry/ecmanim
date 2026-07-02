@@ -1,4 +1,8 @@
-# ecmanim
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ecmanim-logo-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/ecmanim-logo-light.png">
+  <img alt="ecmanim" src="docs/assets/ecmanim-logo-light.png" width="450">
+</picture>
 
 A **TypeScript** port of [manim](https://github.com/ManimCommunity/manim) — the
 Mathematical Animation Engine popularized by 3Blue1Brown — that renders the same
