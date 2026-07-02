@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.11.0 — adoption phase 5: interchange + fidelity
+
+- **OTIO** (`sceneToOtio`, `toOtioJSON`/`fromOtioJSON`, `RationalTime`): export a
+  scene's play/wait segments (or sections) as a frame-exact OpenTimelineIO `.otio`
+  JSON that round-trips to Resolve/Premiere/FCPXML/EDL. Reimplemented in TS.
+- **Lottie import/export** (`vmobjectToLottieShapes`, `vmobjectToLottieJSON`,
+  `loadLottie`): map VMobject cubic-Bézier subpaths to Lottie's `{v,i,o,c}` shape
+  model and back — export manim shapes to a format every web/iOS/Android Lottie
+  player understands (geometry; ThorVG-WASM noted for full fidelity).
+- **Watermark** (`applyWatermark`, `render({ watermark })`): burn a text or image
+  watermark into the output via an ffmpeg overlay, positionable with opacity.
+- **Real-TeX** backend confirmed shipped (`texToSVGViaDvisvgm`: `latex → dvi →
+  dvisvgm → SVG → Béziers` with detection + MathJax fallback).
+
+6 new tests (572 total); type-clean; example `examples/interchange.ts`
+(watermarked render + `.otio` + Lottie export).
+
 ## 1.10.0 — adoption phase 4: animation depth + presentation
 
 - **`TransformMatchingAuto`** — automatic shared-element matching (à la Reveal.js

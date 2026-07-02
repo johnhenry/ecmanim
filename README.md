@@ -175,6 +175,7 @@ Render any of these with `node examples/<name>.ts` (writes to `examples/out/`):
 | `examples/audio-reactive.ts` | FFT spectrum bars + `CaptionTrack` + muxed audio ([docs/captions-audio.md](docs/captions-audio.md)) |
 | `examples/voiceover.ts` | TTS-synced narration with `<bookmark>` cues ([docs/voiceover.md](docs/voiceover.md)) |
 | `examples/diagram.ts` | diagram-as-code + animated board transition via auto-matching ([docs/animation-presentation.md](docs/animation-presentation.md)) |
+| `examples/interchange.ts` | watermarked render + `.otio` + Lottie export ([docs/interchange.md](docs/interchange.md)) |
 | `examples/browser/index.html` | browser Canvas-2D backend (live + WebM export) |
 | `examples/browser-three/index.html` | browser WebGL/Three.js backend (+ "Explore" orbit mode) |
 | `examples/plugins/heart-plugin.ts` | native `use()` plugin |

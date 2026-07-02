@@ -164,6 +164,16 @@ export { getAudioData, visualizeAudio, getWaveformPortion, createSmoothSvgPath }
 export type { AudioData } from "./audio/analyze.ts";
 export { fftInPlace, magnitudeSpectrum, nextPow2 } from "./audio/fft.ts";
 
+// Interchange: OTIO timeline model (+ .otio export) and Lottie import/export.
+export {
+  rationalTime, rtSeconds, timeRange, toOtioJSON, fromOtioJSON, sceneToOtio, sceneToOtioString,
+} from "./interchange/otio.ts";
+export type { RationalTime, TimeRange, OtioClip, OtioTrack, OtioTimeline } from "./interchange/otio.ts";
+export {
+  vmobjectToLottieShapes, lottieShapeToPoints, lottieShapesToVMobject, vmobjectToLottieJSON, loadLottie,
+} from "./interchange/lottie.ts";
+export type { LottieShape, LottieExportOptions } from "./interchange/lottie.ts";
+
 // Remotion-inspired primitives: range-mapping interpolate, physics springs, and
 // composable easing combinators. `interpolate` claims the bare top-level name
 // (the 2-arg lerp stays namespaced as `bezier.interpolate`).

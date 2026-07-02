@@ -29,6 +29,9 @@ export { loadVideo } from "./video-node.ts";
 export type { LoadVideoOptions } from "./video-node.ts";
 export { probeVideo, extractFrames } from "./renderer/ffmpeg.ts";
 export type { ProbeResult } from "./renderer/ffmpeg.ts";
+// Watermark overlay (Phase 5) — also applied automatically via the `watermark` render option.
+export { applyWatermark } from "./core/watermark.ts";
+export type { WatermarkConfig, WatermarkPosition } from "./core/watermark.ts";
 // Voiceover / TTS-synced narration (Phase 3).
 export { voiceover, parseBookmarks, VoiceoverTracker } from "./voiceover/voiceover.ts";
 export type { VoiceoverOptions, Bookmark } from "./voiceover/voiceover.ts";
@@ -66,6 +69,7 @@ export interface RenderOptions {
   style?: string;                     // named STYLE_PRESET (e.g. "3b1b-dark")
   aspectRatio?: string;               // named ASPECT_RATIO_PRESET (e.g. "9:16") or "W:H"
   stillFrame?: number;                // capture exactly this frame index as PNG (see renderStill)
+  watermark?: import("./core/watermark.ts").WatermarkConfig; // burn a text/image watermark
   [key: string]: any;
 }
 
@@ -361,6 +365,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     if (verbose) {
       console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${outPath} (${reusedPartials} partial(s) reused)`);
     }
+    if (options.watermark) await (await import("./core/watermark.ts")).applyWatermark(outPath, options.watermark);
     return { output: outPath, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections, reusedPartials, cached: true };
   }
 
@@ -390,6 +395,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   if (verbose) {
     console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${outPath}`);
   }
+  if (options.watermark) await (await import("./core/watermark.ts")).applyWatermark(outPath, options.watermark);
   return { output: outPath, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections };
 }
 
