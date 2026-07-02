@@ -6,8 +6,26 @@ with an LLM agent.
 
 This directory is **not** `.claude/skills/` — it ships as plain reference
 material so nothing auto-activates just because you cloned or installed the
-package. To use these skills with Claude Code, copy or symlink the ones you
-want into your own skills directory:
+package. Nothing here runs on `npm install`; you (or your tooling) opt in
+explicitly, either way below.
+
+### Option A: `skills-npm` (recommended if you already use it)
+
+This folder follows the [`skills-npm`](https://github.com/antfu/skills-npm)
+convention — a `skills/<name>/SKILL.md` layout that its CLI discovers across
+your `node_modules` and symlinks into whichever agent directories you have
+(`.claude/skills/`, `.cursor/skills/`, etc). If `ecmanim` is a dependency of
+your project:
+
+```bash
+npx skills-npm
+```
+
+This is a command *you* run — nothing installs automatically as a side effect
+of `npm install ecmanim`. See the `skills-npm` README for config (`agents`,
+`include`/`exclude`, a `prepare`-script setup mode, etc).
+
+### Option B: copy/symlink manually
 
 ```bash
 # all of them, into your project's skills

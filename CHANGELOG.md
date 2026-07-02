@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.0.3
+
+### Added
+- A hierarchical `skills/` folder (root `ecmanim` skill + 9 domain skills:
+  timeline, captions/audio, voiceover, presentation, interchange, physics,
+  authoring-pipeline, studio, render-cli) for LLM coding agents. Ships as
+  plain reference material — nothing auto-activates on install.
+
+### Fixed
+- **`skills/` was never actually published to npm.** It was committed to git
+  but missing from `package.json`'s `files` array, so `0.0.1`/`0.0.2` shipped
+  without it despite existing in the repo. Now included.
+- `skills/README.md` documents [`skills-npm`](https://github.com/antfu/skills-npm)
+  (`npx skills-npm`) as the standard opt-in way to symlink these skills into
+  an agent's skills directory, alongside the existing manual copy/symlink
+  instructions.
+
 ## 0.0.2
 
 ### Fixed
