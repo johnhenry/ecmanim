@@ -8,3 +8,4 @@ media/
 .DS_Store
 dist/
 *.tsbuildinfo
+test/golden/*.actual.png
