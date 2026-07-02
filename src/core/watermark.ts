@@ -16,6 +16,21 @@ export interface WatermarkConfig {
   margin?: number;      // px from the edge (default 24)
 }
 
+// Text watermarks need ffmpeg's `drawtext` filter, which requires an ffmpeg
+// build with libfreetype compiled in. Homebrew's default `ffmpeg` formula on
+// macOS omits it (the separate `ffmpeg-full` formula has it); most Linux
+// distro packages include it by default. Image watermarks use `overlay` +
+// `colorchannelmixer`, which are always-built-in filters, so they need no gate.
+let drawtextAvailable: boolean | null = null;
+export async function ffmpegHasDrawtext(): Promise<boolean> {
+  if (drawtextAvailable !== null) return drawtextAvailable;
+  const { execFile } = await import("node:child_process");
+  drawtextAvailable = await new Promise<boolean>((resolve) => {
+    execFile("ffmpeg", ["-filters"], (err, stdout) => resolve(!err && /drawtext/.test(stdout)));
+  });
+  return drawtextAvailable;
+}
+
 function posExpr(position: WatermarkPosition, margin: number, kind: "text" | "image"): { x: string; y: string } {
   // For drawtext the box is text_w/text_h; for overlay it's overlay_w/overlay_h.
   const w = kind === "text" ? "text_w" : "overlay_w";
@@ -47,6 +62,14 @@ export async function applyWatermark(videoPath: string, config: WatermarkConfig)
     const filter = `[1:v]format=rgba,colorchannelmixer=aa=${opacity}[wm];[0:v][wm]overlay=${x}:${y}`;
     args = ["-y", "-i", videoPath, "-i", config.image, "-filter_complex", filter, "-c:a", "copy", tmp];
   } else {
+    if (!(await ffmpegHasDrawtext())) {
+      console.warn(
+        "applyWatermark: this ffmpeg build has no `drawtext` filter (needs libfreetype) — " +
+        "skipping the text watermark; the video is otherwise unchanged. " +
+        "On macOS, `brew install ffmpeg-full` has it; most Linux ffmpeg packages include it by default.",
+      );
+      return;
+    }
     const { x, y } = posExpr(position, margin, "text");
     const text = (config.text ?? "").replace(/[\\:']/g, (c) => "\\" + c);
     const color = config.color ?? "white";

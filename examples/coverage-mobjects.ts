@@ -13,7 +13,7 @@ import {
   Ellipse, ScreenRectangle, FullScreenRectangle,
   NumberLine, UnitInterval,
   Integer,
-  ThreeDVMobject, Sphere,
+  ThreeDVMobject, Sphere, ParametricSurface,
   LabeledArrow, LabeledLine,
   Polygram,
   VectorField, ArrowVectorField,
@@ -120,7 +120,14 @@ class CoverageMobjects extends ThreeDScene {
     marker.setPointsAsCorners([[6.5, -1, 0], [7.5, -1, 0], [7.5, 0, 0], [6.5, 0, 0], [6.5, -1, 0]]);
     (marker as any).fillOpacity = 0.7;
     const sphere3d = new Sphere({ radius: 0.6, fillColor: BLUE }).moveTo([6.5, 1, 0]);
-    await this.play(new FadeIn(marker), new FadeIn(sphere3d), { _playConfig: true, runTime: 0.6 });
+    // ParametricSurface is Surface exported under its Python-manim name (an
+    // alias, not a subclass) — used here by that name so it's not the one
+    // registered mobject with no example anywhere in the repo.
+    const saddle = new ParametricSurface(
+      (u: number, v: number) => [u, v, 0.3 * (u * u - v * v)],
+      { uRange: [-0.8, 0.8], vRange: [-0.8, 0.8], resolution: [12, 12], checkerboardColors: ["#F0AC5F", "#8C5A20"] },
+    ).moveTo([7.6, -0.3, 0.3]);
+    await this.play(new FadeIn(marker), new FadeIn(sphere3d), new FadeIn(saddle), { _playConfig: true, runTime: 0.6 });
     await this.moveCamera({ phi: 55 * DEGREES, theta: -60 * DEGREES }, { runTime: 2 });
     await this.wait(0.4);
   }
