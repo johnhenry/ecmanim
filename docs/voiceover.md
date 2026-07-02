@@ -40,6 +40,22 @@ any remaining audio so scene time reaches the clip's end. The tracker exposes
 `silent`). Register your own with `registerTTSProvider({ name, available, synthesize })`
 — `synthesize(text) → { file, durationSeconds, wordBoundaries? }`.
 
+### The `system` provider needs an external TTS program
+
+`say` (macOS, built in) and `espeak-ng` (Linux, **not** built in — install it:
+`apt install espeak-ng`, `nix-install espeak-ng`, `brew install espeak-ng`, …)
+are system binaries, not npm dependencies. If neither is on `PATH`, `system`
+reports unavailable and resolution falls through to `silent` — narration pacing
+still works, the video is just mute.
+
+Quality expectations: espeak-ng uses formant synthesis — clear and instant but
+distinctly robotic. For natural local speech, [Piper](https://github.com/OHF-Voice/piper1-gpl)
+(neural, fast, offline) is the usual step up — wrap it with
+`registerTTSProvider` (it emits WAV files, so the adapter is a few lines).
+Other local options in the same space: Festival/flite (classic, also robotic),
+Coqui/XTTS (heavier neural). For cloud quality use the built-in `openai` /
+`elevenlabs` providers.
+
 Bookmarks: put `<bookmark mark="name"/>` inline in the narration text; the tag is
 stripped from what's spoken and its position becomes a cue you can wait for.
 
