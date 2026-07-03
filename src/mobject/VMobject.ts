@@ -570,7 +570,7 @@ export class VMobject extends Mobject {
   }
 
   setColor(color: ColorLike): this {
-    this.color = Color.parse(color);
+    this._color = Color.parse(color);
     this.strokeColor = Color.parse(color);
     this.fillColor = Color.parse(color);
     for (const m of this.submobjects) m.setColor(color);
