@@ -31,7 +31,11 @@ export class Mobject {
   points: number[][];
   submobjects: Mobject[];
   name: string;
-  color: Color;
+  /**
+   * Backing field for `.color`. Subclasses (e.g. VMobject.setColor) write
+   * here directly to avoid re-entering the `color` setter below.
+   */
+  protected _color: Color;
   opacity: number;
   zIndex: number;
   updaters: Updater[];
@@ -44,11 +48,25 @@ export class Mobject {
     this.points = []; // array of [x,y,z]
     this.submobjects = [];
     this.name = config.name || this.constructor.name;
-    this.color = Color.parse(config.color ?? "#FFFFFF");
+    this._color = Color.parse(config.color ?? "#FFFFFF");
     this.opacity = config.opacity ?? 1;
     this.zIndex = config.zIndex ?? 0;
     this.updaters = [];
     this.updatingSuspended = false;
+  }
+
+  /**
+   * Raw assignment (`mob.color = "#E8833A"`) forwards to `setColor()` so it
+   * actually recolors the render (subclasses like VMobject read
+   * strokeColor/fillColor, not this field, for drawing) instead of silently
+   * updating a field nothing downstream looks at.
+   */
+  get color(): Color {
+    return this._color;
+  }
+
+  set color(value: ColorLike) {
+    this.setColor(value);
   }
 
   // --- tree ---------------------------------------------------------------
@@ -229,7 +247,7 @@ export class Mobject {
 
   // --- style --------------------------------------------------------------
   setColor(color: ColorLike): this {
-    this.color = Color.parse(color);
+    this._color = Color.parse(color);
     for (const m of this.submobjects) m.setColor(color);
     return this;
   }
@@ -308,15 +326,14 @@ export class Mobject {
     // Copy geometry/style member-wise across the family, growing/shrinking the
     // submobject list to match.
     this.points = src.points.map((p) => [p[0], p[1], p[2]]);
-    this.color = Color.parse(src.color);
+    this._color = Color.parse(src.color);
     this.opacity = src.opacity;
     this.zIndex = src.zIndex;
     // Copy any extra style fields subclasses added (fill/stroke/etc.).
     for (const key of Object.keys(src)) {
-      if (["id", "points", "submobjects", "color", "updaters", "savedState", "target"].includes(key)) continue;
+      if (["id", "points", "submobjects", "color", "_color", "updaters", "savedState", "target"].includes(key)) continue;
       (this as any)[key] = (src as any)[key];
     }
-    this.color = Color.parse(src.color);
     this.submobjects = src.submobjects;
     return this;
   }
@@ -721,7 +738,7 @@ export class Mobject {
     Object.assign(c, this);
     c.id = _idCounter++;
     c.points = this.points.map((p) => [p[0], p[1], p[2]]);
-    c.color = Color.parse(this.color);
+    c._color = Color.parse(this.color);
     c.updaters = [];
     c.submobjects = this.submobjects.map((m) => m.copy());
     return c;
@@ -734,7 +751,7 @@ export class Mobject {
     for (let i = 0; i < n; i++) {
       this.points[i] = V.lerp(start.points[i], target.points[i], alpha);
     }
-    this.color = Color.lerp(start.color, target.color, alpha);
+    this._color = Color.lerp(start.color, target.color, alpha);
     this.opacity = start.opacity + (target.opacity - start.opacity) * alpha;
     const sn = Math.min(this.submobjects.length, start.submobjects.length, target.submobjects.length);
     for (let i = 0; i < sn; i++) {

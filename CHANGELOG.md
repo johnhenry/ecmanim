@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **`Mobject.color` was a dead field for rendering purposes.** Raw assignment
+  (`mob.color = "#E8833A"`) never synced `VMobject`'s `strokeColor`/
+  `fillColor`, which the renderer actually reads, so it silently did nothing
+  visible. `color` is now a getter/setter backed by `_color`; the setter
+  forwards to `setColor()` so raw assignment and `setColor()` agree. Every
+  `setColor()` override (`Mobject`, `VMobject`, `Text` x2) and internal
+  copy/interpolate path (`become()`, `copy()`, `interpolate()`) writes to
+  `_color` directly to avoid re-entering the setter and recoloring stale or
+  shared submobjects.
 - **CLI `render`/`plan` crashed with `TypeError: Class constructor ... cannot
   be invoked without 'new'` for scene files that imported `Scene` through a
   different specifier than the CLI itself** (e.g. `import { Scene } from

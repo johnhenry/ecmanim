@@ -103,7 +103,7 @@ export class RasterText extends Mobject {
 
   setColor(color: ColorLike): this {
     this.fillColor = Color.parse(color);
-    this.color = Color.parse(color);
+    this._color = Color.parse(color);
     return this;
   }
 
@@ -451,7 +451,7 @@ export class Text extends VGroup {
     const c = Color.parse(color);
     this.fillColor = c;
     this.strokeColor = Color.parse(color);
-    this.color = Color.parse(color);
+    this._color = Color.parse(color);
     for (const m of this.submobjects) (m as VMobject).setColor(color);
     return this;
   }
