@@ -5,6 +5,13 @@
 // scene scripts. Anything it cannot confidently translate is passed through
 // with a `/* TODO py2ts: ... */` marker rather than crashing.
 //
+// Known unhandled constructs (NOT marked with a TODO comment -- they pass
+// through silently as invalid TS, so review the diff by hand if your source
+// uses either): list/generator comprehensions (`[x for x in y]`, `*[...]`
+// unpacking) and any single Python statement whose call arguments span
+// multiple lines. Both stem from the converter's line-by-line architecture;
+// rewrite the source as a single line or an explicit loop before conversion.
+//
 //   import { convert } from "./tools/py2ts.ts";
 //   const ts = convert(pySource);
 //
@@ -265,6 +272,20 @@ function rewriteCalls(src: string): string {
   const idRe = /[A-Za-z_$][A-Za-z0-9_$]*/y;
   while (i < src.length) {
     const ch = src[i];
+    // Python raw string r"..." / R'...' (f-strings are already converted to
+    // template literals earlier in rewriteExpr). Drop the prefix and escape
+    // backslashes in the body, since raw-string semantics ("\p" is a literal
+    // backslash+p) become normal-string semantics in the JS output ("\n"
+    // would otherwise be read back as an actual newline).
+    if ((ch === "r" || ch === "R") && (src[i + 1] === '"' || src[i + 1] === "'")) {
+      const quote = src[i + 1];
+      let j = i + 2;
+      while (j < src.length && !(src[j] === quote && src[j - 1] !== "\\")) j++;
+      const body = src.slice(i + 2, j);
+      out += quote + body.replace(/\\/g, "\\\\") + quote;
+      i = j + 1;
+      continue;
+    }
     // Skip string literals verbatim.
     if (ch === '"' || ch === "'" || ch === "`") {
       const quote = ch;
@@ -338,7 +359,11 @@ function rebuildCall(name: string, argsRaw: string, dotted = false): string {
 
   const isKnown = !dotted && KNOWN_CLASSES.has(name);
   const prefix = isKnown ? "new " : "";
-  return `${prefix}${name}(${parts.join(", ")})`;
+  // Known classes are already PascalCase (toCamel is a no-op on them); a bare
+  // call to a user-defined snake_case helper needs to match its camelCased
+  // `function` declaration (see the top-level `def` handling above).
+  const callee = dotted ? name : toCamel(name);
+  return `${prefix}${callee}(${parts.join(", ")})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +457,7 @@ function detectImports(tsBody: string): string[] {
 
 interface Block {
   indent: number; // python indentation column that opened the block
+  kind?: "class"; // set for `class X:` blocks, so nested `def`s know they're methods
 }
 
 export function convert(pythonSource: string, opts: Py2TsOptions = {}): string {
@@ -491,21 +517,23 @@ export function convert(pythonSource: string, opts: Py2TsOptions = {}): string {
       const base = m[2];
       const ext = base && SCENE_BASES.has(base) ? ` extends ${base}` : base ? ` extends ${base}` : "";
       emit(depth, `class ${cls}${ext} {${commentSuffix(comment)}`);
-      blocks.push({ indent });
+      blocks.push({ indent, kind: "class" });
       continue;
     }
 
-    // --- def construct(self): / def m(self, ...): --------------------
+    // --- def construct(self): / def m(self, ...): -- OR a top-level def ---
     m = /^(?:async\s+)?def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)\s*:\s*$/.exec(code);
     if (m) {
       const fn = m[1];
       const params = m[2];
+      const isMethod = blocks.length > 0 && blocks[blocks.length - 1].kind === "class";
       const paramList = splitArgs(params).filter((p) => p !== "self" && p !== "cls");
       const paramStr = paramList.map((p) => rewriteParam(p)).join(", ");
-      const isConstruct = fn === "construct";
+      const isConstruct = isMethod && fn === "construct";
       const asyncKw = isConstruct ? "async " : "";
-      const jsName = isConstruct ? "construct" : (fn === "__init__" ? "constructor" : toCamel(fn));
-      emit(depth, `${asyncKw}${jsName}(${paramStr}) {${commentSuffix(comment)}`);
+      const jsName = isConstruct ? "construct" : (isMethod && fn === "__init__" ? "constructor" : toCamel(fn));
+      const fnKw = isMethod ? "" : "function ";
+      emit(depth, `${fnKw}${asyncKw}${jsName}(${paramStr}) {${commentSuffix(comment)}`);
       blocks.push({ indent });
       continue;
     }
@@ -688,8 +716,9 @@ function buildHeader(body: string, importFrom: string, wildcard: boolean): strin
     return `import * as mn from "${importFrom}";\n\n`;
   }
   const names = detectImports(body);
-  // Also provide a small `range` helper if referenced.
+  // Also provide small `range`/`enumerate` helpers if referenced.
   const usesRange = /\brange\(/.test(body);
+  const usesEnumerate = /\benumerate\(/.test(body);
   let header = "";
   if (names.length > 0) {
     header += `import { ${names.join(", ")} } from "${importFrom}";\n`;
@@ -705,6 +734,14 @@ function buildHeader(body: string, importFrom: string, wildcard: boolean): strin
       "  if (step > 0) for (let i = start; i < stop; i += step) out.push(i);\n" +
       "  else for (let i = start; i > stop; i += step) out.push(i);\n" +
       "  return out;\n" +
+      "}\n";
+  }
+  if (usesEnumerate) {
+    header +=
+      "\n// py2ts helper: Python enumerate() -> [index, item] pairs.\n" +
+      "function* enumerate<T>(iterable: Iterable<T>, start = 0): Generator<[number, T]> {\n" +
+      "  let i = start;\n" +
+      "  for (const x of iterable) yield [i++, x];\n" +
       "}\n";
   }
   return header + "\n";

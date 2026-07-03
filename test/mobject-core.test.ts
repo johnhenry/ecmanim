@@ -13,6 +13,26 @@ function makeMob(points: number[][]): Mobject {
 
 const approx = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) < eps;
 
+test("Mobject is iterable over direct submobjects (matches Python manim's VGroup __iter__)", () => {
+  const a = makeMob([[0, 0, 0]]);
+  const b = makeMob([[1, 1, 0]]);
+  const group = new Mobject();
+  group.add(a, b);
+
+  const collected: Mobject[] = [];
+  for (const m of group) collected.push(m);
+  assert.deepEqual(collected, [a, b]);
+
+  // Spread and Array.from should also work, since both rely on the iterator.
+  assert.deepEqual([...group], [a, b]);
+  assert.deepEqual(Array.from(group), [a, b]);
+
+  // Shallow, not recursive: a submobject's own children aren't yielded.
+  const grandchild = makeMob([[2, 2, 0]]);
+  a.add(grandchild);
+  assert.deepEqual([...group], [a, b]);
+});
+
 test("become copies geometry, style and submobjects (deep)", () => {
   const a = makeMob([[0, 0, 0], [1, 1, 0]]);
   const child = makeMob([[2, 2, 0]]);

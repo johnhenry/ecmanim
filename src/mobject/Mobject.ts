@@ -65,6 +65,13 @@ export class Mobject {
     return this;
   }
 
+  // Iterate direct submobjects (matches Python manim's VGroup __iter__ —
+  // shallow, not the recursive family). Lets `for (const m of group)` and
+  // `[...group]` work directly, without needing `.submobjects`.
+  [Symbol.iterator](): Iterator<Mobject> {
+    return this.submobjects[Symbol.iterator]();
+  }
+
   // All mobjects in this subtree that actually carry points (family members).
   getFamily(): Mobject[] {
     const out: Mobject[] = [this];

@@ -110,6 +110,41 @@ test("mob.animate.shift(RIGHT) and dotted method camelCasing pass through", () =
   assert.match(ts, /c\.setFill\(RED, \{ opacity: 0\.3 \}\)/);
 });
 
+test("raw strings r\"...\" drop the prefix and escape backslashes", () => {
+  const py =
+    "class S(Scene):\n    def construct(self):\n" +
+    "        eq = MathTex(r\"e^{i\\pi} + 1 = 0\")\n" +
+    "        also = Text(r'a\\nb')";
+  const ts = convert(py);
+  assert.match(ts, /new MathTex\("e\^\{i\\\\pi\} \+ 1 = 0"\)/);
+  // \n inside a raw string is literal backslash+n, not a newline -- must stay escaped.
+  assert.match(ts, /new Text\('a\\\\nb'\)/);
+});
+
+test("enumerate() emits a generator helper and converts for i, x in enumerate(...)", () => {
+  const py =
+    "class S(Scene):\n    def construct(self):\n" +
+    "        for i, d in enumerate(dots):\n            self.play(d.animate.set_color(RED))";
+  const ts = convert(py);
+  assert.match(ts, /function\* enumerate/);
+  assert.match(ts, /for \(const \[i, d\] of enumerate\(dots\)\) \{/);
+});
+
+test("top-level def gets `function` keyword; call site matches the camelCased name", () => {
+  const py =
+    "def helper_positions(n):\n    return n * 2\n\n" +
+    "class S(Scene):\n    def construct(self):\n        positions = helper_positions(4)";
+  const ts = convert(py);
+  assert.match(ts, /function helperPositions\(n\) \{/);
+  assert.match(ts, /const positions = helperPositions\(4\)/);
+  // The method-shorthand form (no `function` keyword) must still be used for
+  // an actual method with the same name pattern, inside a class.
+  const py2 = "class S(Scene):\n    def do_thing(self):\n        pass";
+  const ts2 = convert(py2);
+  assert.match(ts2, /doThing\(\) \{/);
+  assert.doesNotMatch(ts2, /function doThing/);
+});
+
 test("CLI: node bin/py2ts.ts converts a file to stdout", () => {
   const inFile = join(tmpdir(), `py2ts_${process.pid}.py`);
   writeFileSync(

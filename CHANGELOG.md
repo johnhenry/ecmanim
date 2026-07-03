@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **`Mobject` wasn't iterable.** `for (const m of group)` / `[...group]`
+  threw "not iterable" for every `Mobject`/`VGroup`, even though Python
+  manim's `VGroup.__iter__` (shallow, over direct submobjects) is a common
+  idiom real scripts rely on. Added `[Symbol.iterator]()` delegating to
+  `submobjects`.
+- **`py2ts`: raw strings (`r"..."`) passed through with the invalid `r`
+  prefix intact** (a syntax error) — very common for LaTeX in `MathTex`/`Tex`,
+  which almost always use raw strings to avoid backslash-escaping. Now drops
+  the prefix and escapes backslashes, preserving raw-string semantics.
+- **`py2ts`: `enumerate()` wasn't converted** — `for i, x in enumerate(y):`
+  produced a call to a nonexistent `enumerate` function (a `ReferenceError`
+  at runtime). Now emits a small generator helper, the same way `range()`
+  already does.
+- **`py2ts`: top-level (non-method) `def`s were missing the `function`
+  keyword** — valid only as class-method shorthand, a syntax error at module
+  scope — and even when that's fixed, callers still need the definition's
+  camelCased name to match: a bare call to a user-defined snake_case helper
+  now gets camelCased at the call site too, consistently with the
+  definition.
+- `py2ts`'s header comment now names its two known-broken constructs (list/
+  generator comprehensions and multi-line statements — both pass through as
+  invalid TS silently, not caught by the "TODO marker" safety net the
+  header otherwise promises) instead of just claiming a vague "~80% subset."
+
 ## 0.0.5
 
 ### Fixed
