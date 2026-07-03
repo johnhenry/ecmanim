@@ -1,18 +1,17 @@
 ---
 name: ecmanim-practical-authoring
-description: Practical field guide for authoring ecmanim scenes — layout math that prevents clipped/off-center output, a verification discipline that catches problems before they reach the user, working layout helpers (frame geometry, measured text width, Axes centering), and confirmed library gotchas with workarounds. This skill should be used alongside `ecmanim` (the root skill) whenever a scene places content near a frame edge, uses `Axes`/`NumberPlane` with a range that doesn't straddle zero, animates more than one mobject at a time, or a render's output looks subtly wrong (clipped, off-center, or a silently corrupted animation) rather than throwing a clear error.
+description: Practical field guide for authoring ecmanim scenes — layout math that prevents clipped/off-center output, a verification discipline that catches problems before they reach the user, working layout helpers (frame geometry, measured text width, Axes centering), and a bug-report template for when something still looks wrong. This skill should be used alongside `ecmanim` (the root skill) whenever a scene places content near a frame edge, uses `Axes`/`NumberPlane` with a range that doesn't straddle zero, or a render's output looks subtly wrong (clipped or off-center) rather than throwing a clear error.
 metadata:
-  tags: ecmanim, manim, animation, layout, verification, debugging, gotchas
+  tags: ecmanim, manim, animation, layout, verification, debugging
 ---
 
 # ecmanim — practical authoring guide
 
 This skill captures what actually mattered across real scene-authoring work
 with `ecmanim` (a TypeScript port of manim: the same `Scene` code renders in
-Node and the browser) — the layout math that prevents clipped output, the
-verification discipline that catches problems before they reach the user, and
-confirmed library gotchas with working workarounds. It **complements, not
-replaces**, `ecmanim` (the root skill, which owns the core Plan → Code →
+Node and the browser) — the layout math that prevents clipped output and the
+verification discipline that catches problems before they reach the user. It
+**complements, not replaces**, `ecmanim` (the root skill, which owns the core Plan → Code →
 Render → Verify → Iterate loop) and the domain skills (`ecmanim-timeline`,
 `ecmanim-render-cli`, etc., which cover API surface) — read this one for the
 specific failure modes those don't spell out. Every numeric constant and code
@@ -183,80 +182,12 @@ real scene-authoring work:
      -loop 0 out.gif
    ```
 
-## Confirmed library gotchas
+## Reporting a new bug
 
-Each of these was confirmed via a minimal, isolated reproduction (not
-inferred from reading source alone) and independently re-verified against
-the current `main` branch while writing this skill — status reflects that
-verification, which may be newer than when each was first found.
-
-### 1. CLI `Scene` identity mismatch across `src`/`dist` — fixed (0.0.6, [#3](https://github.com/johnhenry/ecmanim/issues/3))
-
-Running a scene through the `ecmanim render`/`plan` CLI while the scene
-imported `Scene` from `../src/node.ts` (source) rather than the built
-`dist/` crashed with `TypeError: Class constructor ... cannot be invoked
-without 'new'`. Root cause: the compiled CLI and the dynamically-imported
-scene file ended up with two referentially-distinct copies of `Scene`, so
-`instanceof Scene` failed even for a legitimate subclass. **Fixed** by
-replacing every `instanceof Scene` check with a duck-typed `isSceneLike()`.
-If you're on an older version: import from the package's built entry point
-(`"ecmanim/node"`, not a relative `../src/...` path) in any scene file meant
-to run through the CLI, or invoke it directly with `node scene.ts` (which
-calls `render()` itself) instead.
-
-### 2. Direct `mobject.color = X` assignment desyncs `strokeColor`/`fillColor` — fixed
-
-Assigning `mobject.color = X` directly used to leave the `strokeColor`/
-`fillColor` fields the renderer actually reads for a `VMobject` stale —
-the three were independent fields that only happened to agree at
-construction time (or after a real `.setColor()` call). Confirmed directly
-before the fix landed:
-
-```ts
-const c = new Circle({ color: "#0000ff" });
-c.color = "#ff0000";
-c.color;        // "#ff0000"
-c.strokeColor;   // "#0000ff" -- stale (pre-fix)
-c.fillColor;     // "#0000ff" -- stale (pre-fix)
-```
-
-A naive getter/setter fix is riskier than it looks: this project's
-TypeScript target uses `[[Define]]` class-field semantics, so a subclass
-accessor of the same *name* as a base-class field gets shadowed by the base
-class's own-property field, silently not intercepting assignment. **Fixed**
-correctly by renaming the backing field (`protected _color: Color`) and
-making `color` a real `get`/`set` pair whose setter delegates to
-`setColor()`, so raw assignment and `.setColor()` now agree — `c.color =
-"#ff0000"` correctly updates `strokeColor`/`fillColor` too, on current
-`main`. On an older version without this fix: always use `.setColor(color)`
-(or set `color`/`strokeColor`/`fillColor` in the constructor config) instead
-of a raw `.color = ...` assignment.
-
-### 3. `FadeIn(a, b, c)` (extra positional mobjects) — fixed
-
-`new FadeIn(a, b, c)` used to silently corrupt `a`'s geometry to `NaN`, with
-**zero error output**, `b`/`c` silently dropped. Root cause: single-mobject
-`Animation` subclasses take `(mobject, config)`; the extra positional
-argument `b` landed in `config`, and since `Mobject` has a `.shift()`
-*method*, `config.shift ?? [0,0,0]` read that method reference as a truthy
-value instead of falling through to the default — corrupting the fade's
-computed shift vector into `NaN` arithmetic. **Fixed**: the `Animation` base
-constructor now throws a clear `TypeError` instead ("Animation constructors
-take a single Mobject; to animate multiple mobjects together, wrap them in a
-Group..."). The correct pattern, unaffected by this bug on any version and
-still the right idiom: wrap multiple mobjects in `Group` first —
-`new FadeIn(new Group(a, b, c))`, never `new FadeIn(a, b, c)`. The
-`mobjects.map(m => new FadeIn(m))` pattern (passed as multiple animations to
-a single `play(...)` call) was never affected.
-
-When a new bug surfaces, write it up with `assets/bug_report_template.md` —
-the difference between a report that gets fixed quickly and one that
-doesn't is almost always whether the root cause is backed by a minimal,
-confirmed reproduction (see issues
-[#1](https://github.com/johnhenry/ecmanim/issues/1),
-[#2](https://github.com/johnhenry/ecmanim/issues/2),
-[#3](https://github.com/johnhenry/ecmanim/issues/3) for the house style this
-project's own maintainer uses), not a description of the symptom.
+When a bug surfaces, write it up with `assets/bug_report_template.md` — the
+difference between a report that gets fixed quickly and one that doesn't is
+almost always whether the root cause is backed by a minimal, confirmed
+reproduction, not a description of the symptom.
 
 ## A caching gotcha to be aware of
 

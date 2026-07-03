@@ -54,7 +54,7 @@ to the domain skill that fits the task at hand:
 | [`ecmanim-authoring-pipeline`](ecmanim-authoring-pipeline/SKILL.md) | `ecmanim/authoring`: plan-IR/dry-run, quality gates, Format lifecycle, providers, built-in formats |
 | [`ecmanim-studio`](ecmanim-studio/SKILL.md) | `ecmanim/studio`: live-reload dev server, schema→controls |
 | [`ecmanim-render-cli`](ecmanim-render-cli/SKILL.md) | The `ecmanim` CLI, quality/output presets, caching, renderer backends |
-| [`ecmanim-practical-authoring`](ecmanim-practical-authoring/SKILL.md) | Layout math (frame geometry, measured text width, `Axes` centering), a verification discipline for catching problems before render, confirmed library gotchas with workarounds, a bug-report template |
+| [`ecmanim-practical-authoring`](ecmanim-practical-authoring/SKILL.md) | Layout math (frame geometry, measured text width, `Axes` centering), a verification discipline for catching problems before render, a bug-report template |
 
 ## Design notes
 

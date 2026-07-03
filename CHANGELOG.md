@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.0.8
+
+### Changed
+- **`skills/ecmanim-practical-authoring`: removed the "Confirmed library
+  gotchas" section documenting issues #3, #5, and #7** now that all three are
+  fixed and published (0.0.7) — the section's write-ups and workarounds were
+  stale as soon as they landed. Replaced with a short "Reporting a new bug"
+  pointer to `assets/bug_report_template.md`.
+
 ## 0.0.7
 
 ### Fixed
