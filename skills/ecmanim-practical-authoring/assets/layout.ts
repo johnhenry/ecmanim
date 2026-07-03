@@ -4,7 +4,7 @@
 // this exists to prevent. Copy this file into a project's scene directory
 // and import from it rather than re-deriving these formulas per scene.
 
-import { Axes, Text } from "ecmanim/node";
+import { Axes, Text, DecimalNumber } from "ecmanim/node";
 
 // --- Frame geometry (src/core/constants.ts) --------------------------------
 // World coordinates run from -FRAME_X_RADIUS to +FRAME_X_RADIUS (x) and
@@ -56,19 +56,60 @@ export function assertClear(
   if (problems.length) throw new Error(`assertClear("${label}"): ${problems.join("; ")}`);
 }
 
+// A different check from assertClear: horizontal clearance between two
+// elements (e.g. a label block and a curve's right endpoint), rather than
+// one element against the frame boundary. Throws instead of silently
+// rendering an overlap.
+export function assertGap(label: string, leftBlockEdge: number, rightObstacleEdge: number, minGap = 0.3): void {
+  const gap = leftBlockEdge - rightObstacleEdge;
+  if (gap < minGap) {
+    throw new Error(
+      `assertGap("${label}"): left edge ${leftBlockEdge.toFixed(2)} is only ${gap.toFixed(2)} clear ` +
+      `of the obstacle at ${rightObstacleEdge.toFixed(2)} (need >= ${minGap}).`,
+    );
+  }
+}
+
 // --- Axes centering ----------------------------------------------------
 // Axes always maps data value 0 to world [0,0,0] on each axis, regardless of
 // xRange/yRange (verified across [0,70], [10,20], [-4,4], [-70,0]-style
 // ranges) — so an axes box whose range doesn't straddle zero renders
-// off-center in the frame unless explicitly re-centered. Solves the shift
-// that puts the axes box's own midpoint at the world origin:
+// off-center in the frame unless explicitly re-centered. With no `targets`,
+// solves the shift that puts the axes box's own midpoint at the world
+// origin:
 //
 //   const ax = new Axes({ xRange: [0, 70, 10], yRange: [0, 8, 1], ... });
 //   ax.shift(solveAxesShift(ax));
-export function solveAxesShift(axes: Axes): [number, number, number] {
+//
+// Pass `targets` to place a specific edge at an exact world-space margin
+// instead (e.g. pin the left edge so a caption has guaranteed room to its
+// left) — only the sides given are constrained; the other axis is
+// untouched. `left`/`right` are mutually exclusive (same for `bottom`/`top`);
+// if both are given for an axis, `left`/`bottom` wins.
+//
+//   ax.shift(solveAxesShift(ax, { left: -6, bottom: -3 }));
+//
+// Derives from the axes instance's own `c2p()` (ground truth) rather than
+// recomputing the unit/scale math independently, so it can't drift out of
+// sync if that math ever changes.
+export interface AxesMarginTargets {
+  left?: number;
+  right?: number;
+  bottom?: number;
+  top?: number;
+}
+export function solveAxesShift(axes: Axes, targets?: AxesMarginTargets): [number, number, number] {
   const c1 = axes.c2p(axes.xRange[0], axes.yRange[0]);
   const c2 = axes.c2p(axes.xRange[1], axes.yRange[1]);
-  return [-(c1[0] + c2[0]) / 2, -(c1[1] + c2[1]) / 2, 0];
+  if (!targets) return [-(c1[0] + c2[0]) / 2, -(c1[1] + c2[1]) / 2, 0];
+  const left = Math.min(c1[0], c2[0]), right = Math.max(c1[0], c2[0]);
+  const bottom = Math.min(c1[1], c2[1]), top = Math.max(c1[1], c2[1]);
+  let shiftX = 0, shiftY = 0;
+  if (targets.left !== undefined) shiftX = targets.left - left;
+  else if (targets.right !== undefined) shiftX = targets.right - right;
+  if (targets.bottom !== undefined) shiftY = targets.bottom - bottom;
+  else if (targets.top !== undefined) shiftY = targets.top - top;
+  return [shiftX, shiftY, 0];
 }
 
 // --- A right-anchored multi-row readout (a common "stat block" layout) -----
@@ -85,5 +126,45 @@ export function buildReadout(
     const t = new Text(row, { fontSize, color: opts.color, point: [0, y, 0] });
     t.moveTo([opts.topRight[0] - t.getWidth() / 2, y, 0]);
     return t;
+  });
+}
+
+// --- A live-updating label + value "stat block" (e.g. "people: 5", where 5
+// changes every frame) -----------------------------------------------------
+// A DecimalNumber's own width changes as its digit count changes ("5" vs
+// "500000"), so without something to anchor it, its position drifts on every
+// setValue() -- which can visibly jitter a readout or, worse, change how
+// close it sits to a frame edge over time. DecimalNumber's built-in
+// `edgeToFix` option (verified against src/mobject/value_tracker.ts) solves
+// this directly: it re-anchors the *given* edge to its current position on
+// every update, so pin the right edge once at construction and the value
+// column's right edge never moves again, however many digits it grows to.
+// Each row's label is positioned to the left of its (own-width, edgeToFix-
+// pinned) value, with a gap, so it can never collide with the value even as
+// the value's width changes.
+export interface StatRow {
+  label: string;
+  initialValue: number;
+  decimalPlaces: number;
+  color?: string;
+}
+export function buildStatBlock(
+  rows: StatRow[],
+  opts: { topRight: [number, number, number]; fontSize?: number; color?: string; lineGap?: number; gap?: number },
+): Array<{ label: Text; value: InstanceType<typeof DecimalNumber> }> {
+  const fontSize = opts.fontSize ?? 0.4;
+  const lineGap = opts.lineGap ?? fontSize * 1.4;
+  const gap = opts.gap ?? 0.3;
+  return rows.map((row, i) => {
+    const y = opts.topRight[1] - i * lineGap;
+    const color = row.color ?? opts.color;
+    const value = new DecimalNumber(row.initialValue, {
+      numDecimalPlaces: row.decimalPlaces, color, fontSize,
+      point: [opts.topRight[0], y, 0], edgeToFix: [1, 0, 0],
+    });
+    value.moveTo([opts.topRight[0] - value.getWidth() / 2, y, 0]);
+    const label = new Text(row.label, { fontSize, color, point: [0, y, 0] });
+    label.moveTo([opts.topRight[0] - value.getWidth() - gap - label.getWidth() / 2, y, 0]);
+    return { label, value };
   });
 }

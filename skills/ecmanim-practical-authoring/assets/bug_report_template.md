@@ -1,7 +1,7 @@
 ---
 title: "Bug: <one-line symptom, in backticks where it's a literal error/API name>"
 labels: []
-severity: "" # blocks-render | wrong-output | dx-annoyance
+severity: "" # blocking (no workaround found) | major (workaround exists, but affects a documented happy path) | minor (narrow/cosmetic)
 version: "" # `npx ecmanim checkhealth` or `require("ecmanim/package.json").version`
 regression: "" # "yes, worked in <version>" | "no, first time this path was exercised" | "unknown"
 ---
@@ -14,7 +14,19 @@ all filed by the maintainer against exactly the failure modes this skill
 documents) — the difference between a report that gets fixed quickly and one
 that doesn't is almost always whether "Root cause" is backed by a minimal
 reproduction, not just a description of the symptom.
+
+Use this ONLY for something confirmed to live in ecmanim's own source
+(src/, dist/, bin/) via a minimal reproduction — not for a mistake in your
+own scene script (wrong position, wrong shift value, a misused option).
+That distinction matters: half of what looks like a library bug during
+scene authoring turns out to be a layout assumption that was wrong, not the
+library — rule that out first (see "Verify by measurement" and "Iterate on
+one thing at a time" in SKILL.md) before writing this up as one.
 -->
+
+## Summary
+
+<!-- One sentence: what's broken and the user-visible symptom. -->
 
 ## Environment
 - ecmanim version:
@@ -62,4 +74,7 @@ Result:
 
 ## Suggested real fix
 
-<!-- Optional: where you'd point a maintainer, if you have a specific idea. -->
+<!-- Optional: where you'd point a maintainer, if you have a specific idea.
+     Keep this clearly labeled as a suggestion, not a directive -- the
+     maintainer may have context (API constraints, a different fix already
+     in flight) that changes the right approach. -->

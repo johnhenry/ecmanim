@@ -101,17 +101,32 @@ straddle zero will **not** be centered in the frame the way a naive
 
 ## Reusable layout helpers: `assets/layout.ts`
 
-A working helper module — frame/safe-zone constants, `solveAxesShift()`,
-measured `textWidth()`/`textHeight()`, a right-anchored multi-row readout
-builder (`buildReadout()`), and `assertClear()` (throws instead of silently
-rendering a clip). Every constant and function was verified end-to-end
-against the actual library (not derived from docs alone) — copy it into a
-new project's scene directory and import from it rather than re-deriving
-these formulas per scene:
+A working helper module — frame/safe-zone constants, `solveAxesShift()`
+(auto-center, or pass `{ left, right, bottom, top }` to pin a specific edge
+at an exact world-space margin), measured `textWidth()`/`textHeight()`, a
+right-anchored multi-row readout builder (`buildReadout()`), `buildStatBlock()`
+(a live-updating label + numeric-value row, e.g. a running counter), and two
+distinct collision checks — `assertClear()` (one element against the frame
+boundary) and `assertGap()` (clearance between two elements) — both throw
+instead of silently rendering a problem. Every constant and function was
+verified end-to-end against the actual library (not derived from docs
+alone) — copy it into a new project's scene directory and import from it
+rather than re-deriving these formulas per scene:
 
 ```ts
-import { FRAME_X_RADIUS, solveAxesShift, textWidth, assertClear, buildReadout } from "./layout.ts";
+import { FRAME_X_RADIUS, solveAxesShift, textWidth, assertClear, assertGap, buildReadout, buildStatBlock } from "./layout.ts";
 ```
+
+**A live-updating numeric value (e.g. a running counter) needs an anchor, or
+its position drifts as its digit count changes** — `"5"` and `"500000"` are
+different widths, so a naive `setValue()` shifts whatever's anchored to the
+mobject's center. `DecimalNumber`'s own `edgeToFix` option (verified against
+`src/mobject/value_tracker.ts`) solves this directly and is the better fix
+over pre-computing a "worst-case width" externally: it re-anchors the given
+edge (`edgeToFix: [1, 0, 0]` for the right edge) to its current position on
+every update, so a value pinned once at construction never visibly jitters
+or drifts closer to a frame edge, however many digits it later grows to.
+`buildStatBlock()` uses this internally.
 
 ## The authoring loop, in practice
 

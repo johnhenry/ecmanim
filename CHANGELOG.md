@@ -99,6 +99,15 @@ text — which is exactly what caught these):
   `assets/layout.ts` (a working, runtime-verified helper module) and
   `assets/bug_report_template.md` (modeled on this repo's own best real
   bug reports, issues #1-#3).
+  - `assets/layout.ts` gained `solveAxesShift(axes, { left/right/bottom/top })`
+    (pin a specific axes-box edge at an exact world-space margin, in
+    addition to the existing auto-center form), `assertGap()` (clearance
+    between two elements, distinct from `assertClear()`'s frame-boundary
+    check), and `buildStatBlock()` for a live-updating label + numeric-value
+    row — built on `DecimalNumber`'s `edgeToFix` option (verified against
+    `src/mobject/value_tracker.ts`), which keeps a pinned edge stationary
+    across `setValue()` regardless of digit-count changes, rather than
+    pre-computing a "worst-case width" externally.
 
 ## 0.0.6
 
