@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed
+- **`loadVectorFont`/`resolveFontPath` (Node) are now exported from
+  `ecmanim`/`ecmanim/node`, not just the internal `renderer/fonts-node.ts`
+  module** (issue #14). Without a public way to force the vector-glyph font
+  path `render()` uses internally, `Text`/`estimateTextSize()` measured
+  *before* the first `render()` call in a process silently used the
+  raster/`CHAR_ASPECT` estimate instead, which could disagree with the real
+  glyph metrics `render()` ends up using by ~10% — enough to turn a
+  correctly-gated "measure before you render" layout check into clipped
+  output. Callers doing their own layout/measurement ahead of `render()` can
+  now call `await loadVectorFont()` first to get consistent measurements.
+
 ## 0.0.8
 
 ### Changed

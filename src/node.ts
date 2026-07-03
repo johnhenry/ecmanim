@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, renameSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { dirname, resolve, join, basename } from "node:path";
 import { Camera, CanvasRenderer } from "./renderer/CanvasRenderer.ts";
-import { autoRegisterFonts, loadVectorFont } from "./renderer/fonts-node.ts";
+import { autoRegisterFonts, loadVectorFont, resolveFontPath } from "./renderer/fonts-node.ts";
 import { Scene } from "./scene/Scene.ts";
 import { makeScene, runConstruct } from "./scene/orchestrate.ts";
 import { QUALITIES } from "./index.ts";
@@ -14,6 +14,14 @@ import { config as manimConfig, resolveConfig, loadConfigFile, QUALITY_PRESETS }
 import { startFfmpeg, writeToStream, encodeFrames, runFfmpeg, concatPartials, remuxCopy } from "./renderer/ffmpeg.ts";
 
 export * from "./index.ts";
+// Load (and register as the library default) the same system vector font
+// `render()` resolves internally, for Text/VText/VectorDecimalNumber. Call
+// this before constructing any Text you intend to measure (getWidth()/
+// estimateTextSize()) ahead of a render() call in the same process --
+// otherwise that measurement uses the raster/CHAR_ASPECT estimate fallback,
+// which can disagree with the real glyph metrics render() ends up using by
+// ~10% (see issue #14). Idempotent-ish: safe to call more than once.
+export { loadVectorFont, resolveFontPath };
 export { MathTexDvisvgm, mathTexDvisvgm, mathTexDvisvgmOrFallback, texToSVGViaDvisvgm, detectDvisvgmToolchain } from "./mobject/mathtex_dvisvgm.ts";
 export { config, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
 // Parallel segment rendering (worker_threads over the partial-movie cache).

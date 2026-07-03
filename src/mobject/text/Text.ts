@@ -54,6 +54,14 @@ export const CHAR_ASPECT = 0.55;
  * themselves before real glyph layout is available. A fast approximation,
  * not a guarantee: for anything close to a layout boundary, prefer measuring
  * a real, constructed mobject's `.getWidth()`/`.getHeight()` instead.
+ *
+ * Node caveat: `Text`/`getWidth()` only use this raster estimate until a
+ * vector font has been loaded in the process (which `render()` does
+ * automatically before running your scene's `construct()`). If you measure
+ * a `Text` mobject constructed *outside* of `construct()` — e.g. in a
+ * layout-planning step that runs before `render()` — call `loadVectorFont()`
+ * (from `ecmanim/node`) once first, or the measurement can disagree with
+ * what the same string renders as by ~10% (see issue #14).
  */
 export function estimateTextSize(
   text: string,
