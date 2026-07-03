@@ -4,7 +4,16 @@
 // this exists to prevent. Copy this file into a project's scene directory
 // and import from it rather than re-deriving these formulas per scene.
 
-import { Axes, Text, DecimalNumber } from "ecmanim/node";
+import { Axes, Text, DecimalNumber, estimateTextSize } from "ecmanim/node";
+
+// Re-exported for convenience: a fast, approximate size without constructing
+// a mobject — the exact formula RasterText/Text use internally to size
+// themselves before real glyph layout is available (verified: this is now a
+// real exported library function, not a hand-maintained duplicate of a
+// private constant). Prefer textWidth()/textHeight() below (measured ground
+// truth) for anything close to the safe-zone budget; reach for this when you
+// need a size estimate in a hot path without paying for a real mobject.
+export { estimateTextSize };
 
 // --- Frame geometry (src/core/constants.ts) --------------------------------
 // World coordinates run from -FRAME_X_RADIUS to +FRAME_X_RADIUS (x) and

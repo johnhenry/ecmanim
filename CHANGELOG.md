@@ -88,6 +88,19 @@ text — which is exactly what caught these):
   of the API already uses.
 
 ### Added
+- **`CHAR_ASPECT` and `estimateTextSize(text, fontSize, opts?)` exported**
+  from `ecmanim`/`ecmanim/node` (`src/mobject/text/Text.ts`). `CHAR_ASPECT`
+  (the per-character width factor `RasterText`/`Text` use to size themselves
+  before real glyph layout is available) was previously an unexported
+  module-private constant — any code that wanted a fast width/height
+  estimate without constructing a mobject had to hardcode a duplicate `0.55`
+  and hope it never silently drifted from the real one. `RasterText._buildBox()`
+  and `Text._buildRasterBox()` (which previously each inlined a slightly
+  different copy of the same formula — one hard-coded a `1.2` line height,
+  the other used the instance's own `lineSpacing`) now both call this one
+  shared, exported function, so there's exactly one formula, used
+  identically inside and outside the library. Pure refactor: verified
+  byte-identical output for both call sites before and after.
 - **`skills/ecmanim-practical-authoring`** — a field guide synthesized from
   real scene-authoring work: frame-geometry/layout math (verified against
   `src/core/constants.ts`), a measured-not-estimated text-width helper, an

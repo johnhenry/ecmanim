@@ -46,7 +46,28 @@ export interface TextConfig extends MobjectConfig {
 }
 
 // Rough per-character width factor for layout estimation without a context.
-const CHAR_ASPECT = 0.55;
+export const CHAR_ASPECT = 0.55;
+
+/**
+ * Estimate a text block's rendered width/height without constructing a
+ * mobject — the same formula `RasterText`/`Text` use internally to size
+ * themselves before real glyph layout is available. A fast approximation,
+ * not a guarantee: for anything close to a layout boundary, prefer measuring
+ * a real, constructed mobject's `.getWidth()`/`.getHeight()` instead.
+ */
+export function estimateTextSize(
+  text: string,
+  fontSize: number,
+  opts: { lineHeight?: number } = {},
+): { width: number; height: number } {
+  const lineHeight = opts.lineHeight ?? 1.2;
+  const lines = text.split("\n");
+  const longest = lines.reduce((m, l) => Math.max(m, l.length), 1);
+  return {
+    width: longest * fontSize * CHAR_ASPECT,
+    height: lines.length * fontSize * lineHeight,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // RasterText — the original canvas-2D text (kept verbatim in behaviour).
@@ -87,10 +108,7 @@ export class RasterText extends Mobject {
   }
 
   _buildBox() {
-    const lines = this.text.split("\n");
-    const longest = lines.reduce((m, l) => Math.max(m, l.length), 1);
-    const w = longest * this.fontSize * CHAR_ASPECT;
-    const h = lines.length * this.fontSize * 1.2;
+    const { width: w, height: h } = estimateTextSize(this.text, this.fontSize);
     // Four corners (TL, TR, BR, BL) centered on origin — transforms act on these.
     this.points = [
       [-w / 2, h / 2, 0],
@@ -98,7 +116,7 @@ export class RasterText extends Mobject {
       [w / 2, -h / 2, 0],
       [-w / 2, -h / 2, 0],
     ];
-    this.numLines = lines.length;
+    this.numLines = this.text.split("\n").length;
   }
 
   setColor(color: ColorLike): this {
@@ -235,17 +253,14 @@ export class Text extends VGroup {
   }
 
   private _buildRasterBox(): void {
-    const lines = this.text.split("\n");
-    const longest = lines.reduce((m, l) => Math.max(m, l.length), 1);
-    const w = longest * this.fontSize * CHAR_ASPECT;
-    const h = lines.length * this.fontSize * this.lineSpacing;
+    const { width: w, height: h } = estimateTextSize(this.text, this.fontSize, { lineHeight: this.lineSpacing });
     this.points = [
       [-w / 2, h / 2, 0],
       [w / 2, h / 2, 0],
       [w / 2, -h / 2, 0],
       [-w / 2, -h / 2, 0],
     ];
-    this.numLines = lines.length;
+    this.numLines = this.text.split("\n").length;
   }
 
   // Renderer's drawText reads .font/.numLines/.currentFontHeight().

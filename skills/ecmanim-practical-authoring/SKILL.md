@@ -73,12 +73,23 @@ rendering and eyeballing the result. Every genuine layout bug worth writing
 up (clipped captions, overlapping labels, off-frame axis edges) was caught
 this way, not by inspection after the fact.
 
-`Text`'s approximate width is `longest_line_length * fontSize * 0.55`
-(matches the `CHAR_ASPECT = 0.55` constant in `src/mobject/text/Text.ts` — no
-runtime accessor exposes it, so treat this as a maintained duplicate, not a
-guarantee). It's a good first-pass estimate but **not exact** — for long
-captions or anything close to the frame boundary, get the actual measured
-width instead of trusting the formula:
+`Text`'s approximate width is `longest_line_length * fontSize * CHAR_ASPECT`
+(`CHAR_ASPECT = 0.55`). This used to be an unexported internal constant in
+`src/mobject/text/Text.ts`, meaning anyone who wanted a fast estimate had to
+hardcode a duplicate `0.55` and hope it never drifted from the real one —
+`CHAR_ASPECT` and a proper `estimateTextSize(text, fontSize, opts?)`
+function are now exported from `ecmanim`/`ecmanim/node`, and the library's
+own `RasterText`/`Text` box-building calls the *same* function internally,
+so there's exactly one formula, not a maintained copy:
+
+```ts
+import { estimateTextSize } from "ecmanim/node";
+const { width, height } = estimateTextSize(myString, fontSize); // fast, approximate
+```
+
+It's a good first-pass estimate but **not exact** — for long captions or
+anything close to the frame boundary, get the actual measured width instead
+of trusting the estimate:
 
 ```ts
 const t = new Text(myString, { fontSize, color, point: [0, y, 0] });

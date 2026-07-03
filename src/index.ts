@@ -42,7 +42,7 @@ export * from "./mobject/matrix.ts";
 export * from "./mobject/table.ts";
 export * from "./mobject/brace.ts";
 export * from "./mobject/graph.ts";
-export { Text, MarkupText, RasterText } from "./mobject/text/Text.ts";
+export { Text, MarkupText, RasterText, CHAR_ASPECT, estimateTextSize } from "./mobject/text/Text.ts";
 export * from "./mobject/text/paragraph.ts";
 export * from "./mobject/text/tex_extras.ts";
 export * from "./mobject/text/code.ts";

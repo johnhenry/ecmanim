@@ -1,11 +1,36 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
-import { Text, MarkupText, RasterText } from "../src/mobject/text/Text.ts";
+import { Text, MarkupText, RasterText, CHAR_ASPECT, estimateTextSize } from "../src/mobject/text/Text.ts";
 import { VMobject } from "../src/mobject/VMobject.ts";
 
 // Ensure a vector font is loaded so `new Text(...)` builds real glyph outlines.
 before(async () => {
   await (await import("../src/renderer/fonts-node.ts")).loadVectorFont();
+});
+
+test("estimateTextSize() is exported and matches RasterText's own internal box-building formula", () => {
+  assert.equal(CHAR_ASPECT, 0.55);
+
+  // RasterText always uses this estimate as its actual geometry (no vector
+  // glyph fallback), so it's a direct, exact ground truth to check against.
+  const single = estimateTextSize("Hello, ecmanim!", 0.5);
+  const r = new RasterText("Hello, ecmanim!", { fontSize: 0.5 });
+  assert.ok(Math.abs(single.width - r.getWidth()) < 1e-9);
+  assert.ok(Math.abs(single.height - r.getHeight()) < 1e-9);
+
+  // A multi-line RasterText, and the default lineHeight (matches
+  // RasterText's hard-coded 1.2).
+  const multi = estimateTextSize("line one\nline two", 0.4);
+  const r2 = new RasterText("line one\nline two", { fontSize: 0.4 });
+  assert.ok(Math.abs(multi.width - r2.getWidth()) < 1e-9);
+  assert.ok(Math.abs(multi.height - r2.getHeight()) < 1e-9);
+  assert.equal(multi.height, 2 * 0.4 * 1.2);
+
+  // Custom lineHeight (the parameter Text's own `lineSpacing` config feeds
+  // into for its raster-fallback path, used when no vector font is loaded).
+  const custom = estimateTextSize("line one\nline two", 0.4, { lineHeight: 1.5 });
+  assert.equal(custom.height, 2 * 0.4 * 1.5);
+  assert.equal(custom.width, multi.width); // lineHeight only affects height
 });
 
 test("Text builds per-glyph submobjects", () => {
