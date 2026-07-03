@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Fixed
+- **`FadeIn` (and other single-mobject `Animation` subclasses) silently
+  duck-typed an extra positional `Mobject` argument as `config`, corrupting
+  the first mobject instead of raising an error.** `new FadeIn(a, b)` bound
+  `b` (a live `Mobject`) to the `config` parameter; `config.shift` resolved
+  to `Mobject.prototype.shift` (a function, so truthy), so `this.shiftVec`
+  ended up holding a function instead of a 3-vector, NaN-poisoning `a`'s
+  start geometry with no error of any kind. The `Animation` base constructor
+  now throws a `TypeError` when its `config` argument is mobject-shaped
+  (checked via `points`/`submobjects`/`opacity` own-fields, since most
+  subclasses pass `config` through a `{ ...config }` spread before it
+  reaches the base, which strips prototype methods but not these own
+  fields). Multiple mobjects must be wrapped in a `Group`:
+  `new FadeIn(new Group(a, b, c))`.
 - **`Mobject.color` was a dead field for rendering purposes.** Raw assignment
   (`mob.color = "#E8833A"`) never synced `VMobject`'s `strokeColor`/
   `fillColor`, which the renderer actually reads, so it silently did nothing
