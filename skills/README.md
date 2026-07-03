@@ -54,6 +54,7 @@ to the domain skill that fits the task at hand:
 | [`ecmanim-authoring-pipeline`](ecmanim-authoring-pipeline/SKILL.md) | `ecmanim/authoring`: plan-IR/dry-run, quality gates, Format lifecycle, providers, built-in formats |
 | [`ecmanim-studio`](ecmanim-studio/SKILL.md) | `ecmanim/studio`: live-reload dev server, schema→controls |
 | [`ecmanim-render-cli`](ecmanim-render-cli/SKILL.md) | The `ecmanim` CLI, quality/output presets, caching, renderer backends |
+| [`ecmanim-practical-authoring`](ecmanim-practical-authoring/SKILL.md) | Layout math (frame geometry, measured text width, `Axes` centering), a verification discipline for catching problems before render, confirmed library gotchas with workarounds, a bug-report template |
 
 ## Design notes
 
@@ -74,3 +75,13 @@ architecture and pre/post-render validation gates. ecmanim's own
 `ecmanim/authoring` subpath already implements the engine-level version of
 these ideas (see that skill) — the skills here are the missing agent-facing
 layer on top of it.
+
+`ecmanim-practical-authoring` was synthesized from a field report of real
+scene-authoring work and re-verified line by line against current `main`
+before merging — every constant (frame geometry, the `Text` width formula),
+every behavioral claim (`Axes` coordinate mapping), and every "confirmed" bug
+status was independently re-checked, not copied on trust. That process
+caught real drift: two of the three reported bugs turned out to still be
+open as of the version the report cited them fixed against — both landed
+real fixes on `main` by the time this skill merged, so the skill documents
+their actual current status rather than repeating a stale claim.

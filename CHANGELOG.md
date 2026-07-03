@@ -87,6 +87,19 @@ text — which is exactly what caught these):
   trailing options object, matching the config-object convention the rest
   of the API already uses.
 
+### Added
+- **`skills/ecmanim-practical-authoring`** — a field guide synthesized from
+  real scene-authoring work: frame-geometry/layout math (verified against
+  `src/core/constants.ts`), a measured-not-estimated text-width helper, an
+  `Axes`-centering helper (`solveAxesShift`), a verification discipline
+  (pixel-level clip checks, multi-frame sampling, minimal-repro debugging),
+  and confirmed library gotchas with workarounds — including two bug
+  reports that turned out to still be open despite being cited as fixed,
+  independently re-verified while writing this skill. Includes
+  `assets/layout.ts` (a working, runtime-verified helper module) and
+  `assets/bug_report_template.md` (modeled on this repo's own best real
+  bug reports, issues #1-#3).
+
 ## 0.0.6
 
 ### Added
