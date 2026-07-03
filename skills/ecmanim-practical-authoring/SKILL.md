@@ -95,6 +95,21 @@ const t = new Text(myString, { fontSize, color, point: [0, y, 0] });
 const width = t.getWidth();  // ground truth — the real, laid-out bounding box
 ```
 
+**In Node, that's only ground truth once a vector font has loaded in the
+process.** Before that, `Text` falls back to the same `CHAR_ASPECT` estimate
+as `estimateTextSize()` — so measuring in a layout-planning step that runs
+*before* your `render()` call can silently disagree with what the render
+actually produces (confirmed ~10% off in practice). `render()` loads the
+font itself before running your scene's `construct()`, so this only bites
+code that constructs/measures `Text` outside of `construct()`. Call
+`loadVectorFont()` (also from `ecmanim/node`) once before that code runs to
+force the same glyph-metric path render() uses:
+
+```ts
+import { loadVectorFont, estimateTextSize } from "ecmanim/node";
+await loadVectorFont(); // now Text.getWidth() matches what render() will produce
+```
+
 `assets/layout.ts` (below) wraps this as `textWidth()`/`textHeight()`. For
 anything that survived to a render and you're still unsure, pixel-scan the
 frame at the content's row for non-background columns touching column 0 or
