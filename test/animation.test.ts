@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Circle, Square } from "../src/mobject/geometry.ts";
 import { Create, FadeIn, FadeOut, Transform, ApplyMethod, Shift } from "../src/animation/Animation.ts";
+import { Group } from "../src/mobject/Mobject.ts";
 import { Scene } from "../src/scene/Scene.ts";
 import * as rf from "../src/animation/rate_functions.ts";
 import * as V from "../src/core/math/vector.ts";
@@ -33,6 +34,25 @@ test("FadeIn ends fully opaque", () => {
   assert.ok(c.fillOpacity <= 0.01);
   anim.finish();
   assert.ok(Math.abs(c.fillOpacity - 1) < 1e-6);
+});
+
+test("issue #7 repro: passing an extra positional Mobject to FadeIn throws instead of silently corrupting the first mobject", () => {
+  const a = new Circle({ radius: 1 });
+  const b = new Circle({ radius: 1 });
+  const c = new Circle({ radius: 1 });
+  assert.throws(() => new FadeIn(a, b as any, c as any), TypeError);
+});
+
+test("wrapping multiple mobjects in a Group is still a valid single-mobject FadeIn call", () => {
+  const a = new Circle({ radius: 1 });
+  const b = new Circle({ radius: 1 });
+  const group = new Group(a, b);
+  assert.doesNotThrow(() => new FadeIn(group));
+});
+
+test("a real AnimationConfig (not a Mobject) is still accepted by FadeIn", () => {
+  const c = new Circle({ radius: 1 });
+  assert.doesNotThrow(() => new FadeIn(c, { shift: [1, 0, 0], scale: 2, runTime: 0.5 }));
 });
 
 test("Transform morphs circle center to target center", async () => {

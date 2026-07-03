@@ -26,6 +26,23 @@ export interface AnimationConfig {
   [key: string]: any;
 }
 
+// Duck-typed rather than `instanceof Mobject` to avoid adding a value import
+// of Mobject here (Mobject.ts -> composition.ts -> Animation.ts is already a
+// cycle; a value import back to Mobject would close a second loop through
+// this file). Most Animation subclasses build their super() config via
+// `{ ...config, introducer: true }` before this constructor ever runs, and a
+// plain-object spread only copies OWN enumerable properties -- prototype
+// methods like shift()/getCenter() don't survive it, but Mobject's own
+// instance fields (set via `this.foo = ...` in its constructor) do. So this
+// checks those own fields instead of methods, to still catch the corrupted
+// value after it's been spread into a fresh plain object.
+function isMobjectLike(v: any): boolean {
+  return v != null && typeof v === "object" &&
+    Array.isArray(v.points) &&
+    Array.isArray(v.submobjects) &&
+    typeof v.opacity === "number";
+}
+
 export class Animation {
   // Typed `any` because animations reach into VMobject-specific fields
   // (alignPointsWith, strokeEnd, fillOpacity, _isText, ...) heterogeneously.
@@ -43,6 +60,12 @@ export class Animation {
   // `null` is allowed for group/composite animations whose own mobject is a
   // stand-in (AnimationGroup delegates all real work to its children).
   constructor(mobject: Mobject | null, config: AnimationConfig = {}) {
+    if (isMobjectLike(config)) {
+      throw new TypeError(
+        "Animation constructors take a single Mobject; to animate multiple " +
+        "mobjects together, wrap them in a Group: new FadeIn(new Group(a, b, c))",
+      );
+    }
     this.mobject = mobject;
     this.runTime = config.runTime ?? 1;
     let rate = running(config.rateFunc ?? smooth);
