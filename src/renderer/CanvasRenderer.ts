@@ -30,6 +30,7 @@ export interface CameraConfig {
   frameWidth?: number;
   frameCenter?: number[];
   background?: ColorLike;
+  zoom?: number;
   [key: string]: any;
 }
 
@@ -55,6 +56,10 @@ export class Camera {
   // size/center drive the viewport via preRender() — this is how
   // MovingCameraScene / ZoomedScene pan and zoom by animating a mobject.
   declare frame?: any;
+  // Optional uniform zoom factor (default 1 via `?? 1`, so unset is a no-op).
+  // Mirrors ThreeDCamera.zoom (src/scene/three_d.ts), giving both renderer
+  // paths one shared zoom mechanism for pointer-driven camera control.
+  declare zoom?: number;
 
   constructor(config: CameraConfig = {}) {
     this.pixelWidth = config.pixelWidth ?? 1920;
@@ -63,15 +68,17 @@ export class Camera {
     this.frameWidth = config.frameWidth ?? (this.frameHeight * this.pixelWidth) / this.pixelHeight;
     this.frameCenter = config.frameCenter ?? [0, 0, 0];
     this.background = config.background ?? "#000000";
+    if (config.zoom != null) this.zoom = config.zoom;
   }
 
   // World coordinates -> pixel coordinates (y is flipped: world y-up).
   toPixel(p: number[]): [number, number] {
+    const z = this.zoom ?? 1;
     const cx = p[0] - this.frameCenter[0];
     const cy = p[1] - this.frameCenter[1];
     return [
-      (cx / this.frameWidth + 0.5) * this.pixelWidth,
-      (0.5 - cy / this.frameHeight) * this.pixelHeight,
+      (cx / this.frameWidth / z + 0.5) * this.pixelWidth,
+      (0.5 - cy / this.frameHeight / z) * this.pixelHeight,
     ];
   }
 

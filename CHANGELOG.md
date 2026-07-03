@@ -55,6 +55,25 @@ text — which is exactly what caught these):
   trailing options object, matching the config-object convention the rest
   of the API already uses.
 
+## 0.0.6
+
+### Added
+- **Pointer-driven interactive camera + `<manim-chart>`** — browser-interactive
+  graphing, requested after the mpld3 comparison. New `ecmanim/studio` exports:
+  `attachInteractiveCamera(canvas, camera, opts)` attaches drag-to-pan/orbit and
+  wheel-to-zoom to any `Camera` (2D `CanvasRenderer`, 2D-orthographic or 3D
+  `ThreeRenderer`), plus `onClick`/`onHover` screen-space bounding-box picking
+  via the new `pickAt()`. The base `Camera` gained a `zoom` field (default
+  no-op), unifying zoom across all three renderer configurations. `<manim-chart>`
+  (`ManimChartElement`/`defineManimChart`) is a new custom element that renders
+  a static graph once via `CanvasRenderer` (no `Player`/frame-recording
+  involved) and layers the interactive camera on top, dispatching
+  `manim-chart-pick`/`manim-chart-hover` `CustomEvent`s. `startStudio({
+  interactive: true })` wires the same controller into the dev-server's live
+  preview via a new `Player.rerenderCurrentFrame()`. See
+  [`docs/authoring-studio.md`](docs/authoring-studio.md) and
+  [`examples/browser/manim-chart.html`](examples/browser/manim-chart.html).
+
 ## 0.0.5
 
 ### Fixed

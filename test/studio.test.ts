@@ -4,9 +4,10 @@ import { buildStudioHarness, startStudio } from "../src/studio/dev_server.ts";
 import { schemaToControls } from "../src/studio/props.ts";
 
 test("buildStudioHarness embeds importmap, scene import, player, and SSE reload", () => {
-  const html = buildStudioHarness({ sceneModuleUrl: "/scene.js", sceneExport: "default", browserUrl: "/dist/browser.js", quality: "medium", background: "#000" });
+  const html = buildStudioHarness({ sceneModuleUrl: "/scene.js", sceneExport: "default", browserUrl: "/dist/browser.js", studioUrl: "/dist/studio.js", quality: "medium", background: "#000", interactive: false });
   assert.match(html, /importmap/);
   assert.match(html, /"ecmanim\/browser":"\/dist\/browser\.js"/);
+  assert.match(html, /"ecmanim\/studio":"\/dist\/studio\.js"/);
   assert.match(html, /<manim-player/);
   assert.match(html, /import\("\/scene\.js\?t="/); // cache-busted dynamic import
   assert.match(html, /EventSource\("\/__studio_events"\)/);

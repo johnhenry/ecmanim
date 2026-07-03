@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ecmanim — &lt;manim-chart&gt; interactive graph</title>
+  <script type="importmap">
+  { "imports": { "ecmanim/browser": "/dist/browser.js", "ecmanim/studio": "/dist/studio.js" } }
+  </script>
+  <style>
+    body { margin: 0; background: #0d1117; color: #c9d1d9; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 1.5rem; }
+    manim-chart { max-width: 90vw; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+    #out { opacity: .8; }
+  </style>
+</head>
+<body>
+  <h1>drag to pan · scroll to zoom · click the curve</h1>
+  <manim-chart id="chart" width="800" height="450" background="#0d1117"></manim-chart>
+  <pre id="out">running…</pre>
+  <script type="module">
+    import { Axes, NumberPlane, GRAY, BLUE, YELLOW } from "ecmanim/browser";
+    import { defineManimChart } from "ecmanim/studio";
+
+    const out = document.getElementById("out");
+    const log = (s) => { out.textContent += "\n" + s; };
+
+    log("defineManimChart(): " + defineManimChart());
+
+    const chart = document.getElementById("chart");
+    chart.graph = () => {
+      const plane = new NumberPlane({ color: GRAY });
+      const axes = new Axes({ xRange: [-4, 4, 1], yRange: [-2, 2, 1], color: GRAY });
+      const curve = axes.plot((x) => Math.sin(x), { color: BLUE });
+      const marker = axes.plot((x) => 0.4 * x, { color: YELLOW, xRange: [-4, 4] });
+      return [plane, axes, curve, marker];
+    };
+
+    window.__result = { picks: 0, hovers: 0, lastPick: null };
+    chart.addEventListener("manim-chart-pick", (e) => {
+      window.__result.picks++;
+      window.__result.lastPick = e.detail.hit ? e.detail.hit.index : null;
+      log("pick: " + JSON.stringify(window.__result.lastPick));
+    });
+    chart.addEventListener("manim-chart-hover", () => { window.__result.hovers++; });
+
+    window.__done = true;
+    log("chart rendered, camera zoom = " + chart.camera.zoom);
+  </script>
+</body>
+</html>

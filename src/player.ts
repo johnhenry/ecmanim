@@ -133,6 +133,17 @@ export class Player {
   private _playStartWall: number;
   private _playStartFrame: number;
 
+  // Live-redraw support (Studio interactive camera): the recording Camera
+  // instance, a renderer bound to the DISPLAY canvas (separate from the
+  // offscreen recording renderer in record()), and a reference to the LAST
+  // frame's live mobjects — retained as a single overwritten reference (not
+  // per-frame storage) purely so a pointer-driven camera controller can
+  // re-render the currently-paused frame on demand. `frames[]` stays
+  // rasterized bitmaps only; this is an additive, opt-in path alongside it.
+  private _camera: Camera | null = null;
+  private _liveRenderer: CanvasRenderer | null = null;
+  private _lastMobjects: any[] | null = null;
+
   constructor(opts: PlayerOptions = {}) {
     const q = QUALITIES[opts.quality ?? "medium"] ?? QUALITIES.medium;
     this.canvas = opts.canvas;
@@ -170,6 +181,11 @@ export class Player {
     return this._current;
   }
 
+  /** The recording Camera, for a Studio interactive-camera controller to mutate. */
+  get camera(): Camera | null {
+    return this._camera;
+  }
+
   /** Wall-clock time of the currently displayed frame. */
   get currentTime(): number {
     return this._current / this.fps;
@@ -191,12 +207,17 @@ export class Player {
     const { canvas: off, ctx: offCtx } = await makeOffscreen(this.pixelWidth, this.pixelHeight);
     const renderer = new CanvasRenderer(offCtx, camera);
 
+    this._camera = camera;
+    this._liveRenderer = this.ctx ? new CanvasRenderer(this.ctx, camera) : null;
+    this._lastMobjects = null;
+
     const scene = makeScene(sceneOrConstruct, { fps: this.fps, camera });
     this.scene = scene;
     this.frames = [];
     this._current = 0;
 
     scene.frameHandler = async (mobjects: any) => {
+      this._lastMobjects = mobjects;
       renderer.renderScene(mobjects);
       const frame = await snapshot(off, offCtx, this.pixelWidth, this.pixelHeight);
       this.frames.push(frame);
@@ -224,6 +245,20 @@ export class Player {
   /** Seek to a time in seconds. */
   seekTime(seconds: number): void {
     this.seek(Math.round(seconds * this.fps));
+  }
+
+  /**
+   * Re-render the LAST recorded frame's live mobjects straight to the display
+   * canvas, reflecting the current state of `this.camera` (e.g. after a
+   * Studio interactive-camera pan/zoom/orbit). Unlike seek()/_draw(), this
+   * does not read from `frames[]` — it re-runs `renderScene()` against the
+   * live mobject list, so camera changes are visible immediately without a
+   * re-record. No-op headless (no display canvas) or before any frame has
+   * been recorded.
+   */
+  rerenderCurrentFrame(): void {
+    if (!this._liveRenderer || !this._lastMobjects) return;
+    this._liveRenderer.renderScene(this._lastMobjects);
   }
 
   private _draw(frame: RecordedFrame): void {

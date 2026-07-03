@@ -16,20 +16,33 @@ export interface StudioOptions {
   port?: number;
   quality?: string;
   background?: string;
+  /** Attach pointer-driven pan/zoom/orbit to the live preview (default false). */
+  interactive?: boolean;
 }
 
 /** The live-reload harness page HTML (importmap + <manim-player> + SSE reload). */
-export function buildStudioHarness(opts: { sceneModuleUrl: string; sceneExport: string; browserUrl: string; quality: string; background: string }): string {
+export function buildStudioHarness(opts: { sceneModuleUrl: string; sceneExport: string; browserUrl: string; studioUrl: string; quality: string; background: string; interactive: boolean }): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ecmanim Studio</title>
 <style>body{margin:0;background:#0b0d12;color:#cdd6f4;font:14px system-ui;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px}manim-player{max-width:96vw;box-shadow:0 4px 30px #0008}#bar{opacity:.7}</style>
-<script type="importmap">{"imports":{"ecmanim/browser":"${opts.browserUrl}"}}</script></head>
+<script type="importmap">{"imports":{"ecmanim/browser":"${opts.browserUrl}","ecmanim/studio":"${opts.studioUrl}"}}</script></head>
 <body>
-<div id="bar">ecmanim Studio — editing <code>${opts.sceneExport}</code> · saves hot-reload</div>
+<div id="bar">ecmanim Studio — editing <code>${opts.sceneExport}</code> · saves hot-reload${opts.interactive ? " · drag to pan/orbit, scroll to zoom" : ""}</div>
 <manim-player id="p" quality="${opts.quality}" background="${opts.background}" controls></manim-player>
 <script type="module">
   import { defineManimPlayer } from "ecmanim/browser";
   defineManimPlayer();
   const el = document.getElementById("p");
+  ${opts.interactive ? `
+  let detachInteractive = null;
+  el.addEventListener("ready", async () => {
+    detachInteractive?.detach();
+    const { attachInteractiveCamera } = await import("ecmanim/studio");
+    const player = el.player;
+    if (!player?.canvas || !player.camera) return;
+    detachInteractive = attachInteractiveCamera(player.canvas, player.camera, {
+      render: () => player.rerenderCurrentFrame(),
+    });
+  });` : ""}
   async function load() {
     try {
       const mod = await import("${opts.sceneModuleUrl}?t=" + Date.now()); // cache-bust
@@ -53,6 +66,7 @@ export async function startStudio(options: StudioOptions): Promise<StudioHandle>
   const sceneExport = options.sceneExport ?? "default";
   const quality = options.quality ?? "medium";
   const background = options.background ?? "#0d1117";
+  const interactive = options.interactive ?? false;
   const sceneUrlPath = "/" + path.relative(root, path.resolve(root, options.sceneModule)).split(path.sep).join("/");
 
   const clients: any[] = [];
@@ -61,7 +75,7 @@ export async function startStudio(options: StudioOptions): Promise<StudioHandle>
   const server = http.createServer((req: any, res: any) => {
     const url = decodeURIComponent((req.url || "/").split("?")[0]);
     if (url === "/" || url === "/index.html") {
-      const html = buildStudioHarness({ sceneModuleUrl: sceneUrlPath, sceneExport, browserUrl: "/dist/browser.js", quality, background });
+      const html = buildStudioHarness({ sceneModuleUrl: sceneUrlPath, sceneExport, browserUrl: "/dist/browser.js", studioUrl: "/dist/studio.js", quality, background, interactive });
       res.writeHead(200, { "content-type": "text/html" });
       res.end(html);
       return;

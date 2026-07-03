@@ -75,12 +75,64 @@ console.log(studio.url); // open it; edit the scene file → the browser hot-rel
 Serves your Scene in a `<manim-player>` and re-imports + re-renders on every save
 (file-watch + Server-Sent Events, dependency-free).
 
-**What Studio is today, honestly:** the hot-reload dev server above and the
-`schemaToControls` data layer below — that's it. The heavier features you might
-expect from a "studio" are **not implemented**: no checkpoint replay (every save
-re-renders the whole scene from scratch), no mouse camera pan/zoom/orbit, no
-in-page eval REPL, and no rendered props-panel UI (only the control *descriptors*
-exist; nothing draws them). These are planned on top of this foundation.
+**What Studio is today, honestly:** the hot-reload dev server, the interactive
+camera controller, `<manim-chart>`, and the `schemaToControls` data layer —
+that's it. The heavier features you might expect from a "studio" are **not
+implemented**: no checkpoint replay (every save re-renders the whole scene
+from scratch), no in-page eval REPL, and no rendered props-panel UI (only the
+control *descriptors* exist; nothing draws them). These are planned on top of
+this foundation.
+
+### Interactive camera (pan/zoom/orbit/pick)
+
+```js
+import { attachInteractiveCamera } from "ecmanim/studio";
+
+const handle = attachInteractiveCamera(canvas, camera, {
+  render: () => renderer.renderScene(mobjects), // called after every camera mutation
+  mobjects,                                       // enables click/hover picking
+  onClick: (hit) => console.log(hit?.mobject),
+  onHover: (hit) => console.log(hit?.mobject),
+});
+// handle.detach() removes all listeners
+```
+Attaches pointer/wheel handlers to any `<canvas>` and mutates a `Camera` in
+place: drag pans `frameCenter` (2D) or orbits `phi`/`theta` (3D, detected via
+`camera.projectionDepth`), wheel adjusts the new `camera.zoom` field (shared
+by `CanvasRenderer` 2D, `ThreeRenderer` 2D-ortho, and `ThreeRenderer` 3D).
+Picking (`onClick`/`onHover`) is screen-space bounding-box hit-testing —
+each candidate mobject's world AABB is forward-projected through the
+camera's own `toPixel()`; there is no GPU/triangle-precise picking. The
+module never calls `renderer.renderScene()` itself — you supply `render()`,
+which keeps it usable by any renderer/mobject-store combination, including
+`<manim-player>`'s live preview (pass `interactive: true` to `startStudio`) and
+`<manim-chart>` below.
+
+### `<manim-chart>` — interactive graphs
+
+```html
+<script type="module">
+  import { defineManimChart } from "ecmanim/studio";
+  defineManimChart(); // registers <manim-chart>
+</script>
+<manim-chart width="800" height="450"></manim-chart>
+<script type="module">
+  import { Axes } from "ecmanim";
+  const chart = document.querySelector("manim-chart");
+  chart.graph = () => {
+    const axes = new Axes({ xRange: [-3, 3], yRange: [-2, 2] });
+    const curve = axes.plot((x) => Math.sin(x));
+    return [axes, curve];
+  };
+</script>
+```
+A static (non-timed) custom element: your `graph` builder runs once through
+`CanvasRenderer.renderScene()` — no `Player`/frame-recording involved — then
+pointer pan/zoom/click/hover is layered on via `attachInteractiveCamera()`.
+Call `chart.refresh()` after mutating data the builder closes over to
+re-render. Listens for clicks/hovers and dispatches `manim-chart-pick` /
+`manim-chart-hover` `CustomEvent`s with `{ hit: { mobject, index } | null }`
+in `detail`. `disconnectedCallback` detaches the camera listeners.
 
 ### Schema → props controls
 
