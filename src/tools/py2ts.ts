@@ -108,6 +108,7 @@ const KNOWN_CONSTS = new Set<string>([
 // snake_case -> camelCase overrides for names where a plain conversion would
 // be wrong or where we want to be explicit.
 const NAME_MAP: Record<string, string> = {
+  append: "push", // Python list.append(x) -> JS Array.push(x)
   run_time: "runTime",
   stroke_width: "strokeWidth",
   fill_opacity: "fillOpacity",
@@ -371,6 +372,16 @@ function rebuildCall(name: string, argsRaw: string, dotted = false): string {
 // self./method-name handling).
 // ---------------------------------------------------------------------------
 
+// self.<name> -> this.<camelName>, and .snake_case_property (no call) ->
+// .camelCase. Shared between full-statement rewriting and the assignment LHS
+// (which never goes through rewriteStatement itself -- only its RHS does;
+// see rewriteAssignmentOrExpr).
+function rewriteSelfAndDottedNames(s: string): string {
+  s = s.replace(/\bself\.([A-Za-z_][A-Za-z0-9_]*)/g, (_m, n: string) => "this." + toCamel(n));
+  s = s.replace(/\.([a-z]+_[a-z_]*)\b(?!\s*\()/g, (_m, n: string) => "." + toCamel(n));
+  return s;
+}
+
 function rewriteStatement(body: string): string {
   let s = body;
 
@@ -379,13 +390,10 @@ function rewriteStatement(body: string): string {
   s = s.replace(/\bself\.play\b/g, " AWAIT this.play");
   s = s.replace(/\bself\.wait\b/g, " AWAIT this.wait");
 
-  // self.<name> -> this.<camel name>
-  s = s.replace(/\bself\.([A-Za-z_][A-Za-z0-9_]*)/g, (_m, n: string) => "this." + toCamel(n));
+  s = rewriteSelfAndDottedNames(s);
 
   // .method_name( snake case -> camelCase (dotted calls).
   s = s.replace(/\.([a-z_][A-Za-z0-9_]*)\s*\(/g, (_m, n: string) => "." + toCamel(n) + "(");
-  // .property snake case (no call) -> camelCase for known accessors.
-  s = s.replace(/\.([a-z]+_[a-z_]*)\b(?!\s*\()/g, (_m, n: string) => "." + toCamel(n));
 
   // Expression rewrites (calls, literals, f-strings, numpy).
   s = rewriteExpr(s);
@@ -516,7 +524,13 @@ export function convert(pythonSource: string, opts: Py2TsOptions = {}): string {
       const cls = m[1];
       const base = m[2];
       const ext = base && SCENE_BASES.has(base) ? ` extends ${base}` : base ? ` extends ${base}` : "";
-      emit(depth, `class ${cls}${ext} {${commentSuffix(comment)}`);
+      // Top-level classes must be exported: the CLI (`ecmanim render`/`plan`)
+      // discovers scenes by inspecting the imported module's own exports
+      // (named export, default export, or the first export whose prototype
+      // chain includes Scene) -- an unexported class is invisible to it, so
+      // `ecmanim render converted.ts` would silently render nothing at all.
+      const exportKw = blocks.length === 0 ? "export " : "";
+      emit(depth, `${exportKw}class ${cls}${ext} {${commentSuffix(comment)}`);
       blocks.push({ indent, kind: "class" });
       continue;
     }
@@ -527,12 +541,13 @@ export function convert(pythonSource: string, opts: Py2TsOptions = {}): string {
       const fn = m[1];
       const params = m[2];
       const isMethod = blocks.length > 0 && blocks[blocks.length - 1].kind === "class";
+      const isTopLevel = blocks.length === 0;
       const paramList = splitArgs(params).filter((p) => p !== "self" && p !== "cls");
       const paramStr = paramList.map((p) => rewriteParam(p)).join(", ");
       const isConstruct = isMethod && fn === "construct";
       const asyncKw = isConstruct ? "async " : "";
       const jsName = isConstruct ? "construct" : (isMethod && fn === "__init__" ? "constructor" : toCamel(fn));
-      const fnKw = isMethod ? "" : "function ";
+      const fnKw = isMethod ? "" : (isTopLevel ? "export function " : "function ");
       emit(depth, `${fnKw}${asyncKw}${jsName}(${paramStr}) {${commentSuffix(comment)}`);
       blocks.push({ indent });
       continue;
@@ -651,7 +666,11 @@ function rewriteAssignmentOrExpr(code: string): string {
   // Assignment: LHS = RHS  (skip ==, <=, >=, != and kwargs are line-internal).
   const m = /^([A-Za-z_$][A-Za-z0-9_$.\[\]]*)\s*(\+=|-=|\*=|\/=|=)\s*(.+)$/.exec(code);
   if (m && !/[=!<>]$/.test(m[1])) {
-    const lhs = m[1];
+    // self.attr = ... / self.attr.nested = ... -- rewriteStatement only ever
+    // runs on the RHS below, so the LHS needs the same self./property
+    // rewrite applied directly or `self.foo = x` stays as literal (undefined
+    // at runtime) `self.foo = x` instead of `this.foo = x`.
+    const lhs = rewriteSelfAndDottedNames(m[1]);
     const op = m[2];
     const rhs = m[3];
     // Declare with const for simple new-binding assignments (single `=`, plain

@@ -27,6 +27,34 @@
   invalid TS silently, not caught by the "TODO marker" safety net the
   header otherwise promises) instead of just claiming a vague "~80% subset."
 
+Found while building real execution-based tests for the four fixes above
+(actually running converted output, not just pattern-matching the generated
+text — which is exactly what caught these):
+- **`py2ts` never `export`ed the converted top-level class.** The CLI
+  (`ecmanim render`/`plan`) discovers scenes by inspecting the imported
+  module's own exports; an unexported class is invisible to it, so
+  `ecmanim render <converted-file>` silently rendered **nothing at all** —
+  no error, no video, just a "no exported Scene found" warning. Every
+  single file `py2ts` had ever converted was unusable via the CLI.
+- **`py2ts`: `self.attr = value` assignments never rewrote the
+  assignment's left-hand side.** `rewriteStatement` (which does the
+  `self.` → `this.` rewrite) only ever ran on the right-hand side of an
+  `=`, so `self.circle = Circle()` produced literal, undefined-at-runtime
+  `self.circle = ...` — silently broken for what's likely the single most
+  common Python-manim idiom for keeping a mobject reference across a
+  scene.
+- **`py2ts`: `.append(x)` wasn't converted to `.push(x)`** — passed
+  through as syntactically valid but nonexistent-at-runtime JS.
+- **`VMobject.setFill()`/`setStroke()` silently accepted the wrong
+  argument shape.** Python's `set_fill(color, opacity=0.3)` naturally
+  supports keyword args; `py2ts` folds them into a trailing config object
+  like it does everywhere else (`setFill(RED, { opacity: 0.3 })`) — but
+  the actual signature took a bare number, so `fillOpacity` silently
+  became the *object* `{opacity: 0.3}`, not `0.3`. No error, no crash —
+  just a wrong value once rendered. Both methods now also accept a
+  trailing options object, matching the config-object convention the rest
+  of the API already uses.
+
 ## 0.0.5
 
 ### Fixed

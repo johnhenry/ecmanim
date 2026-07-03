@@ -33,6 +33,21 @@ test("Mobject is iterable over direct submobjects (matches Python manim's VGroup
   assert.deepEqual([...group], [a, b]);
 });
 
+test("Mobject iteration: empty group yields nothing; spreads into function call args", () => {
+  const empty = new Mobject();
+  assert.deepEqual([...empty], []);
+  for (const _m of empty) assert.fail("empty group should not yield any submobject");
+
+  const a = makeMob([[0, 0, 0]]);
+  const b = makeMob([[1, 1, 0]]);
+  const group = new Mobject();
+  group.add(a, b);
+
+  // The common `fn(...group)` idiom (e.g. self.play(*group) in Python).
+  const collectArgs = (...args: Mobject[]) => args;
+  assert.deepEqual(collectArgs(...group), [a, b]);
+});
+
 test("become copies geometry, style and submobjects (deep)", () => {
   const a = makeMob([[0, 0, 0], [1, 1, 0]]);
   const child = makeMob([[2, 2, 0]]);

@@ -540,16 +540,32 @@ export class VMobject extends Mobject {
   }
 
   // --- style --------------------------------------------------------------
-  setFill(color: ColorLike | null, opacity = 1): this {
+  // `opacity`/`width` also accept a trailing options object (in addition to
+  // the plain-positional form), matching the config-object convention the
+  // rest of the API uses -- e.g. `setFill(RED, { opacity: 0.3 })`, not just
+  // `setFill(RED, 0.3)`. Needed because py2ts folds ALL keyword args from
+  // Python's `set_fill(color, opacity=0.3)` into one trailing object; a
+  // plain-number-only signature silently assigns that object where a number
+  // was expected (`this.fillOpacity` becomes `{opacity: 0.3}`, not `0.3`).
+  setFill(color: ColorLike | null, opacity: number | { opacity?: number } = 1): this {
     if (color != null) this.fillColor = Color.parse(color);
-    this.fillOpacity = opacity;
+    this.fillOpacity = typeof opacity === "object" ? (opacity.opacity ?? this.fillOpacity) : opacity;
     return this;
   }
 
-  setStroke(color: ColorLike | null, width?: number | null, opacity = 1): this {
+  setStroke(
+    color: ColorLike | null,
+    width?: number | { width?: number; opacity?: number } | null,
+    opacity = 1,
+  ): this {
     if (color != null) this.strokeColor = Color.parse(color);
-    if (width != null) this.strokeWidth = width;
-    this.strokeOpacity = opacity;
+    if (width != null && typeof width === "object") {
+      if (width.width != null) this.strokeWidth = width.width;
+      if (width.opacity != null) this.strokeOpacity = width.opacity;
+    } else {
+      if (width != null) this.strokeWidth = width;
+      this.strokeOpacity = opacity;
+    }
     return this;
   }
 
