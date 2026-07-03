@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.0.7
+
 ### Fixed
 - **`FadeIn` (and other single-mobject `Animation` subclasses) silently
   duck-typed an extra positional `Mobject` argument as `config`, corrupting
