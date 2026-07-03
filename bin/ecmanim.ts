@@ -324,12 +324,12 @@ async function cmdCheckhealth() {
 async function cmdPlan(args: any) {
   const file = args._[1];
   if (!file || !existsSync(resolve(file))) { console.error(`Scene file not found: ${file}`); process.exit(1); }
-  const { Scene } = await import(nodePath("../src/node.ts"));
+  const { isSceneLike } = await import(nodePath("../src/scene/orchestrate.ts"));
   const { toPlanIR } = await import(nodePath("../src/authoring.ts"));
   const mod: any = await import(pathToFileURL(resolve(file)).href);
   const sceneName = args.scene ?? args._[2];
   const target = (sceneName && mod[sceneName]) || mod.default ||
-    Object.values(mod).find((v: any) => typeof v === "function" && v.prototype instanceof Scene);
+    Object.values(mod).find((v: any) => isSceneLike(v));
   if (!target) { console.error("No scene found in " + file); process.exit(1); }
   const plan = await toPlanIR(target, { fps: args.fps ? Number(args.fps) : 30, promise: args.promise, name: sceneName });
   const json = JSON.stringify(plan, null, 2);
@@ -345,7 +345,8 @@ async function cmdRender(args: any) {
   }
 
   const nodeMod: any = await import(nodePath("../src/node.ts"));
-  const { render, Scene, flushCache } = nodeMod;
+  const { render, flushCache } = nodeMod;
+  const { isSceneLike } = await import(nodePath("../src/scene/orchestrate.ts"));
 
   // Load a config file if requested, so its defaults participate.
   if (args.config) await nodeMod.loadConfigFile(args.config);
@@ -356,7 +357,7 @@ async function cmdRender(args: any) {
   const positionalScene = args._[2]; // `render file Scene`
   const sceneName = args.scene ?? positionalScene;
 
-  const isScene = (v: any) => typeof v === "function" && v.prototype instanceof Scene;
+  const isScene = isSceneLike;
 
   // Build the list of targets.
   let targets: Array<{ name: string; target: any }> = [];
