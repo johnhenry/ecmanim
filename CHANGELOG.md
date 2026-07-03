@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Fixed
+- **CLI `render`/`plan` crashed with `TypeError: Class constructor ... cannot
+  be invoked without 'new'` for scene files that imported `Scene` through a
+  different specifier than the CLI itself** (e.g. `import { Scene } from
+  "ecmanim/node"`, which resolves to `dist/`, while the CLI's own dev-mode
+  `instanceof Scene` check imported `../src/node.ts` directly). Node loaded
+  two referentially-distinct copies of `Scene`, so `instanceof` failed even
+  for a legitimate subclass and the CLI misidentified it as a bare construct
+  function. Replaced every `instanceof Scene` check (CLI scene discovery,
+  `makeScene`/`runConstruct`) with a shared duck-typed `isSceneLike()` that
+  checks for `construct`/`play`/`wait` on the prototype instead.
 - **`Mobject` wasn't iterable.** `for (const m of group)` / `[...group]`
   threw "not iterable" for every `Mobject`/`VGroup`, even though Python
   manim's `VGroup.__iter__` (shallow, over direct submobjects) is a common
