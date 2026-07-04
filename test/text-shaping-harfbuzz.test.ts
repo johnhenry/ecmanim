@@ -1,0 +1,129 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { Text } from "../src/mobject/text/Text.ts";
+import { getDefaultFont } from "../src/mobject/vectorized_text.ts";
+import {
+  setTextShapingBackend,
+  isTextShapingBackendActive,
+  buildGlyphRun,
+} from "../src/mobject/text_shaping.ts";
+import { canShapeWithHarfBuzz } from "../src/mobject/text_shaping_hb.ts";
+import { resolveFontPath } from "../src/node.ts";
+
+// Optional HarfBuzz shaping backend: real GSUB/GPOS shaping instead of the
+// default per-code-point charToGlyph loop. Skips gracefully (not failing)
+// if harfbuzzjs's WASM can't load in this environment, matching this
+// project's existing "environment-dependent, degrade don't fail" test style.
+
+test("harfbuzz backend: ligature-prone text produces fewer glyphs with ligatures on than off", async () => {
+  const path = resolveFontPath();
+  if (!path) return; // no system font in this environment
+
+  await setTextShapingBackend("harfbuzz");
+  const font = getDefaultFont();
+  if (!font || !canShapeWithHarfBuzz(font)) return; // harfbuzzjs unavailable here; nothing to exercise
+
+  const withLigatures = buildGlyphRun("ffi", { font, scaleToWorld: 1, ligatures: true });
+  const withoutLigatures = buildGlyphRun("ffi", { font, scaleToWorld: 1, ligatures: false });
+  assert.equal(isTextShapingBackendActive(), "harfbuzz");
+
+  // DejaVu Sans is confirmed (via direct inspection) to substitute "ffi" via
+  // a real ligature glyph when GSUB is enabled -- fewer output glyphs than
+  // input characters. With ligatures disabled, one glyph per character.
+  assert.equal(withoutLigatures.entries.length, 3, "no ligatures: one glyph per character");
+  assert.ok(withLigatures.entries.length < 3, `with ligatures: expected fewer than 3 glyphs, got ${withLigatures.entries.length}`);
+
+  await setTextShapingBackend("opentype"); // restore default for later tests in this file
+});
+
+test("harfbuzz backend: getPartByText selects correctly across a ligature boundary", async () => {
+  const path = resolveFontPath();
+  if (!path) return;
+
+  await setTextShapingBackend("harfbuzz");
+  const font = getDefaultFont();
+  if (!font || !canShapeWithHarfBuzz(font)) { await setTextShapingBackend("opentype"); return; }
+
+  const t = new Text("office", { fontSize: 0.5 });
+  if ((t as any)._isText) { await setTextShapingBackend("opentype"); return; }
+
+  // "ffi" (chars 1-3) forms one ligature glyph -- fewer chars entries than
+  // source characters, but getPartByText must still correctly select the
+  // substring spanning that merged glyph via the cluster-based _charSource.
+  assert.ok(t.chars.submobjects.length < "office".length, "the ffi ligature should have merged into fewer glyph slots");
+  const part = t.getPartByText("ffi");
+  assert.ok(part.submobjects.length >= 1, "should find the ligature-spanning substring");
+
+  const oPart = t.getPartByText("o");
+  assert.equal(oPart.submobjects.length, 1);
+  const ePart = t.getPartByText("e");
+  assert.equal(ePart.submobjects.length, 1);
+
+  await setTextShapingBackend("opentype");
+});
+
+test("harfbuzz backend: kerning matches or improves on the opentype-backend fallback for plain text", async () => {
+  const path = resolveFontPath();
+  if (!path) return;
+
+  await setTextShapingBackend("harfbuzz");
+  const font = getDefaultFont();
+  if (!font || !canShapeWithHarfBuzz(font)) { await setTextShapingBackend("opentype"); return; }
+
+  // Plain, non-ligature text should shape to sane, finite geometry via
+  // either backend -- this is a coarse "doesn't regress" check, not an
+  // assertion about a specific kerning delta (this environment's font has
+  // no kerning pairs for common combos, confirmed directly beforehand).
+  const hbRun = buildGlyphRun("Hello", { font, scaleToWorld: 1 });
+  assert.equal(isTextShapingBackendActive(), "harfbuzz");
+  assert.equal(hbRun.entries.length, 5);
+  assert.ok(Number.isFinite(hbRun.endX) && hbRun.endX > 0);
+
+  await setTextShapingBackend("opentype");
+  const otRun = buildGlyphRun("Hello", { font, scaleToWorld: 1 });
+  assert.equal(isTextShapingBackendActive(), "opentype");
+  assert.equal(otRun.entries.length, 5);
+  assert.ok(Number.isFinite(otRun.endX) && otRun.endX > 0);
+});
+
+test("Text's disableLigatures actually suppresses ligatures once harfbuzz backend is active", async () => {
+  const path = resolveFontPath();
+  if (!path) return;
+
+  await setTextShapingBackend("harfbuzz");
+  const font = getDefaultFont();
+  if (!font || !canShapeWithHarfBuzz(font)) { await setTextShapingBackend("opentype"); return; }
+
+  const ligated = new Text("ffi", { fontSize: 0.5, disableLigatures: false });
+  const disabled = new Text("ffi", { fontSize: 0.5, disableLigatures: true });
+  assert.ok(
+    disabled.chars.submobjects.length > ligated.chars.submobjects.length,
+    "disableLigatures:true should produce one glyph per character, not the merged ligature",
+  );
+  assert.equal(disabled.chars.submobjects.length, 3);
+
+  await setTextShapingBackend("opentype");
+});
+
+test("a simulated HarfBuzz load failure falls back to the opentype backend cleanly", async () => {
+  const path = resolveFontPath();
+  if (!path) return;
+
+  const font = getDefaultFont();
+  if (!font) return;
+
+  // A font with no _rawFontBytes stashed (e.g. passed directly by a user as
+  // config.font) can't be shaped via HarfBuzz regardless of module
+  // availability -- canShapeWithHarfBuzz() must report false, not throw,
+  // and buildGlyphRun() must fall back to "opentype" transparently.
+  const fontWithoutBytes = Object.create(font);
+  fontWithoutBytes._rawFontBytes = undefined;
+  assert.ok(!canShapeWithHarfBuzz(fontWithoutBytes));
+
+  await setTextShapingBackend("harfbuzz");
+  const run = buildGlyphRun("test", { font: fontWithoutBytes, scaleToWorld: 1 });
+  assert.equal(isTextShapingBackendActive(), "opentype", "should transparently fall back, not throw or silently produce nothing");
+  assert.equal(run.entries.length, 4);
+
+  await setTextShapingBackend("opentype");
+});

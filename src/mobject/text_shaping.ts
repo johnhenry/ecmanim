@@ -4,15 +4,15 @@
 // grapheme-cluster iteration, and (eventually) real HarfBuzz shaping all touch
 // this exact loop, so it lives in one place.
 //
-// Iterates by Unicode grapheme cluster (not UTF-16 code unit or code point),
-// so combining-mark sequences and multi-codepoint emoji count as one glyph
+// Default backend ("opentype", see setTextShapingBackend() below) iterates
+// by Unicode grapheme cluster (not UTF-16 code unit or code point), so
+// combining-mark sequences and multi-codepoint emoji count as one glyph
 // slot -- every code point in a cluster gets its own opentype.js glyph
 // outline, merged into a single VMobject per cluster so the whole cluster
-// moves/selects as one unit. This does not perform GSUB/GPOS shaping (no
+// moves/selects as one unit. It does NOT perform GSUB/GPOS shaping (no
 // ligatures, no mark-attachment positioning -- combining marks are drawn at
-// the same pen position as their base glyph); that requires real text
-// shaping, planned as a HarfBuzz-backed alternative implementation of this
-// same function shape.
+// the same pen position as their base glyph). The optional "harfbuzz"
+// backend (text_shaping_hb.ts) does full real shaping instead.
 
 import { VMobject } from "./VMobject.ts";
 import { parsePathToSubpaths, subpathsToVMobject } from "./svg_path.ts";
@@ -40,6 +40,51 @@ export interface BuildGlyphRunOptions {
   scaleToWorld: number;
   /** Apply font kerning between clusters. Default true. */
   kerning?: boolean;
+  /** Include GSUB ligature features (liga/clig/calt) when shaping with the
+   *  HarfBuzz backend. Default true. No effect on the opentype.js backend
+   *  (which never performs GSUB substitution at all). */
+  ligatures?: boolean;
+}
+
+// --- text-shaping backend selection ----------------------------------------
+// Default "opentype": the per-code-point charToGlyph loop below (no GSUB/GPOS
+// shaping). Optional "harfbuzz": full shaping via the harfbuzzjs WASM build
+// (real ligatures, contextual forms, mark-attachment positioning) -- see
+// text_shaping_hb.ts. Loaded lazily via a cached dynamic import (not a static
+// one) specifically to avoid a circular module dependency, since
+// text_shaping_hb.ts itself imports UNITS_PER_WORLD/types from this file.
+export type TextShapingBackend = "opentype" | "harfbuzz";
+let _backend: TextShapingBackend = "opentype";
+let _lastBackendUsed: TextShapingBackend = "opentype";
+let _hbBridge: typeof import("./text_shaping_hb.ts") | null = null;
+
+/** Which backend buildGlyphRun() will *try* to use. */
+export function getTextShapingBackend(): TextShapingBackend {
+  return _backend;
+}
+
+/**
+ * Which backend actually ran for the most recent buildGlyphRun() call --
+ * may differ from getTextShapingBackend() if HarfBuzz was requested but
+ * couldn't be used (not loaded yet, or the active font has no raw bytes),
+ * in which case buildGlyphRun() transparently falls back to "opentype".
+ */
+export function isTextShapingBackendActive(): TextShapingBackend {
+  return _lastBackendUsed;
+}
+
+/**
+ * Select the shaping backend. Selecting "harfbuzz" loads harfbuzzjs (if not
+ * already loaded) and resolves once it's ready to use -- await this before
+ * constructing Text/VText that should use it; a Text/VText built before the
+ * load resolves falls back to "opentype" for that call, not an error.
+ */
+export async function setTextShapingBackend(backend: TextShapingBackend): Promise<void> {
+  _backend = backend;
+  if (backend === "harfbuzz" && !_hbBridge) {
+    _hbBridge = await import("./text_shaping_hb.ts");
+    await _hbBridge.loadHarfBuzz();
+  }
 }
 
 const graphemeSegmenter: any =
@@ -65,6 +110,16 @@ function graphemeClusters(line: string): string[] {
  */
 export function buildGlyphRun(line: string, opts: BuildGlyphRunOptions): GlyphRunResult {
   const { font, scaleToWorld } = opts;
+
+  if (_backend === "harfbuzz" && _hbBridge?.canShapeWithHarfBuzz(font)) {
+    const hbResult = _hbBridge.shapeWithHarfBuzz(font, line, { scaleToWorld, ligatures: opts.ligatures });
+    if (hbResult) {
+      _lastBackendUsed = "harfbuzz";
+      return hbResult;
+    }
+  }
+  _lastBackendUsed = "opentype";
+
   const px = opts.px ?? UNITS_PER_WORLD;
   const kerning = opts.kerning ?? true;
   const scaleFactor = px / font.unitsPerEm;

@@ -69,6 +69,7 @@
   "license": "MIT",
   "optionalDependencies": {
     "@napi-rs/canvas": "^0.1.100",
+    "harfbuzzjs": "^1.4.0",
     "three": "^0.185.1"
   },
   "dependencies": {

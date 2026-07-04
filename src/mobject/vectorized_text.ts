@@ -67,11 +67,15 @@ export async function setDefaultFont(source: any): Promise<any> {
     const opentype = (await import("opentype.js")).default;
     const buf = await fetch(source).then((r) => r.arrayBuffer());
     _defaultFont = opentype.parse(buf);
+    // Stash the raw bytes for the optional HarfBuzz shaping backend (see
+    // fonts-node.ts's loadVectorFontSync for the Node-side equivalent).
+    (_defaultFont as any)._rawFontBytes = buf;
   } else if (source instanceof ArrayBuffer) {
     const opentype = (await import("opentype.js")).default;
     _defaultFont = opentype.parse(source);
+    (_defaultFont as any)._rawFontBytes = source;
   } else {
-    _defaultFont = source; // already a parsed opentype.Font
+    _defaultFont = source; // already a parsed opentype.Font -- no raw bytes available
   }
   return _defaultFont;
 }

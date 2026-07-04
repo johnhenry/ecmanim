@@ -68,7 +68,13 @@ export function loadVectorFontSync(pattern = "sans-serif") {
   const path = resolveFontPath(pattern);
   if (!path) return null;
   const buf = readFileSync(path);
-  const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  const bytes = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+  const font = opentype.parse(bytes);
+  // Stash the raw bytes the opentype.js parse consumed -- the optional
+  // HarfBuzz shaping backend (text_shaping_hb.ts) needs them to build its
+  // own hb.Face/Font from the same font file; opentype.js itself doesn't
+  // retain them after parsing.
+  (font as any)._rawFontBytes = bytes;
   setDefaultFontSync(font);
   return font;
 }

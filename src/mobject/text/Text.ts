@@ -46,11 +46,11 @@ export interface TextConfig extends MobjectConfig {
    */
   width?: number;
   /**
-   * @deprecated Currently a no-op: no glyph shaping (GSUB ligature
-   * substitution) happens anywhere in this codebase yet, so there is nothing
-   * for this flag to disable. Wiring it up is planned alongside real text
-   * shaping (HarfBuzz); until then, setting this to `true` has no effect on
-   * rendered output.
+   * Suppress GSUB ligature substitution (liga/clig/calt). Only has an effect
+   * when the optional HarfBuzz shaping backend is active
+   * (`setTextShapingBackend("harfbuzz")`, see text_shaping.ts) -- the
+   * default "opentype" backend never performs GSUB substitution at all, so
+   * this flag is a no-op there (there's nothing to disable).
    */
   disableLigatures?: boolean;
   // text-to-* maps: substring -> value.
@@ -225,7 +225,7 @@ export class Text extends VGroup {
   slant: string;
   align: string;
   lineSpacing: number;
-  /** @deprecated Currently a no-op -- see {@link TextConfig.disableLigatures}. */
+  /** See {@link TextConfig.disableLigatures}. */
   disableLigatures: boolean;
 
   // Vector-mode data. `chars` is a VGroup of the per-glyph VMobjects (manim's
@@ -371,7 +371,7 @@ export class Text extends VGroup {
       // glyph plus any combining marks share a single VMobject and a single
       // _charSource slot, so `chars`/index-based selection operate on
       // clusters, matching how a user perceives "one character."
-      const { entries } = buildGlyphRun(line, { font, px, scaleToWorld });
+      const { entries } = buildGlyphRun(line, { font, px, scaleToWorld, ligatures: !this.disableLigatures });
       for (const entry of entries) {
         const mob = entry.mob;
         mob.fillColor = Color.parse(this.fillColor);

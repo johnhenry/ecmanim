@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### Added
+- **Word-wrap for `Text`**: a new `width` config option greedily wraps long
+  lines to fit, using real glyph-advance measurement when a vector font is
+  loaded or the `CHAR_ASPECT` estimate otherwise. `estimateTextSize()` gained
+  a matching `opts.width` parameter.
+- **Optional HarfBuzz text-shaping backend** (`setTextShapingBackend("harfbuzz")`,
+  opt-in, default remains `"opentype"`): real GSUB/GPOS shaping via the
+  `harfbuzzjs` WASM build — actual ligatures, combining-mark composition, and
+  correct kerning/positioning — instead of the previous naive per-character
+  `charToGlyph` loop. `disableLigatures` (previously a dead config field) now
+  has real effect when this backend is active. Falls back to the `"opentype"`
+  backend transparently if HarfBuzz can't load or a font has no raw bytes
+  available to build an `hb.Font` from.
+- **`Code.diffTo(other)`**: morphs one `Code` snapshot's tokens into another's
+  via `TransformMatchingAuto` (the Reveal.js Auto-Animate / animated-code-diff
+  idea), disambiguating repeated identical tokens on one line via a seeded
+  `matchId`.
+- **SVG `<linearGradient>` fill and rect/circle `<clipPath>` support** in
+  `SVGMobject`, plus matching gradient-export support in the SVG renderer.
+
+### Fixed
+- **`SVGMobject` no longer renders `<defs>`/`<clipPath>`/`<linearGradient>`
+  contents as visible shapes** — these definition-only containers were
+  previously not excluded from the render walk.
+- **Kerning**: `vectorized_text.ts`'s glyph-advance loop now calls
+  opentype.js's `font.getKerningValue()`, previously available but unused.
+- **Grapheme-cluster-aware glyph iteration**: combining-mark sequences (e.g.
+  `"e" + U+0301`) and multi-codepoint emoji now build as a single glyph
+  slot instead of silently dropping the combining mark's own outline.
+- `Text.ts` and `vectorized_text.ts`'s previously-independent, near-identical
+  glyph-building loops are now one shared implementation
+  (`src/mobject/text_shaping.ts`).
+
 ## 0.0.10
 
 ### Fixed
