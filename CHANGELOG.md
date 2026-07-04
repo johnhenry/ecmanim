@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **`reprojectCurve(domainSamples | curve, targetSystem, options?)`**
+  (`src/mobject/coordinate_reprojection.ts`): rebuilds a curve sampled in
+  domain (coordinate) space against a different coordinate system (e.g. an
+  `Axes`-plotted curve reprojected onto a `PolarPlane`), reusing the same
+  `setPointsAsCorners` construction `Axes.plot()` uses so fidelity matches a
+  curve plotted directly against the target. `targetSystem` is typed
+  structurally (`{ coordsToPoint(a, b) }`), so `Axes`/`PolarPlane`/
+  `ComplexPlane` all work as either source or target. `Axes.plot()` now
+  stamps a hidden `_domainSamples` tag on its result so
+  `reprojectCurve(curve, targetSystem)` can read the samples back
+  automatically instead of requiring the caller to re-supply them.
 - **`SpringParams.velocity0`**: the analytic spring (`src/animation/spring.ts`)
   now accepts a nonzero initial velocity (default 0, byte-identical to the
   prior zero-initial-velocity formula in every damping regime). Enables

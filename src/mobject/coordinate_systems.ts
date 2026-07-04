@@ -280,15 +280,24 @@ export class Axes extends VGroup {
     const stop = range[1];
     const step = range[2] ?? (stop - start) / 200;
     const corners: number[][] = [];
+    const domainSamples: Array<[number, number]> = [];
     const eps = 1e-6 * Math.abs(step || 1);
     for (let x = start; x <= stop + eps; x += step) {
       const y = fn(x);
-      if (Number.isFinite(y)) corners.push(this.coordsToPoint(x, y));
+      if (Number.isFinite(y)) {
+        corners.push(this.coordsToPoint(x, y));
+        domainSamples.push([x, y]);
+      }
     }
     const graph = new VMobject({ strokeColor: color, color });
     graph.setPointsAsCorners(corners);
     graph.fillOpacity = 0;
     (graph as any).underlyingFunction = fn;
+    // Hidden tag (mirrors the matchId/autoId convention elsewhere) recording
+    // the domain-space samples that produced this curve, so
+    // reprojectCurve(curve, targetSystem) can rebuild it against a different
+    // coordinate system without the caller having to re-supply the samples.
+    (graph as any)._domainSamples = domainSamples;
     return graph;
   }
 

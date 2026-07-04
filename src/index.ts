@@ -81,6 +81,8 @@ export {
   Polyhedron, Tetrahedron, Octahedron, Icosahedron, Dodecahedron, ConvexHull3D,
 } from "./mobject/polyhedra.ts";
 export { NumberLine, Axes, NumberPlane, PolarPlane, ComplexPlane, UnitInterval } from "./mobject/coordinate_systems.ts";
+export { reprojectCurve } from "./mobject/coordinate_reprojection.ts";
+export type { CoordSystemLike, ReprojectOptions } from "./mobject/coordinate_reprojection.ts";
 export * from "./mobject/functions.ts";
 export * from "./mobject/probability.ts";
 export * from "./mobject/vector_field.ts";
