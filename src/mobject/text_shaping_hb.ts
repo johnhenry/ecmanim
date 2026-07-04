@@ -136,7 +136,17 @@ export function shapeWithHarfBuzz(
       if (shiftX !== 0 || shiftY !== 0) {
         for (const sub of subs) for (const pt of sub) { pt[0] += shiftX; pt[1] += shiftY; }
       }
-      subpathsToVMobject(mob, subs, { scale: opts.scaleToWorld, translate: [0, 0, 0], flipY: true });
+      // NOT flipY:true here, unlike the opentype.js path in text_shaping.ts.
+      // Confirmed by direct comparison of the two libraries' path data for
+      // the same glyph ("H" in the same font): opentype.js's
+      // glyph.getPath().toPathData() emits Y-DOWN pixel-space coordinates
+      // (top of "H" at y=-71.6, baseline at 0) -- flipY:true is what
+      // converts THAT into this codebase's Y-up world space. HarfBuzz's
+      // glyphToPath() instead emits Y-UP font-unit-space coordinates (top
+      // of "H" at y=+71.58, baseline at 0), already matching Y-up world
+      // space after scaling alone. Applying flipY:true here double-flips
+      // it, rendering every HarfBuzz-shaped glyph upside down.
+      subpathsToVMobject(mob, subs, { scale: opts.scaleToWorld, translate: [0, 0, 0], flipY: false });
     }
 
     entries.push({ mob, sourceStart: info.cluster, clusterLength });

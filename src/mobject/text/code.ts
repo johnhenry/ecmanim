@@ -277,6 +277,17 @@ export class Code extends VGroup {
    * the same trade-off real manim's own `TransformMatchingTex` has. This is
    * not a bug to fix here; a true diff/patience-alignment algorithm would be
    * a separate, larger feature.
+   *
+   * Cleanup gotcha (confirmed via a real end-to-end scene render, not just
+   * this file's own unit tests): tokens present ONLY in `other` (e.g. a
+   * newly-inserted argument) are real children of `other`, individually
+   * `FadeIn`-ed by the underlying `TransformMatchingAuto` -- `Scene.play()`
+   * auto-adds any animation's introduced mobjects directly to the scene,
+   * even though `other` itself was never explicitly added. Fading out only
+   * `this` afterward leaves those new-token mobjects behind as permanent,
+   * untracked scene members. Fade out `other` too (in addition to `this`)
+   * to fully clear the diff's result -- same pattern real manim's
+   * `TransformMatchingTex` callers already have to follow.
    */
   diffTo(other: Code, config: AutoMatchingConfig = {}): AnimationGroup {
     this._seedMatchIds();

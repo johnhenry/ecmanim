@@ -102,6 +102,17 @@ function copyStyle(target: VMobject, source: VMobject): void {
     strokeWidth: source.strokeWidth,
     strokeOpacity: source.strokeOpacity,
   });
+  // Confirmed bug: this allowlist previously omitted gradientColors/
+  // sheenDirection, so a gradient-filled shape silently lost its gradient
+  // (falling back to fillColor's already-set first-stop color) whenever it
+  // passed through ANY boolean op -- most visibly SVGMobject's clip-path
+  // support, which wraps a gradient-filled shape in an Intersection to
+  // apply the clip. Found by actually rendering an SVG with both a
+  // <linearGradient> fill AND a <clipPath> on the same element (untested
+  // combination: the existing gradient and clipPath tests each cover their
+  // feature in isolation, never together).
+  if (source.gradientColors) target.gradientColors = source.gradientColors;
+  target.sheenDirection = source.sheenDirection;
 }
 
 // Shared base for the boolean operations. Holds the flattened input rings and

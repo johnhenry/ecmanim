@@ -96,6 +96,39 @@ test("a plain solid fill (no url(...)) never sets gradientColors (regression gua
   assert.equal(rect.fillColor.toHex().toUpperCase(), "#00FF00");
 });
 
+test("a gradient fill survives being clipped (confirmed bug: boolean ops' copyStyle dropped gradientColors)", () => {
+  // Combining the previous two features on the SAME element -- untested
+  // until now, and confirmed broken: applyClipPath() wraps the gradient-
+  // filled shape in an Intersection (src/mobject/boolean_ops.ts), whose
+  // copyStyle() helper only copied fillColor/fillOpacity/strokeColor/
+  // strokeWidth/strokeOpacity, silently dropping gradientColors and
+  // sheenDirection -- so a clipped, gradient-filled shape rendered as a
+  // flat fillColor (the gradient's own first stop, since that's what
+  // resolveGradientFill() sets as a solid-fill fallback) instead of an
+  // actual gradient. Found via a real end-to-end scene render, not a unit
+  // test, since existing gradient/clipPath tests each cover their feature
+  // in isolation.
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#ff0000"/>
+          <stop offset="1" stop-color="#0000ff"/>
+        </linearGradient>
+        <clipPath id="c"><circle cx="50" cy="50" r="40"/></clipPath>
+      </defs>
+      <rect x="0" y="0" width="100" height="100" fill="url(#g)" clip-path="url(#c)"/>
+    </svg>
+  `;
+  const mob = new SVGMobject(svg);
+  assert.equal(mob.submobjects.length, 1);
+  const clipped = mob.submobjects[0] as any;
+  assert.ok(clipped.gradientColors, "gradient should survive the clip operation");
+  assert.equal(clipped.gradientColors.length, 2);
+  assert.equal(clipped.gradientColors[0].toHex().toUpperCase(), "#FF0000");
+  assert.equal(clipped.gradientColors[1].toHex().toUpperCase(), "#0000FF");
+});
+
 test("a config-level fillColor override still wins over an SVG-authored gradient", () => {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">

@@ -63,6 +63,23 @@ A child with no `setChildFlex()` entry uses its own current `getWidth()`/
 `getHeight()` as a fixed flex-basis (i.e. it neither grows nor shrinks unless
 you say so).
 
+### ⚠️ `flexGrow`/`flexShrink` affect layout math, not the child's rendered size
+
+Unlike CSS Flexbox, `layout()` only ever **repositions** children (via
+`moveTo()`) to the center of the box Yoga computes for them — it never
+resizes a child mobject to actually fill that box. A child with
+`flexGrow: 1` is given more space in Yoga's internal model (and other
+siblings are positioned accordingly around it), but the child's own
+`getWidth()`/`getHeight()` are completely unchanged after `layout()`
+returns, so it will NOT visually grow to fill the space the way it would in
+a browser. Confirmed directly: a `Square({ sideLength: 2 })` with
+`flexGrow: 1` in a 10-wide row (computed box width 8, centered at x=6)
+still reports `getWidth() === 2` post-layout. If you want a child to visibly
+fill its computed box, resize it yourself after `layout()` (e.g.
+`child.scaleToFitWidth(computedWidth)`), or size it explicitly up front via
+`flexBasis` and don't rely on `flexGrow` for visual sizing. Tracked as
+[issue #23](https://github.com/johnhenry/ecmanim/issues/23).
+
 ## Coordinate systems
 
 Yoga computes layout in a top-left-origin, Y-down space (like CSS). This

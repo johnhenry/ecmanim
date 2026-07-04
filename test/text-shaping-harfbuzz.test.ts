@@ -34,6 +34,44 @@ test("setTextShapingBackend and friends are reachable from the public ecmanim/ec
   assert.equal(typeof node.setTextShapingBackend, "function", "ecmanim/node re-exports the full public barrel");
 });
 
+test("harfbuzz backend: glyphs render right-side up, matching the opentype backend's orientation", async () => {
+  // Confirmed bug, found via an actual rendered end-to-end scene (not
+  // caught by this file's other tests, which only ever check glyph
+  // COUNTS/widths, never orientation): opentype.js's
+  // glyph.getPath().toPathData() emits Y-DOWN pixel-space coordinates
+  // (confirmed directly: "H"'s top point is negative, baseline at 0), so
+  // text_shaping.ts's buildGlyphRun() passes flipY:true to convert that
+  // into this codebase's Y-up world space. HarfBuzz's glyphToPath()
+  // instead emits Y-UP font-unit-space coordinates for the very same font
+  // (confirmed directly: "H"'s top point is POSITIVE, baseline at 0) --
+  // already matching Y-up world space after scaling alone. Reusing the
+  // same flipY:true for the HarfBuzz path double-flipped it, rendering
+  // every HarfBuzz-shaped Text mobject upside down.
+  const path = resolveFontPath();
+  if (!path) return;
+
+  await setTextShapingBackend("opentype");
+  const otText = new Text("H", { fontSize: 1 });
+  const otTop = Math.max(...otText.chars.submobjects[0].points.map((p: number[]) => p[1]));
+  const otBottom = Math.min(...otText.chars.submobjects[0].points.map((p: number[]) => p[1]));
+
+  await setTextShapingBackend("harfbuzz");
+  const font = getDefaultFont();
+  if (!font || !canShapeWithHarfBuzz(font)) { await setTextShapingBackend("opentype"); return; }
+  const hbText = new Text("H", { fontSize: 1 });
+  const hbTop = Math.max(...hbText.chars.submobjects[0].points.map((p: number[]) => p[1]));
+  const hbBottom = Math.min(...hbText.chars.submobjects[0].points.map((p: number[]) => p[1]));
+  await setTextShapingBackend("opentype");
+
+  // Right-side up in both cases means the ascender (top) is well above the
+  // baseline/descender (bottom) by roughly the same amount either backend
+  // measures it -- an upside-down glyph would invert which end is which.
+  assert.ok(otTop > otBottom, "sanity: opentype 'H' top should be above its bottom");
+  assert.ok(hbTop > hbBottom, "harfbuzz 'H' top should be above its bottom, not flipped");
+  assert.ok(Math.abs(hbTop - otTop) < 0.05, `harfbuzz top (${hbTop}) should match opentype top (${otTop})`);
+  assert.ok(Math.abs(hbBottom - otBottom) < 0.05, `harfbuzz bottom (${hbBottom}) should match opentype bottom (${otBottom})`);
+});
+
 test("harfbuzz backend: ligature-prone text produces fewer glyphs with ligatures on than off", async () => {
   const path = resolveFontPath();
   if (!path) return; // no system font in this environment

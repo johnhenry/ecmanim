@@ -2,7 +2,60 @@
 
 ## Unreleased
 
+### Added
+- **`examples/e2e-feature-tour.ts`**: an end-to-end scene exercising the
+  0.0.7-0.0.12 feature surface together through the real public
+  `ecmanim`/`ecmanim/node` package — `FlexGroup` layout, HarfBuzz text
+  shaping, `spring()`'s `velocity0`, `crossFade`/`springTiming`,
+  `SVGMobject` gradient+clipPath, `Code.diffTo()`, and `Scene.track()`/
+  `bindTrack()` — rendered to a real MP4 rather than exercised only through
+  each feature's own isolated unit tests. Found 4 real issues in the
+  process (see this section's other entries plus issues #23 and the
+  `Code.diffTo()`/`FlexGroup` doc callouts below).
+- `docs/flex-group.md`: documented that `flexGrow`/`flexShrink` affect
+  Yoga's internal layout math and child *positioning* only — `layout()`
+  never resizes a child mobject to match its computed box, unlike real CSS
+  flexbox. Tracked as [issue #23](https://github.com/johnhenry/ecmanim/issues/23)
+  (a real fix needs a design decision about resize semantics this issue
+  doesn't prescribe).
+- `Code.diffTo()`'s doc comment now calls out that tokens present only in
+  the target `Code` get added directly to the scene by `Scene.play()` (via
+  the underlying `TransformMatchingAuto`'s per-token `FadeIn`s) even though
+  the target itself was never explicitly added — so cleanup after a diff
+  needs to fade out both the source and target `Code` instances, not just
+  the source.
+
 ### Fixed
+- **Every glyph shaped via the optional HarfBuzz text-shaping backend
+  rendered upside down.** `shapeWithHarfBuzz()`
+  (`src/mobject/text_shaping_hb.ts`) passed the same `flipY: true` to
+  `subpathsToVMobject()` that the opentype.js-based path uses, but the two
+  libraries emit glyph outlines in opposite Y conventions: confirmed
+  directly for the same font/glyph ("H"), opentype.js's
+  `glyph.getPath().toPathData()` emits Y-DOWN pixel-space coordinates (top
+  of "H" at y=-71.6), while HarfBuzz's `glyphToPath()` emits Y-UP
+  font-unit-space coordinates (top of "H" at y=+71.58) for the identical
+  glyph. `flipY: true` correctly un-inverts the former into this codebase's
+  Y-up world space; applied to the latter, it double-flips an already
+  right-side-up path. Fixed by using `flipY: false` for the HarfBuzz path.
+  Found by actually rendering a scene with `setTextShapingBackend("harfbuzz")`
+  active and looking at the output — every existing HarfBuzz test asserts
+  on glyph counts/widths, never orientation, so this was invisible to the
+  test suite despite 6/6 of those tests passing throughout.
+- **`SVGMobject`'s `<linearGradient>` fill was silently dropped whenever
+  the same element also had a `clip-path`** — an untested combination
+  (existing gradient and clip-path tests each cover their feature in
+  isolation). `applyClipPath()` wraps a clipped shape in an `Intersection`
+  (`src/mobject/boolean_ops.ts`), whose shared `copyStyle()` helper (also
+  used by `Union`/`Difference`/`Exclusion`) only copied
+  `fillColor`/`fillOpacity`/`strokeColor`/`strokeWidth`/`strokeOpacity` —
+  never `gradientColors`/`sheenDirection` — so a gradient-filled, clipped
+  shape silently fell back to a flat fill (the gradient's own first stop,
+  already stashed in `fillColor` as a fallback) instead of rendering an
+  actual gradient. `copyStyle()` now also copies `gradientColors` (when
+  present) and `sheenDirection`, fixing every boolean op, not just SVG
+  clipping. Found while rendering an SVG badge combining both features
+  (added in the same 0.0.11 release) in one end-to-end scene.
 - **`setTextShapingBackend()` and the rest of the optional HarfBuzz
   text-shaping API were never wired into the public `ecmanim`/`ecmanim/node`
   barrels** — `import { setTextShapingBackend } from "ecmanim"` threw "does
