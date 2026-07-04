@@ -85,25 +85,42 @@ export class Timeline {
     throw new Error(`Timeline: unknown position "${position}"`);
   }
 
-  private childRunTime(animation: any): number {
-    if (this.defaults.runTime != null) return this.defaults.runTime;
+  // `forNestedTimeline`: bypass defaults.runTime -- a nested Timeline's own
+  // resolved duration must never be overridden by this timeline's defaults.
+  private childRunTime(animation: any, forNestedTimeline = false): number {
+    if (!forNestedTimeline && this.defaults.runTime != null) return this.defaults.runTime;
     return animation.runTime ?? 1;
   }
 
   add(animation: any, position?: string | number): this {
-    const anim = animation && animation._isAnimateBuilder ? animation.build() : animation;
+    // A nested Timeline is built into its own AnimationGroup (with its own
+    // internally-resolved absolute schedule) and placed as ONE child at the
+    // resolved position -- previously this fell through to the plain
+    // "anim = animation" branch below, pushing the raw, un-built Timeline
+    // object (which has no .runTime), so childRunTime() silently fell back
+    // to its `?? 1` default instead of the nested timeline's real duration.
+    const isNestedTimeline = animation instanceof Timeline;
+    const anim = isNestedTimeline
+      ? animation.build()
+      : (animation && animation._isAnimateBuilder ? animation.build() : animation);
 
-    // Apply default rate function if provided and the animation exposes one.
-    if (this.defaults.rateFunc && anim && typeof anim === "object") {
-      anim.rateFunc = this.defaults.rateFunc;
-    }
-    // Apply default runTime to the animation object so downstream consumers agree.
-    if (this.defaults.runTime != null && anim && typeof anim === "object") {
-      anim.runTime = this.defaults.runTime;
+    // Defaults (rateFunc/runTime) apply to leaf animations authored directly
+    // on this Timeline, not to a nested Timeline's own already-resolved
+    // internal schedule -- overwriting its resolved `runTime` here would
+    // silently reflow every child inside it to a single new duration.
+    if (!isNestedTimeline) {
+      // Apply default rate function if provided and the animation exposes one.
+      if (this.defaults.rateFunc && anim && typeof anim === "object") {
+        anim.rateFunc = this.defaults.rateFunc;
+      }
+      // Apply default runTime to the animation object so downstream consumers agree.
+      if (this.defaults.runTime != null && anim && typeof anim === "object") {
+        anim.runTime = this.defaults.runTime;
+      }
     }
 
     const start = Math.max(0, this.resolve(position));
-    const end = start + this.childRunTime(anim);
+    const end = start + this.childRunTime(anim, isNestedTimeline);
 
     this.entries.push({ anim, start, end });
     this.prevStart = start;

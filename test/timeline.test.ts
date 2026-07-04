@@ -70,3 +70,46 @@ test("unknown position throws", () => {
   tl.add(fade());
   assert.throws(() => tl.add(fade(), "nope"), /unknown position/);
 });
+
+// Nested Timeline support: add() previously only special-cased the .animate
+// builder proxy, so passing a raw (unbuilt) Timeline pushed it as-is with no
+// .runTime, silently falling back to childRunTime()'s `?? 1` default instead
+// of the nested timeline's real, resolved duration.
+
+test("nesting a Timeline uses its own resolved duration, not the ?? 1 fallback", () => {
+  const inner = timeline();
+  inner.add(fade());        // [0,1]
+  inner.add(fade(), "+=1"); // [2,3] -> duration 3
+  const outer = timeline();
+  outer.add(inner, 0);
+  assert.deepEqual(windows(outer), [[0, 3]]);
+  assert.equal(outer.duration, 3);
+});
+
+test("nesting does not reflow the inner Timeline's own resolved schedule", () => {
+  const standaloneInner = timeline();
+  standaloneInner.add(fade());        // [0,1]
+  standaloneInner.add(fade(), "+=1"); // [2,3]
+  const standaloneTimings = windows(standaloneInner);
+
+  const nestedInner = timeline();
+  nestedInner.add(fade());
+  nestedInner.add(fade(), "+=1");
+  const outer = timeline();
+  outer.add(nestedInner, 5); // placed starting at outer position 5
+  const outerEntry = (outer.build() as any).timings[0];
+  const nestedGroupTimings = outerEntry.anim.timings.map((t: any) => [t.start, t.end]);
+
+  assert.deepEqual(nestedGroupTimings, standaloneTimings, "the nested timeline's own internal windows must be unchanged");
+  assert.deepEqual(windows(outer), [[5, 8]], "the nested timeline occupies one [start, start+duration] window in the outer schedule");
+});
+
+test("an outer Timeline's defaults.runTime does not clobber a nested Timeline's resolved duration", () => {
+  const inner = timeline();
+  inner.add(fade());
+  inner.add(fade(), "+=1"); // duration 3
+  const outer = timeline({ defaults: { runTime: 0.25 } });
+  outer.add(inner, 0);
+  outer.add(fade()); // a leaf animation IS affected by defaults.runTime
+  assert.deepEqual(windows(outer), [[0, 3], [3, 3.25]]);
+});
