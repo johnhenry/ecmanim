@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **`FlexGroup`** (`src/mobject/flex_group.ts`): opt-in real Flexbox layout
+  via [Yoga](https://www.yogalayout.dev/) (Meta/React's portable WASM
+  Flexbox engine), a new `optionalDependency` (`yoga-layout`) mirroring
+  `@napi-rs/canvas`/`three`/`harfbuzzjs`'s graceful-degrade pattern.
+  `direction`/`justifyContent`/`alignItems`/`gap` at the container level;
+  `flexGrow`/`flexShrink`/`flexBasis`/`margin` per child via
+  `setChildFlex()`. `await group.layout()` builds a fresh Yoga node tree
+  from the group's current children and repositions them — necessarily
+  async (Yoga's WASM must load first), documented prominently as the one
+  sharp edge in `docs/flex-group.md`. Fully additive: mobjects outside a
+  `FlexGroup` are unaffected, and a child can still pin its own size.
 - **WebGL raster-text batching** (`ThreeRenderer`): raster `Text`
   (`RasterText`) mobjects now render as ONE shared texture atlas + ONE
   merged quad mesh instead of one `THREE.Sprite` (own `CanvasTexture`) per

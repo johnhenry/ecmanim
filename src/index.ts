@@ -89,6 +89,9 @@ export * from "./mobject/probability.ts";
 export * from "./mobject/vector_field.ts";
 export * from "./mobject/graphing_scale.ts";
 export { ValueTracker, DecimalNumber, Integer, alwaysRedraw } from "./mobject/value_tracker.ts";
+// Opt-in Yoga-backed Flexbox layout (async init -- see docs/flex-group.md).
+export { FlexGroup, isYogaLoaded } from "./mobject/flex_group.ts";
+export type { FlexGroupConfig, FlexChildConfig, FlexDirection, JustifyContent, AlignItems } from "./mobject/flex_group.ts";
 
 export { CanvasRenderer, Camera } from "./renderer/CanvasRenderer.ts";
 export { SVGRenderer, mobjectsToSVG } from "./renderer/SVGRenderer.ts";

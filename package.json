@@ -70,7 +70,8 @@
   "optionalDependencies": {
     "@napi-rs/canvas": "^0.1.100",
     "harfbuzzjs": "^1.4.0",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "yoga-layout": "^3.2.1"
   },
   "dependencies": {
     "gifenc": "^1.0.3",

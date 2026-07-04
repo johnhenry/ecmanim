@@ -3,6 +3,9 @@
 Phase-1 adoption additions. All isomorphic and dependency-free; exported from
 `ecmanim`.
 
+See also: [docs/flex-group.md](flex-group.md) for `FlexGroup`, an opt-in
+Yoga-backed Flexbox layout primitive (an `optionalDependency`, async `layout()`).
+
 ## Expression drivers
 
 Pure, deterministic (order-independent) functions of time — drive any property
