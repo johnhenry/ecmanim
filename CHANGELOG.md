@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Fixed
+- Three `test/text-shaping-harfbuzz.test.ts` ligature tests assumed
+  DejaVu-Sans-specific coverage ("ffi"/"office" merging into a ligature
+  glyph). On macOS, `resolveFontPath()` commonly resolves to the system
+  Arial build, which has a `liga` GSUB feature but no "ffi"/"fi"/"fl"/"ff"
+  substitutions in it — HarfBuzz shaping was genuinely active
+  (`canShapeWithHarfBuzz: true`, backend reports `"harfbuzz"`), the font
+  itself just doesn't define those ligatures. The tests now check whether
+  the loaded font actually merges the glyphs before asserting, skipping
+  gracefully (matching the file's existing "degrade don't fail" style)
+  when it doesn't, instead of failing on environments with a different
+  system font.
+
 ## 0.0.12
 
 ### Fixed
