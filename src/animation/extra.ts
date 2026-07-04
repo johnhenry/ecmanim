@@ -12,6 +12,58 @@ import { Line, Rectangle } from "../mobject/geometry.ts";
 import { VGroup } from "../mobject/VMobject.ts";
 import type { Mobject } from "../mobject/Mobject.ts";
 import type { Vec3, RateFunc, ColorLike } from "../core/types.ts";
+import { X_AXIS, Z_AXIS } from "../core/constants.ts";
+
+// --- camera-facing billboarding (issue #29) ---------------------------------
+//
+// Circumscribe/Flash/FocusOn each build a brand-new, flat highlight mobject
+// in the mobject's local XY plane. Issue #21 fixed the case where the target
+// is fixed-in-frame (the highlight now inherits that flag). But a target
+// that's a genuine 3D world-space point has no "fixed" orientation to
+// inherit -- pinning it to the camera plane would be wrong too, since the
+// highlight wouldn't track the point's real 3D position as the camera
+// orbits. What that case needs is true camera-facing billboarding: build the
+// highlight directly in the point's camera-tangent plane (the two world-space
+// directions that project to flat screen X/Y under the CURRENT camera
+// orientation), so the ordinary 3D pipeline projects it back out undistorted,
+// still perspective-scaled and depth-tested against other 3D content, at any
+// camera angle.
+//
+// This must be recomputed every frame (not once at construction) so an
+// orbiting/animated camera (beginAmbientCameraRotation, moveCamera) doesn't
+// leave the highlight's orientation stale relative to a moving view.
+
+/** Camera-space right/up unit vectors, rotated into world space -- the
+ *  inverse of ThreeDCamera.toCameraSpace()'s rotation chain (Rz(-(theta+90))
+ *  then Rx(-phi) then Rz(-gamma)), applied in reverse order. Confirmed
+ *  empirically: projecting `center ± right*d` / `center ± up*d` through the
+ *  same camera's toPixel() moves purely along screen X / screen Y
+ *  respectively, at any phi/theta/gamma -- i.e. these two vectors span
+ *  exactly the plane that renders undistorted (camera-facing) at `center`. */
+function cameraBillboardBasis(camera: any): { right: number[]; up: number[] } {
+  const theta = camera.theta ?? 0, phi = camera.phi ?? 0, gamma = camera.gamma ?? 0;
+  const toWorld = (v: number[]) => {
+    let r = V.rotateVector(v, gamma, Z_AXIS);
+    r = V.rotateVector(r, phi, X_AXIS);
+    r = V.rotateVector(r, theta + 90 * V.DEGREES, Z_AXIS);
+    return r;
+  };
+  return { right: toWorld([1, 0, 0]), up: toWorld([0, 1, 0]) };
+}
+
+/** Remap flat, origin-centered local points (z ignored -- these shapes are
+ *  always built flat) into world space via a camera-billboard basis. */
+function billboardLocalPoints(localPoints: number[][], center: number[], right: number[], up: number[]): number[][] {
+  return localPoints.map((p) => V.add(center, V.add(V.scale(right, p[0]), V.scale(up, p[1]))));
+}
+
+/** True when config supplies a 3D camera and the target isn't already
+ *  fixed-in-frame/fixed-orientation (those paths already render correctly
+ *  via issue #21's flag-propagation fix -- billboarding is the alternative
+ *  for a target that's a genuine, still-3D world-space point). */
+function usesCameraBillboard(config: ExtraConfig, fixedInFrame: boolean, fixedOrientation: boolean): boolean {
+  return !fixedInFrame && !fixedOrientation && !!config.camera && typeof config.camera.projectionDepth === "function";
+}
 
 // Config accepted by the extra animations. All class-specific fields are
 // optional; AnimationConfig already carries an index signature.
@@ -43,6 +95,14 @@ interface ExtraConfig extends AnimationConfig {
    *  supply the flag when only a raw point is available. */
   fixedInFrame?: boolean;
   fixedOrientation?: boolean;
+  /** A 3D camera (e.g. `this.camera` inside a ThreeDScene's construct()) to
+   *  billboard the highlight against, for a target that's a genuine 3D
+   *  world-space point (not fixed-in-frame/fixed-orientation) -- see the
+   *  "camera-facing billboarding" note above (issue #29). Ignored when the
+   *  target is fixed-in-frame/fixed-orientation, since those already render
+   *  correctly without it. Recomputed every frame, so an orbiting camera
+   *  (beginAmbientCameraRotation/moveCamera) is tracked correctly. */
+  camera?: any;
 }
 
 // Snapshot every family member's points (deep copy) for later reconstruction.
@@ -332,6 +392,12 @@ export class Flash extends Animation {
   point: any;
   lines: any;
   startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
+  _billboard: boolean;
+  _billboardCamera: any;
+  _billboardCenter!: number[];
+  _billboardFlashRadius!: number;
+  _billboardLineLength!: number;
+  _billboardNumLines!: number;
 
   constructor(point: any, config: ExtraConfig = {}) {
     const color = config.color ?? "#FFFFFF";
@@ -368,6 +434,14 @@ export class Flash extends Animation {
     super(lines, { ...config, introducer: true, remover: true });
     this.point = center;
     this.lines = lines;
+    // Bug (issue #29): a genuinely-3D (non-fixed) point still rendered as a
+    // lopsided starburst -- see "camera-facing billboarding" above.
+    this._billboard = usesCameraBillboard(config, fixedInFrame, fixedOrientation);
+    this._billboardCamera = config.camera;
+    this._billboardCenter = center;
+    this._billboardFlashRadius = flashRadius;
+    this._billboardLineLength = lineLength;
+    this._billboardNumLines = numLines;
   }
 
   setup(): void {
@@ -375,6 +449,19 @@ export class Flash extends Animation {
   }
 
   interpolateMobject(alpha: number): void {
+    if (this._billboard) {
+      // Recomputed every frame (not cached) so an orbiting/animated camera
+      // keeps the burst camera-facing throughout the animation's runTime.
+      const { right, up } = cameraBillboardBasis(this._billboardCamera);
+      const n = this._billboardNumLines;
+      for (let i = 0; i < n; i++) {
+        const angle = (V.TAU * i) / n;
+        const dir = V.add(V.scale(right, Math.cos(angle)), V.scale(up, Math.sin(angle)));
+        const start = V.add(this._billboardCenter, V.scale(dir, this._billboardFlashRadius));
+        const end = V.add(this._billboardCenter, V.scale(dir, this._billboardFlashRadius + this._billboardLineLength));
+        (this.lines.submobjects[i] as any).setPointsAsCorners([start, end]);
+      }
+    }
     // Fade out the rays over the animation.
     const fade = 1 - alpha;
     this.mobject.getFamily().forEach((m: any, i: number) => {
@@ -445,6 +532,10 @@ export class Circumscribe extends Animation {
   rect: any;
   fadeOut: boolean;
   startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
+  _billboard: boolean;
+  _billboardCamera: any;
+  _billboardCenter!: number[];
+  _billboardLocalPoints!: number[][] | null;
 
   constructor(mobject: any, config: ExtraConfig = {}) {
     const target = mobject;
@@ -462,8 +553,10 @@ export class Circumscribe extends Animation {
     // this `rect` is a brand-new mobject the target's flag never reaches).
     // `target` is always a real Mobject here (unlike Flash/FocusOn's `point`,
     // which may be a raw coordinate), so this can inherit automatically.
-    (rect as any)._fixedInFrame = config.fixedInFrame ?? !!(target as any)._fixedInFrame;
-    (rect as any)._fixedOrientation = config.fixedOrientation ?? !!(target as any)._fixedOrientation;
+    const fixedInFrame = config.fixedInFrame ?? !!(target as any)._fixedInFrame;
+    const fixedOrientation = config.fixedOrientation ?? !!(target as any)._fixedOrientation;
+    (rect as any)._fixedInFrame = fixedInFrame;
+    (rect as any)._fixedOrientation = fixedOrientation;
 
     super(rect, {
       rateFunc: config.rateFunc ?? rf.smooth,
@@ -473,6 +566,17 @@ export class Circumscribe extends Animation {
     });
     this.rect = rect;
     this.fadeOut = config.fadeOut ?? true;
+    // Bug (issue #29): a genuinely-3D (non-fixed) target still rendered as a
+    // skewed parallelogram -- see "camera-facing billboarding" above. The
+    // rectangle's own LOCAL (origin-centered) points are captured once --
+    // width/height are static -- and remapped through a freshly recomputed
+    // camera basis every frame in interpolateMobject().
+    this._billboard = usesCameraBillboard(config, fixedInFrame, fixedOrientation);
+    this._billboardCamera = config.camera;
+    this._billboardCenter = target.getCenter();
+    this._billboardLocalPoints = this._billboard
+      ? new Rectangle({ width: Math.max(w, 1e-3), height: Math.max(h, 1e-3) }).points.map((p: number[]) => [...p])
+      : null;
   }
 
   setup(): void {
@@ -480,6 +584,10 @@ export class Circumscribe extends Animation {
   }
 
   interpolateMobject(alpha: number): void {
+    if (this._billboard) {
+      const { right, up } = cameraBillboardBasis(this._billboardCamera);
+      this.rect.points = billboardLocalPoints(this._billboardLocalPoints!, this._billboardCenter, right, up);
+    }
     // First half: draw the outline. Second half: fade it out.
     if (alpha <= 0.5) {
       this.mobject.getFamily().forEach((m: any) => {
@@ -510,6 +618,9 @@ export class FocusOn extends Animation {
   startRadius: number;
   startPoints!: number[][][];
   startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
+  _billboard: boolean;
+  _billboardCamera: any;
+  _billboardLocalPoints!: number[][] | null;
 
   constructor(point: any, config: ExtraConfig = {}) {
     const sourceMobject = point instanceof Object && !Array.isArray(point) && point.getCenter ? point : null;
@@ -529,8 +640,10 @@ export class FocusOn extends Animation {
     // orientation flags. Inherit automatically when called with a Mobject
     // (as `sourceMobject` here); a raw point has no flags to inherit, so an
     // explicit config override is the only way to get this right for one.
-    (circle as any)._fixedInFrame = config.fixedInFrame ?? !!(sourceMobject as any)?._fixedInFrame;
-    (circle as any)._fixedOrientation = config.fixedOrientation ?? !!(sourceMobject as any)?._fixedOrientation;
+    const fixedInFrame = config.fixedInFrame ?? !!(sourceMobject as any)?._fixedInFrame;
+    const fixedOrientation = config.fixedOrientation ?? !!(sourceMobject as any)?._fixedOrientation;
+    (circle as any)._fixedInFrame = fixedInFrame;
+    (circle as any)._fixedOrientation = fixedOrientation;
 
     super(circle, {
       rateFunc: config.rateFunc ?? rf.smooth,
@@ -541,6 +654,17 @@ export class FocusOn extends Animation {
     this.point = target;
     this.circle = circle;
     this.startRadius = startRadius;
+    // Bug (issue #29): a genuinely-3D (non-fixed) point still rendered as an
+    // ellipse -- see "camera-facing billboarding" above. The ring's own
+    // LOCAL (origin-centered, full-size) points are captured once; shrinking
+    // toward the point commutes with the (linear) billboard remap, so
+    // interpolateMobject() shrinks these local points by `1 - alpha` FIRST,
+    // then remaps through a freshly recomputed camera basis every frame.
+    this._billboard = usesCameraBillboard(config, fixedInFrame, fixedOrientation);
+    this._billboardCamera = config.camera;
+    this._billboardLocalPoints = this._billboard
+      ? new Circle({ radius: startRadius }).points.map((p: number[]) => [...p])
+      : null;
   }
 
   static _geometry(): { Circle: typeof _Circle } {
@@ -556,6 +680,15 @@ export class FocusOn extends Animation {
   interpolateMobject(alpha: number): void {
     // Shrink the ring toward the point (scale startRadius -> ~0).
     const s = 1 - alpha;
+    if (this._billboard) {
+      const { right, up } = cameraBillboardBasis(this._billboardCamera);
+      const shrunk = this._billboardLocalPoints!.map((p) => [p[0] * s, p[1] * s, 0]);
+      this.circle.points = billboardLocalPoints(shrunk, this.point, right, up);
+      const o = this.startOpacities[0];
+      this.circle.fillOpacity = o.fill * alpha;
+      this.circle.strokeOpacity = o.stroke * alpha;
+      return;
+    }
     const fam = this.mobject.getFamily();
     fam.forEach((m: any, i: number) => {
       const start = this.startPoints[i];
