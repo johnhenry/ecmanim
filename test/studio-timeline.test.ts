@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   timeToPixel, pixelToTime, frameToPixel, pixelToFrame,
   computeSectionThumbnails, renderSectionOverview, computeStepMarkers,
+  computeWaveformBars, renderWaveform,
 } from "../src/studio/timeline.ts";
 
 test("timeToPixel / pixelToTime round-trip", () => {
@@ -76,4 +77,34 @@ test("computeStepMarkers positions one marker per step at its start frame", () =
   ];
   const markers = computeStepMarkers(steps, { totalFrames: 100, pixelWidth: 400 });
   assert.deepEqual(markers.map((m) => m.x), [0, 100, 300]);
+});
+
+test("computeWaveformBars evenly spaces bars and scales height by amplitude", () => {
+  const samples = [0, 0.5, 1, -1];
+  const bars = computeWaveformBars(samples, { pixelWidth: 400, maxHeight: 20 });
+  assert.equal(bars.length, 4);
+  assert.deepEqual(bars.map((b) => b.x), [0, 100, 200, 300]);
+  assert.deepEqual(bars.map((b) => b.height), [0, 10, 20, 20]); // abs(-1) -> full height
+});
+
+test("computeWaveformBars clamps height to maxHeight even if a sample exceeds 1", () => {
+  const bars = computeWaveformBars([2], { pixelWidth: 100, maxHeight: 10 });
+  assert.equal(bars[0].height, 10);
+});
+
+test("computeWaveformBars of an empty sample set returns no bars", () => {
+  assert.deepEqual(computeWaveformBars([], { pixelWidth: 100, maxHeight: 10 }), []);
+});
+
+test("renderWaveform draws one fillRect per bar and returns the same layout computeWaveformBars would", () => {
+  const calls: any[] = [];
+  const fakeCtx = { fillRect: (...args: any[]) => calls.push(args), fillStyle: "" };
+  const samples = [0.25, 1];
+  const bars = renderWaveform(fakeCtx, samples, { pixelWidth: 200, height: 40, x: 500, y: 10 });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(bars, computeWaveformBars(samples, { pixelWidth: 200, maxHeight: 40 }));
+  // Bars are offset by opts.x/opts.y and vertically centered within the strip.
+  const [x0, y0] = calls[0];
+  assert.equal(x0, 500 + bars[0].x);
+  assert.equal(y0, 10 + 20 - bars[0].height / 2);
 });

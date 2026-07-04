@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Waveform visualization** (`startStudio({ waveform: true })`): draws a
+  bar-chart waveform strip below the live preview for each of the scene's
+  `addSound()`-scheduled sounds, positioned on the shared timeline via
+  `src/studio/timeline.ts`'s new `computeWaveformBars()`/`renderWaveform()`.
+  Reuses the existing `getAudioData()`/`getWaveformPortion()` audio
+  primitives (both Node ffmpeg and browser AudioContext backends) — no new
+  audio decoding. Opt-in; off by default.
 - **Parameter-only re-render primitive**: `runConstruct(sceneOrConstruct,
   scene, props?)` and `Player.record(sceneOrConstruct, { props? })` thread
   `props` through to a Scene subclass's own `config.props` or a bare

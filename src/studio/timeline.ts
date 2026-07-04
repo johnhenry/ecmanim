@@ -94,3 +94,51 @@ export interface StepMarkerLayout {
 export function computeStepMarkers(steps: any[], opts: FrameAxisOptions): StepMarkerLayout[] {
   return steps.map((step) => ({ step, x: frameToPixel(step.startFrame, opts) }));
 }
+
+// --- waveform (item 6) -------------------------------------------------------
+// Audio decoding/downsampling is NOT reimplemented here -- getAudioData()/
+// getWaveformPortion() (src/audio/analyze.ts) already do that (both Node
+// ffmpeg and browser AudioContext backends). This is purely the bar-layout
+// half: turn downsampled peak-amplitude samples into screen-space bars.
+
+export interface WaveformBar {
+  x: number;
+  height: number;
+}
+
+/** Pure layout: one bar per sample, evenly spaced, height proportional to
+ *  the sample's peak amplitude (expected in [-1, 1], e.g. from
+ *  getWaveformPortion()). */
+export function computeWaveformBars(
+  samples: number[],
+  opts: { pixelWidth: number; maxHeight: number },
+): WaveformBar[] {
+  const n = samples.length;
+  if (n === 0) return [];
+  const barWidth = opts.pixelWidth / n;
+  return samples.map((amp, i) => ({
+    x: i * barWidth,
+    height: Math.min(opts.maxHeight, Math.abs(amp) * opts.maxHeight),
+  }));
+}
+
+/** Draws vertically-centered bars for one sound's waveform onto `ctx`,
+ *  positioned at `opts.x`/`opts.y` (e.g. timeToPixel(sound.time, ...) for a
+ *  sound scheduled partway through the scene). */
+export function renderWaveform(
+  ctx: any,
+  samples: number[],
+  opts: { pixelWidth: number; height: number; x?: number; y?: number; color?: string },
+): WaveformBar[] {
+  const bars = computeWaveformBars(samples, { pixelWidth: opts.pixelWidth, maxHeight: opts.height });
+  const barWidth = bars.length ? opts.pixelWidth / bars.length : 0;
+  const originX = opts.x ?? 0;
+  const centerY = (opts.y ?? 0) + opts.height / 2;
+  if (ctx) {
+    ctx.fillStyle = opts.color ?? "#4fd1c5";
+    for (const bar of bars) {
+      ctx.fillRect(originX + bar.x, centerY - bar.height / 2, Math.max(1, barWidth - 1), Math.max(1, bar.height));
+    }
+  }
+  return bars;
+}

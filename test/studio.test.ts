@@ -14,6 +14,20 @@ test("buildStudioHarness embeds importmap, scene import, player, and SSE reload"
   assert.ok(!/undefined/.test(html));
 });
 
+test("buildStudioHarness({ waveform: true }) adds a waveform canvas + audio wiring, opt-in", () => {
+  const base = { sceneModuleUrl: "/scene.js", sceneExport: "default", browserUrl: "/dist/browser.js", studioUrl: "/dist/studio.js", quality: "medium", background: "#000", interactive: false };
+  const withoutWaveform = buildStudioHarness(base);
+  assert.ok(!/id="waveform"/.test(withoutWaveform));
+  assert.ok(!/undefined/.test(withoutWaveform));
+
+  const withWaveform = buildStudioHarness({ ...base, waveform: true });
+  assert.match(withWaveform, /id="waveform"/);
+  assert.match(withWaveform, /getAudioData/);
+  assert.match(withWaveform, /getWaveformPortion/);
+  assert.match(withWaveform, /renderWaveform/);
+  assert.ok(!/undefined/.test(withWaveform));
+});
+
 test("schemaToControls maps field types to controls", () => {
   const schema = { spec: {
     title: { type: "string", default: "hi", description: "the title" },

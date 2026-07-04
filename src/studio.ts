@@ -20,7 +20,8 @@ export type { ChartGraphBuilder } from "./studio/chart_element.ts";
 export {
   timeToPixel, pixelToTime, frameToPixel, pixelToFrame,
   computeSectionThumbnails, renderSectionOverview, computeStepMarkers,
+  computeWaveformBars, renderWaveform,
 } from "./studio/timeline.ts";
 export type {
-  TimeAxisOptions, FrameAxisOptions, SectionThumbnailLayout, StepMarkerLayout,
+  TimeAxisOptions, FrameAxisOptions, SectionThumbnailLayout, StepMarkerLayout, WaveformBar,
 } from "./studio/timeline.ts";

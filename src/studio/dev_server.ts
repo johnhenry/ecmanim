@@ -18,16 +18,20 @@ export interface StudioOptions {
   background?: string;
   /** Attach pointer-driven pan/zoom/orbit to the live preview (default false). */
   interactive?: boolean;
+  /** Draw a waveform strip below the player for each of the scene's sounds
+   *  (via addSound()), on the shared time axis (default false). */
+  waveform?: boolean;
 }
 
 /** The live-reload harness page HTML (importmap + <manim-player> + SSE reload). */
-export function buildStudioHarness(opts: { sceneModuleUrl: string; sceneExport: string; browserUrl: string; studioUrl: string; quality: string; background: string; interactive: boolean }): string {
+export function buildStudioHarness(opts: { sceneModuleUrl: string; sceneExport: string; browserUrl: string; studioUrl: string; quality: string; background: string; interactive: boolean; waveform?: boolean }): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ecmanim Studio</title>
 <style>body{margin:0;background:#0b0d12;color:#cdd6f4;font:14px system-ui;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px}manim-player{max-width:96vw;box-shadow:0 4px 30px #0008}#bar{opacity:.7}</style>
 <script type="importmap">{"imports":{"ecmanim/browser":"${opts.browserUrl}","ecmanim/studio":"${opts.studioUrl}"}}</script></head>
 <body>
 <div id="bar">ecmanim Studio — editing <code>${opts.sceneExport}</code> · saves hot-reload${opts.interactive ? " · drag to pan/orbit, scroll to zoom" : ""}</div>
 <manim-player id="p" quality="${opts.quality}" background="${opts.background}" controls></manim-player>
+${opts.waveform ? `<canvas id="waveform" style="display:block;margin-top:4px"></canvas>` : ""}
 <script type="module">
   import { defineManimPlayer } from "ecmanim/browser";
   defineManimPlayer();
@@ -42,6 +46,35 @@ export function buildStudioHarness(opts: { sceneModuleUrl: string; sceneExport: 
     detachInteractive = attachInteractiveCamera(player.canvas, player.camera, {
       render: () => player.rerenderCurrentFrame(),
     });
+  });` : ""}
+  ${opts.waveform ? `
+  const waveformCanvas = document.getElementById("waveform");
+  const waveformCache = new Map();
+  el.addEventListener("ready", async () => {
+    const player = el.player;
+    const scene = player?.scene;
+    const wctx = waveformCanvas.getContext("2d");
+    const width = player?.pixelWidth ?? 0;
+    const height = 48;
+    waveformCanvas.width = width;
+    waveformCanvas.height = height;
+    wctx.clearRect(0, 0, width, height);
+    if (!player || !scene?.sounds?.length) return;
+    const { getAudioData, getWaveformPortion } = await import("ecmanim/browser");
+    const { renderWaveform, timeToPixel } = await import("ecmanim/studio");
+    const axis = { duration: player.duration, pixelWidth: width };
+    for (const sound of scene.sounds) {
+      let audioData = waveformCache.get(sound.file);
+      if (!audioData) {
+        try { audioData = await getAudioData(sound.file); } catch { continue; }
+        waveformCache.set(sound.file, audioData);
+      }
+      const x = timeToPixel(sound.time, axis);
+      const durationInSeconds = Math.max(0, player.duration - sound.time);
+      const numberOfSamples = Math.max(1, Math.round(width - x));
+      const samples = getWaveformPortion({ audioData, startTimeInSeconds: 0, durationInSeconds, numberOfSamples });
+      renderWaveform(wctx, samples, { pixelWidth: width - x, height, x, y: 0 });
+    }
   });` : ""}
   async function load() {
     try {
@@ -67,6 +100,7 @@ export async function startStudio(options: StudioOptions): Promise<StudioHandle>
   const quality = options.quality ?? "medium";
   const background = options.background ?? "#0d1117";
   const interactive = options.interactive ?? false;
+  const waveform = options.waveform ?? false;
   const sceneUrlPath = "/" + path.relative(root, path.resolve(root, options.sceneModule)).split(path.sep).join("/");
 
   const clients: any[] = [];
@@ -75,7 +109,7 @@ export async function startStudio(options: StudioOptions): Promise<StudioHandle>
   const server = http.createServer((req: any, res: any) => {
     const url = decodeURIComponent((req.url || "/").split("?")[0]);
     if (url === "/" || url === "/index.html") {
-      const html = buildStudioHarness({ sceneModuleUrl: sceneUrlPath, sceneExport, browserUrl: "/dist/browser.js", studioUrl: "/dist/studio.js", quality, background, interactive });
+      const html = buildStudioHarness({ sceneModuleUrl: sceneUrlPath, sceneExport, browserUrl: "/dist/browser.js", studioUrl: "/dist/studio.js", quality, background, interactive, waveform });
       res.writeHead(200, { "content-type": "text/html" });
       res.end(html);
       return;
