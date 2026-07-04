@@ -165,7 +165,7 @@ export {
 } from "./scene/compositions.ts";
 export type { CompositionDescriptor } from "./scene/compositions.ts";
 export {
-  STYLE_PRESETS, ASPECT_RATIO_PRESETS, resolveStyle, resolveAspectRatio,
+  STYLE_PRESETS, ASPECT_RATIO_PRESETS, resolveStyle, resolveAspectRatio, registerStylePreset,
 } from "./core/presets.ts";
 export type { StylePreset, AspectRatioPreset } from "./core/presets.ts";
 
@@ -214,8 +214,8 @@ export type { EaseFn } from "./animation/easing.ts";
 // Sequence time-shift + mobject-level transitions (timing orthogonal to presentation).
 export { Sequence, SequenceAnimation } from "./animation/sequence.ts";
 export type { SequenceConfig } from "./animation/sequence.ts";
-export { crossFade, slide, wipe, Slide, Wipe } from "./animation/transitions.ts";
-export type { TransitionConfig } from "./animation/transitions.ts";
+export { crossFade, slide, wipe, Slide, Wipe, linearTiming, springTiming } from "./animation/transitions.ts";
+export type { TransitionConfig, TimingPreset, TimingPresetResult } from "./animation/transitions.ts";
 
 // Async-asset gate (Remotion-style delayRender/continueRender).
 export {

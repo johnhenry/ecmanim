@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **Page-transition playback resume** (`ecmanim/browser`):
+  `enablePageTransitionResume(playerEl, opts?)` carries a `<manim-player>`'s
+  playback position across a full page navigation — saves `{ time }` to
+  `sessionStorage` on `pagehide`, restores it via `seekTime()` once the new
+  page's player fires "ready". `savePlaybackPosition()`/
+  `restorePlaybackPosition()` are the underlying pure functions if you want
+  to wire your own lifecycle hooks. Opt-in `{ viewTransition: true }`
+  additionally does a View Transitions snapshot handoff (canvases don't
+  participate in the browser's DOM-snapshot mechanism directly, so this
+  captures the outgoing frame into a plain `<img>` tagged with a shared
+  `view-transition-name`, and tags the incoming canvas with the same name).
 - **`FlexGroup`** (`src/mobject/flex_group.ts`): opt-in real Flexbox layout
   via [Yoga](https://www.yogalayout.dev/) (Meta/React's portable WASM
   Flexbox engine), a new `optionalDependency` (`yoga-layout`) mirroring
@@ -225,6 +236,13 @@
   `SVGMobject`, plus matching gradient-export support in the SVG renderer.
 
 ### Fixed
+- **`linearTiming`/`springTiming`/`registerStylePreset` are now actually
+  exported from the public `ecmanim` package** — implemented earlier in this
+  release but never wired into `src/index.ts`'s barrel, so they were
+  unreachable from `import { ... } from "ecmanim"` despite being documented
+  as part of this release. Caught during a pre-release documentation audit
+  (every code sample in the docs above was executed against the real
+  package to confirm it, which is how these two were found).
 - **`Scene.play(animation, config)` no longer requires an undocumented
   internal `_playConfig: true` marker on the config object** (GitHub issue
   #19). Previously, a bare trailing config object like `{ runTime: 0.5 }`

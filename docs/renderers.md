@@ -15,6 +15,57 @@ The CPU Canvas-2D backend stays the default because its determinism is what
 makes the content-hash partial-movie cache and reproducible CI snapshots sound.
 The two alternate renderers below are opt-in.
 
+## The `SceneRenderer` interface
+
+Each backend class also exposes an additive `renderFrame(mobjects)` method
+satisfying one shared shape (`{ renderFrame(mobjects): void | string }`),
+purely delegating to that class's existing named method
+(`CanvasRenderer.renderScene`/`ThreeRenderer.render`/
+`SVGRenderer.renderToString`, all unchanged and still the primary API):
+
+```js
+import { CanvasRenderer, SVGRenderer } from "ecmanim";
+
+function drawWith(renderer, mobjects) {
+  renderer.renderFrame(mobjects); // works the same across all three backends
+}
+```
+
+## Static-subtree render caching (Canvas-2D)
+
+`mobject.cacheStatic()` opts a mobject into `CanvasRenderer`'s per-mobject
+render cache: on an unchanged frame (a content-based fingerprint of its
+geometry/style, *and* the camera state), the renderer blits a small cached
+offscreen bitmap instead of re-walking the bezier path.
+
+```js
+const grid = buildBackgroundGrid(); // many unchanging line segments
+grid.cacheStatic();
+scene.add(grid);
+```
+
+Screen-space, MVP-scoped: invalidated on *any* camera-state change
+(`frameCenter`/`frameWidth`/`frameHeight`/`zoom`), so it mainly helps
+static-camera scenes with many unchanging elements (dense axis labels,
+background grids) — not scenes with continuous camera motion, where it
+invalidates every cached mobject each frame anyway. Requires a synchronous
+offscreen-canvas backend (`OffscreenCanvas`, or a detached `<canvas>` in a
+DOM environment); gracefully no-ops under headless Node (where only an async
+`@napi-rs/canvas` import is available) — calling `cacheStatic()` there is
+harmless, it just draws directly every frame like normal.
+
+## WebGL raster-text batching (Three.js)
+
+`ThreeRenderer` automatically batches every raster `Text` mobject present in
+a frame into ONE shared texture atlas + ONE merged quad mesh (via
+`src/renderer/text_atlas.ts`'s `buildTextAtlas()`), instead of one
+`THREE.Sprite` (own `CanvasTexture`) per mobject — converting N draw calls
+into 1 for scenes with many small text labels. This needs no opt-in and no
+API change; it's automatic whenever the camera is 2D-orthographic (where a
+flat quad looks identical to a billboarded sprite). A genuine 3D/perspective
+camera keeps the original per-mobject sprite path, since real billboarding
+needs each label to actually face the viewer.
+
 ---
 
 ## SVG / vector output

@@ -35,6 +35,15 @@ export { ManimPlayerElement, defineManimPlayer } from "./web-component.ts";
 export { loadVideo, LiveVideoProvider, PreCapturedProvider, WebCodecsProvider, webCodecsAvailable } from "./video-browser.ts";
 export type { LoadVideoBrowserOptions } from "./video-browser.ts";
 
+// Resume <manim-player> playback across a full page navigation (sessionStorage
+// + seekTime(), with an opt-in View Transitions snapshot handoff).
+export {
+  savePlaybackPosition, restorePlaybackPosition, enablePageTransitionResume,
+} from "./page_transition.ts";
+export type {
+  PlaybackPosition, SavePositionOptions, PageTransitionOptions, PageTransitionHandle,
+} from "./page_transition.ts";
+
 // Options accepted by the browser backend's play() / record(). All optional.
 export interface BrowserOptions {
   canvas?: any;
