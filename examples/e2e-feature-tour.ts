@@ -29,21 +29,13 @@ class FeatureTour extends Scene {
     // 1. FlexGroup: real Yoga flexbox layout for 3 "stat cards", one of
     // which grows to fill remaining space via setChildFlex(flexGrow).
     let t = tag("FlexGroup: Yoga flexbox layout");
-    const flexWidth = 12, flexGap = 0.4, fixedCardWidth = 2;
-    const cardA = new Rectangle({ width: fixedCardWidth, height: 1.4, color: BLUE, fillOpacity: 0.3 });
-    const cardB = new Rectangle({ width: fixedCardWidth, height: 1.4, color: GREEN, fillOpacity: 0.3 });
-    const cardC = new Rectangle({ width: fixedCardWidth, height: 1.4, color: PURPLE, fillOpacity: 0.3 });
-    const row = new FlexGroup({ direction: "row", justifyContent: "space-between", alignItems: "center", gap: flexGap, width: flexWidth, height: 2 });
+    const cardA = new Rectangle({ width: 2, height: 1.4, color: BLUE, fillOpacity: 0.3 });
+    const cardB = new Rectangle({ width: 2, height: 1.4, color: GREEN, fillOpacity: 0.3 });
+    const cardC = new Rectangle({ width: 2, height: 1.4, color: PURPLE, fillOpacity: 0.3 });
+    const row = new FlexGroup({ direction: "row", justifyContent: "space-between", alignItems: "center", gap: 0.4, width: 12, height: 2 });
     row.add(cardA, cardB, cardC);
     row.setChildFlex(cardB, { flexGrow: 1 });
-    await row.layout();
-    // layout() only repositions children to Yoga's computed box -- it does
-    // NOT resize them to match (confirmed via direct repro; see issue #23
-    // and docs/flex-group.md's "flexGrow/flexShrink" callout). Resize the
-    // growing card ourselves via setWidth(w, stretch=true) (width-only, so
-    // height stays matched to its fixed siblings) to actually fill the
-    // space Yoga allotted it.
-    cardB.setWidth(flexWidth - 2 * fixedCardWidth - 2 * flexGap, true);
+    await row.layout(); // issue #23 fixed: flexGrow now visibly resizes cardB, no manual setWidth() needed
     await this.play(new FadeIn(t), new Create(cardA), new Create(cardB), new Create(cardC), { runTime: 0.7 });
     await this.wait(0.6);
     await this.play(new FadeOut(t), new FadeOut(cardA), new FadeOut(cardB), new FadeOut(cardC), { runTime: 0.4 });

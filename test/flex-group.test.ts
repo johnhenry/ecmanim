@@ -75,6 +75,39 @@ test("setChildFlex(flexGrow) lets one child grow to fill remaining space", async
   // center, since both are measured in the same post-layout frame.
   const gap = growable.getCenter()[0] - fixed.getCenter()[0];
   approx(gap, 6 - 1);
+
+  // Issue #23, confirmed via direct repro and now fixed: growable's own
+  // getWidth() was previously unchanged (still 2) after layout() -- it was
+  // only ever repositioned to Yoga's computed box, never resized to fill
+  // it. Now matches real CSS flexbox: the child visibly grows.
+  approx(growable.getWidth(), 8); // flexGrow:1 fills the remaining width (10 - fixed's 2)
+  approx(fixed.getWidth(), 2); // a child with no flexGrow/flexShrink keeps its own authored size
+  approx(growable.getHeight(), 2); // flexGrow only resizes the main axis; height is untouched
+});
+
+test("setChildFlex(flexShrink) shrinks a child below its flexBasis when siblings overflow the container", async () => {
+  const group = new FlexGroup({ direction: "row", alignItems: "flex-start", width: 6, height: 4 });
+  const rigid = new Square({ sideLength: 4 });
+  const shrinkable = new Square({ sideLength: 4 });
+  group.add(rigid, shrinkable);
+  group.setChildFlex(shrinkable, { flexShrink: 1 });
+  await group.layout();
+
+  // Two 4-wide children overflow a 6-wide row by 2; with only `shrinkable`
+  // allowed to shrink, it absorbs the full 2-unit overflow (4 -> 2) while
+  // `rigid` (flexShrink unset, default 0) keeps its full authored width.
+  approx(rigid.getWidth(), 4); // no flexShrink -- keeps its authored size even when siblings overflow
+  approx(shrinkable.getWidth(), 2); // flexShrink:1 absorbs the container overflow
+});
+
+test("a child with neither flexGrow nor flexShrink is never resized by layout()", async () => {
+  const group = new FlexGroup({ direction: "row", justifyContent: "center", width: 10, height: 4 });
+  const a = new Square({ sideLength: 2 });
+  const b = new Square({ sideLength: 3 });
+  group.add(a, b);
+  await group.layout();
+  approx(a.getWidth(), 2);
+  approx(b.getWidth(), 3);
 });
 
 test("a child outside any FlexGroup is completely unaffected", () => {

@@ -12,12 +12,6 @@
   each feature's own isolated unit tests. Found 4 real issues in the
   process (see this section's other entries plus issues #23 and the
   `Code.diffTo()`/`FlexGroup` doc callouts below).
-- `docs/flex-group.md`: documented that `flexGrow`/`flexShrink` affect
-  Yoga's internal layout math and child *positioning* only — `layout()`
-  never resizes a child mobject to match its computed box, unlike real CSS
-  flexbox. Tracked as [issue #23](https://github.com/johnhenry/ecmanim/issues/23)
-  (a real fix needs a design decision about resize semantics this issue
-  doesn't prescribe).
 - `Code.diffTo()`'s doc comment now calls out that tokens present only in
   the target `Code` get added directly to the scene by `Scene.play()` (via
   the underlying `TransformMatchingAuto`'s per-token `FadeIn`s) even though
@@ -26,6 +20,33 @@
   the source.
 
 ### Fixed
+- **`FlexGroup`'s `flexGrow`/`flexShrink` now actually resize the child**
+  (issue #23), matching real CSS Flexbox instead of only repositioning it
+  within Yoga's computed box. `layout()` resizes a flex child on the MAIN
+  axis only (width for `row`/`row-reverse`, height for `column`/
+  `column-reverse`, via `setWidth`/`setHeight`'s axis-only `stretch: true`)
+  when it has `flexGrow` or `flexShrink` configured; a child with neither
+  keeps its own authored size exactly as before. Confirmed via direct
+  repro: a `flexGrow: 1` child's `getWidth()` was previously unchanged
+  (still its original size) after `layout()` despite being correctly
+  repositioned as if it already filled the larger box Yoga computed for
+  it — now it's actually resized to fill that box.
+- **`Circumscribe`/`Flash`/`FocusOn` render skewed under a 3D camera, even
+  targeting an already-fixed-in-frame mobject** (issue #21). Each builds a
+  brand-new, flat highlight mobject (a `Rectangle`/ring of `Line`s/`Circle`)
+  rather than reusing the target, so it never inherited the target's
+  `_fixedInFrame`/`_fixedOrientation` flags (set by
+  `addFixedInFrameMobjects()`/`addFixedOrientedMobjects()`) — even when the
+  target itself was correctly flagged. Fixed by propagating both flags from
+  the target: automatic for `Circumscribe` (always given a real target
+  Mobject) and for `Flash`/`FocusOn` when called with a Mobject rather than
+  a raw point (both now also accept a Mobject directly, extracting its
+  center the same way `FocusOn` already did); a new `fixedInFrame`/
+  `fixedOrientation` config option is the fallback for a raw point with
+  nothing to inherit from. This fixes the "target already fixed-in-frame"
+  case from the issue; the separate genuinely-3D-target skew (a receded
+  world-space point under camera rotation) is unaffected — that needs
+  camera-facing billboarding, a larger follow-up left for a future issue.
 - **Every glyph shaped via the optional HarfBuzz text-shaping backend
   rendered upside down.** `shapeWithHarfBuzz()`
   (`src/mobject/text_shaping_hb.ts`) passed the same `flipY: true` to

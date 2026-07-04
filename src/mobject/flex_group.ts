@@ -134,6 +134,9 @@ export class FlexGroup extends Group {
 
     root.calculateLayout(width, height, Yoga.DIRECTION_LTR);
 
+    const direction = this.flexConfig.direction ?? "row";
+    const mainAxisIsWidth = direction === "row" || direction === "row-reverse";
+
     for (let i = 0; i < children.length; i++) {
       const node = nodes[i];
       const left = node.getComputedLeft();
@@ -141,7 +144,24 @@ export class FlexGroup extends Group {
       const w = node.getComputedWidth();
       const h = node.getComputedHeight();
       const child = children[i];
+      const cfg = this._childConfig.get(child) ?? {};
       const z = child.getCenter()[2];
+      // Bug (issue #23), confirmed via direct repro: a child with
+      // flexGrow/flexShrink got a bigger/smaller box in Yoga's computed
+      // layout, and was correctly REPOSITIONED to that box's center below,
+      // but was never actually RESIZED to fill it -- unlike real CSS
+      // flexbox, where a growing child visibly expands. Resize on the MAIN
+      // axis only (matching CSS flexbox: flexGrow/flexShrink only ever
+      // affect the main-axis size; the cross axis is a separate concern
+      // this fix does not touch) via setWidth/setHeight's stretch=true
+      // (axis-only, non-uniform scale), and only for children that opted
+      // in via flexGrow/flexShrink -- a child with neither stays exactly
+      // its own authored size, matching this file's documented "fixed
+      // size unless you say so" contract for setChildFlex().
+      if (cfg.flexGrow != null || cfg.flexShrink != null) {
+        if (mainAxisIsWidth) child.setWidth(w, true);
+        else child.setHeight(h, true);
+      }
       // Yoga's (left, top) is the child's top-left corner, Y-down from the
       // container's own top-left -- convert to a world-space (Y-up) center.
       const worldX = originX + left + w / 2;
