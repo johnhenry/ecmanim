@@ -129,6 +129,32 @@ test("c2p places coordinates on the rendered axis line for an asymmetric xRange 
   assert.ok(Math.abs(ry - 0.25) < 1e-9);
 });
 
+// Issue #31 (filed against ThreeDAxes) turned out to affect this 2D class
+// identically: _xRef()/_yRef() used to check `Number.isFinite(functionOf(0))`,
+// which only catches a true log-scale axis -- not a plain LINEAR range that
+// simply doesn't straddle 0, like [1.1, 3.4]. Confirmed via direct repro
+// before this fix: the x-axis rendered spanning world x∈[4.07, 12.57],
+// nowhere near the y-axis's crossing at world x=0 -- the exact "disconnected
+// axes" symptom issue #31 reports for the 3D case. Fixed by checking range
+// membership (xMin <= 0 <= xMax) instead of function finiteness.
+test("x-axis anchors its own minimum (not an off-segment zero) when xRange doesn't include 0 (issue #31)", () => {
+  const ax = new Axes({ xRange: [1.1, 3.4, 0.5], yRange: [-1.2, 6.5, 1], xLength: 8.5, yLength: 4.2 });
+  const xStart = ax.xAxis.axisLine.getStart();
+  const yLine = [ax.yAxis.axisLine.getStart(), ax.yAxis.axisLine.getEnd()];
+
+  // The x-axis's own minimum (1.1) must land at the world origin, the same
+  // point the y-axis (whose range DOES straddle 0) crosses at.
+  assert.ok(Math.abs(xStart[0]) < 1e-9 && Math.abs(xStart[1]) < 1e-9, `xAxis start should be at the origin, got ${xStart}`);
+  assert.ok(yLine[0][1] < 0 && yLine[1][1] > 0, "yAxis straddles the origin");
+  assert.ok(Math.abs(yLine[0][0]) < 1e-9 && Math.abs(yLine[1][0]) < 1e-9, "yAxis line sits at world x=0, meeting the xAxis's start");
+
+  // c2p/p2c must still round-trip correctly for values across the range.
+  for (const x of [1.1, 2.25, 3.4]) {
+    const [rx] = ax.p2c(ax.c2p(x, 0));
+    assert.ok(Math.abs(rx - x) < 1e-9);
+  }
+});
+
 test("c2p reflects a shift() applied after construction (issue #2)", () => {
   // Before the fix, coordsToPoint()/numberToPoint() computed from frozen
   // construction-time scalars (_leftX/unit), so a shift() applied to the

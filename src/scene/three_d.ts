@@ -402,13 +402,28 @@ export class ThreeDAxes extends VGroup {
     // z-axis: rotate +90deg about -Y so its local +x maps to world +z.
     this.zAxis.rotate(Math.PI / 2, { axis: [0, -1, 0], aboutPoint: V.ORIGIN });
 
-    // Shift each axis so its data-value-0 sits at the world origin.
-    this.xAxis.shift(V.neg(this._axisPointRaw(this.xAxis, 0, X_AXIS)));
-    this.yAxis.shift(V.neg(this._axisPointRaw(this.yAxis, 0, [0, 1, 0])));
-    this.zAxis.shift(V.neg(this._axisPointRaw(this.zAxis, 0, Z_AXIS)));
+    // Shift each axis so its crossing REFERENCE sits at the world origin --
+    // not unconditionally data-value 0 (issue #31: when a range doesn't
+    // include 0, e.g. xRange: [1.1, 3.4], 0's mapped position sits off that
+    // axis's own rendered segment, so the three axes never actually meet).
+    // Mirrors the 2D Axes class's _xRef()/_yRef() fallback (also corrected
+    // by this same fix -- see coordinate_systems.ts).
+    this.xAxis.shift(V.neg(this._axisPointRaw(this.xAxis, this._xRef(), X_AXIS)));
+    this.yAxis.shift(V.neg(this._axisPointRaw(this.yAxis, this._yRef(), [0, 1, 0])));
+    this.zAxis.shift(V.neg(this._axisPointRaw(this.zAxis, this._zRef(), Z_AXIS)));
 
     this.add(this.xAxis, this.yAxis, this.zAxis);
   }
+
+  // Data value used as each axis's crossing reference: 0 when it's actually
+  // within the axis's configured range, otherwise the axis minimum. See the
+  // 2D Axes class's _xRef()/_yRef() for the identical rule and its own
+  // history (this check used to test `Number.isFinite(functionOf(0))`,
+  // which only catches a true log-scale axis, not a plain linear range that
+  // simply doesn't straddle 0).
+  _xRef(): number { return this.xAxis.xMin <= 0 && 0 <= this.xAxis.xMax ? 0 : this.xAxis.xMin; }
+  _yRef(): number { return this.yAxis.xMin <= 0 && 0 <= this.yAxis.xMax ? 0 : this.yAxis.xMin; }
+  _zRef(): number { return this.zAxis.xMin <= 0 && 0 <= this.zAxis.xMax ? 0 : this.zAxis.xMin; }
 
   // World point of data value `v` along a rotated axis whose positive direction
   // is `dir` (its NumberLine measures along its own local x before rotation).
@@ -418,20 +433,22 @@ export class ThreeDAxes extends VGroup {
     return [dir[0] * local, dir[1] * local, dir[2] * local];
   }
 
-  // Data (x,y,z) -> world 3D point.
+  // Data (x,y,z) -> world 3D point. Displacement from each axis's own
+  // reference (see _xRef()/_yRef()/_zRef()), summed onto the shared origin --
+  // same "reference, not hardcoded 0" fix as the constructor's shift above.
   coordsToPoint(x: number, y = 0, z = 0): number[] {
-    const sx = this.xAxis.scaling.functionOf(x) - this.xAxis.scaling.functionOf(0);
-    const sy = this.yAxis.scaling.functionOf(y) - this.yAxis.scaling.functionOf(0);
-    const sz = this.zAxis.scaling.functionOf(z) - this.zAxis.scaling.functionOf(0);
+    const sx = this.xAxis.scaling.functionOf(x) - this.xAxis.scaling.functionOf(this._xRef());
+    const sy = this.yAxis.scaling.functionOf(y) - this.yAxis.scaling.functionOf(this._yRef());
+    const sz = this.zAxis.scaling.functionOf(z) - this.zAxis.scaling.functionOf(this._zRef());
     return [sx * this._xUnit, sy * this._yUnit, sz * this._zUnit];
   }
   c2p(x: number, y = 0, z = 0): number[] { return this.coordsToPoint(x, y, z); }
 
   // World 3D point -> data (x,y,z).
   pointToCoords(p: number[]): number[] {
-    const invX = this.xAxis.scaling.inverseFunctionOf(p[0] / this._xUnit + this.xAxis.scaling.functionOf(0));
-    const invY = this.yAxis.scaling.inverseFunctionOf(p[1] / this._yUnit + this.yAxis.scaling.functionOf(0));
-    const invZ = this.zAxis.scaling.inverseFunctionOf(p[2] / this._zUnit + this.zAxis.scaling.functionOf(0));
+    const invX = this.xAxis.scaling.inverseFunctionOf(p[0] / this._xUnit + this.xAxis.scaling.functionOf(this._xRef()));
+    const invY = this.yAxis.scaling.inverseFunctionOf(p[1] / this._yUnit + this.yAxis.scaling.functionOf(this._yRef()));
+    const invZ = this.zAxis.scaling.inverseFunctionOf(p[2] / this._zUnit + this.zAxis.scaling.functionOf(this._zRef()));
     return [invX, invY, invZ];
   }
   p2c(p: number[]): number[] { return this.pointToCoords(p); }

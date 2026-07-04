@@ -237,13 +237,24 @@ export class Axes extends VGroup {
     this.add(this.xAxis, this.yAxis);
   }
 
-  // Data value used as each axis's crossing reference: 0 if that maps to a
-  // finite position, otherwise the axis minimum (log axes).
+  // Data value used as each axis's crossing reference: 0 when it's actually
+  // within the axis's configured range, otherwise the axis minimum.
+  //
+  // Bug found while fixing issue #31 (ThreeDAxes' identical problem): this
+  // used to check `Number.isFinite(this.xAxis.scaling.functionOf(0))`,
+  // which only catches a TRUE log-scale axis (functionOf(0) = log(0) =
+  // -Infinity) -- not the far more common case of a plain LINEAR range that
+  // simply doesn't straddle 0 (e.g. xRange: [1.1, 3.4]), where
+  // functionOf(0) is still a perfectly finite (if off-segment) number.
+  // Confirmed via direct repro: `new Axes({ xRange: [1.1, 3.4, 0.5], ... })`
+  // rendered its x-axis spanning world x∈[4.07, 12.57] -- nowhere near the
+  // y-axis's crossing at world x=0 -- exactly the "disconnected axes" bug
+  // issue #31 reports for ThreeDAxes, just not previously noticed here.
   _xRef(): number {
-    return Number.isFinite(this.xAxis.scaling.functionOf(0)) ? 0 : this.xAxis.xMin;
+    return this.xAxis.xMin <= 0 && 0 <= this.xAxis.xMax ? 0 : this.xAxis.xMin;
   }
   _yRef(): number {
-    return Number.isFinite(this.yAxis.scaling.functionOf(0)) ? 0 : this.yAxis.xMin;
+    return this.yAxis.xMin <= 0 && 0 <= this.yAxis.xMax ? 0 : this.yAxis.xMin;
   }
 
   // Data coords (x,y) -> world point. Mirrors upstream manim's

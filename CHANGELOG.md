@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Fixed
+- **`ThreeDAxes`' x/y/z axis segments rendered disconnected whenever a
+  range didn't include 0** (issue #31), e.g. a log-scale axis over values
+  that never reach 0 (`log10(bits)` for a 16-2048 bit range). The
+  constructor unconditionally shifted each axis so its data-value-0
+  sits at the world origin, regardless of whether 0 actually falls inside
+  that axis's own range — for an out-of-range axis, that anchor point
+  sits off the visible segment, so the three axes never meet. Fixed by
+  adding `_xRef()`/`_yRef()`/`_zRef()` (falling back to the axis's own
+  minimum when 0 isn't in `[xMin, xMax]`) and using them — instead of a
+  hardcoded `0` — in the constructor's shift and in `coordsToPoint`/
+  `pointToCoords`, mirroring the 2D `Axes` class's existing pattern.
+  Confirmed via direct repro: the reported case (`xRange: [1.1, 3.4]`,
+  `yRange`/`zRange` straddling 0) now has all three axes meeting at one
+  shared corner, with `c2p`/`p2c` round-tripping correctly across the
+  full range; a normal 0-including range renders byte-identical to
+  before.
+- **The 2D `Axes` class has the identical bug**, found while fixing the
+  above: `_xRef()`/`_yRef()` checked `Number.isFinite(functionOf(0))`,
+  which only catches a *true* log-scale axis (`functionOf(0) = -Infinity`)
+  — not the far more common case of a plain linear range that simply
+  doesn't straddle 0. Confirmed via direct repro before this fix:
+  `new Axes({ xRange: [1.1, 3.4, 0.5], ... })` rendered its x-axis
+  spanning world x∈[4.07, 12.57], nowhere near the y-axis's crossing at
+  world x=0 — the exact "disconnected axes" symptom issue #31 reports
+  for the 3D case. Fixed by checking range membership
+  (`xMin <= 0 && 0 <= xMax`) instead of function finiteness, same rule
+  as the `ThreeDAxes` fix above.
+
 ### Added
 - **`Circumscribe`/`Flash`/`FocusOn` now support camera-facing billboarding
   for a genuinely-3D (non-fixed) target** (issue #29 — the remaining half

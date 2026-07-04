@@ -59,6 +59,57 @@ test("ThreeDAxes exposes getAxis / getZAxis", () => {
   assert.equal(ax.getZAxis(), ax.zAxis);
 });
 
+// Issue #31: an axis whose range doesn't include 0 (e.g. a log10 axis over
+// values that never reach 0) used to shift so data-value 0's position --
+// off that axis's own rendered segment -- sat at the world origin, leaving
+// the three axes rendered as disconnected segments instead of meeting at a
+// shared corner. Fixed by falling back to the axis's own minimum as the
+// crossing reference when 0 isn't in [xMin, xMax].
+test("an axis whose range doesn't include 0 anchors its OWN minimum to the shared corner (issue #31)", () => {
+  const ax = new ThreeDAxes({
+    xRange: [1.1, 3.4, 0.5], // entirely positive -- 0 is not in range
+    yRange: [-1.2, 6.5, 1],  // straddles 0 -- unaffected
+    zRange: [-2.1, 0.5, 1],  // straddles 0 -- unaffected
+    xLength: 8.5, yLength: 4.2, zLength: 2.5,
+  });
+  const xStart = ax.xAxis.axisLine.getStart();
+  const yLine = [ax.yAxis.axisLine.getStart(), ax.yAxis.axisLine.getEnd()];
+  const zLine = [ax.zAxis.axisLine.getStart(), ax.zAxis.axisLine.getEnd()];
+
+  // The x-axis's own minimum (1.1, since 0 isn't in [1.1, 3.4]) must land
+  // exactly at the world origin -- the same corner the y/z axes cross at.
+  assert.ok(V.length(xStart) < 1e-9, `xAxis start should be at the origin, got ${xStart}`);
+
+  // y and z DO straddle 0, so they're unaffected -- their lines must still
+  // cross world x=0/z=0 (i.e. the origin lies between each pair of endpoints).
+  assert.ok(yLine[0][1] < 0 && yLine[1][1] > 0, "yAxis straddles the origin");
+  assert.ok(zLine[0][2] < 0 && zLine[1][2] > 0, "zAxis straddles the origin");
+  assert.ok(Math.abs(yLine[0][0]) < 1e-9 && Math.abs(yLine[1][0]) < 1e-9, "yAxis line sits at world x=0");
+  assert.ok(Math.abs(zLine[0][0]) < 1e-9 && Math.abs(zLine[1][0]) < 1e-9, "zAxis line sits at world x=0");
+});
+
+test("c2p/p2c round-trip correctly for an axis whose range doesn't include 0 (issue #31)", () => {
+  const ax = new ThreeDAxes({
+    xRange: [1.1, 3.4, 0.5], yRange: [-1.2, 6.5, 1], zRange: [-2.1, 0.5, 1],
+    xLength: 8.5, yLength: 4.2, zLength: 2.5,
+  });
+  for (const coords of [[1.1, 0, 0], [3.4, 6.5, 0.5], [2.25, 2.65, -0.8]]) {
+    const p = ax.c2p(coords[0], coords[1], coords[2]);
+    const back = ax.p2c(p);
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(back[i] - coords[i]) < 1e-9, `axis ${i}: expected ${coords[i]}, got ${back[i]}`);
+  }
+  // The x-axis minimum must map to the x-axis's own rendered start point.
+  const minPoint = ax.c2p(1.1, 0, 0);
+  const xStart = ax.xAxis.axisLine.getStart();
+  for (let i = 0; i < 3; i++) assert.ok(Math.abs(minPoint[i] - xStart[i]) < 1e-9);
+});
+
+test("a normal 0-including range is unaffected by the issue #31 fix", () => {
+  const ax = new ThreeDAxes({ xRange: [-4, 4, 1], yRange: [-4, 4, 1], zRange: [-4, 4, 1] });
+  assert.deepEqual(ax.c2p(0, 0, 0), [0, 0, 0]);
+  assert.deepEqual(ax.c2p(2, 3, -1), [2, 3, -1]);
+});
+
 test("addFixedInFrameMobjects marks _fixedInFrame and adds it", () => {
   const scene = new ThreeDScene(CFG);
   const line = new Line([0, 0, 0], [1, 0, 0]);
