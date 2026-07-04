@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- **`SceneRenderer` interface + `renderFrame()`** (`src/renderer/scene_renderer.ts`):
+  `CanvasRenderer`, `ThreeRenderer`, and `SVGRenderer` each gain an additive
+  `renderFrame(mobjects)` method that purely delegates to their existing,
+  differently-named public method (`renderScene`/`render`/`renderToString`
+  respectively). Those existing methods are unchanged and remain the
+  primary API (used across 15+ call sites) — `renderFrame()` is a shared,
+  uniform entry point for code that wants to treat any backend
+  interchangeably, not a replacement or rename.
 - **`reprojectCurve(domainSamples | curve, targetSystem, options?)`**
   (`src/mobject/coordinate_reprojection.ts`): rebuilds a curve sampled in
   domain (coordinate) space against a different coordinate system (e.g. an

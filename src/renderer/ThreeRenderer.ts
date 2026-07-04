@@ -10,6 +10,7 @@
 import * as V from "../core/math/vector.ts";
 import { collectBuffers } from "./geometry_util.ts";
 import { makeBezierStrokeMaterial, buildStrokeGeometry } from "./bezier_shader.ts";
+import type { Mobject } from "../mobject/Mobject.ts";
 
 export interface ThreeRendererOptions {
   camera?: any;
@@ -135,6 +136,13 @@ export class ThreeRenderer {
 
     this.syncCamera();
     this.renderer.render(this.scene, this.threeCamera);
+  }
+
+  /** SceneRenderer-shaped alias for render(), satisfying the shared interface
+   *  in scene_renderer.ts. Purely delegating -- render() remains the
+   *  primary, unchanged public method. */
+  renderFrame(mobjects: Mobject[]): void {
+    this.render(mobjects);
   }
 
   _mesh(buf: any, transparent: boolean, alpha: number): any {

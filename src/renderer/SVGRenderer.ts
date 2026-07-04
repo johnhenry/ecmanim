@@ -12,6 +12,7 @@
 import { partialBezier } from "../core/math/bezier.ts";
 import { Color } from "../core/color.ts";
 import type { Camera } from "./CanvasRenderer.ts";
+import type { Mobject } from "../mobject/Mobject.ts";
 
 export interface SVGRenderOptions {
   /** Decimal places for coordinates, default 2. */
@@ -165,6 +166,13 @@ export class SVGRenderer {
       body.join("") +
       `</svg>`
     );
+  }
+
+  /** SceneRenderer-shaped alias for renderToString(), satisfying the shared
+   *  interface in scene_renderer.ts. Purely delegating -- renderToString()
+   *  remains the primary, unchanged public method. */
+  renderFrame(mobjects: Mobject[]): string {
+    return this.renderToString(mobjects);
   }
 
   // Build SVG path data for a VMobject, honoring strokeEnd (proportion) using

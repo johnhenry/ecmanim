@@ -6,6 +6,7 @@ import { partialBezier, bezier } from "../core/math/bezier.ts";
 import { ZBuffer } from "./zbuffer.ts";
 import { Color } from "../core/color.ts";
 import type { Vec3, Ctx2D, ColorLike } from "../core/types.ts";
+import type { Mobject } from "../mobject/Mobject.ts";
 
 const to255 = (c: { r: number; g: number; b: number }): [number, number, number] => [
   Math.round(Math.max(0, Math.min(1, c.r)) * 255),
@@ -135,6 +136,13 @@ export class CanvasRenderer {
     }
     this.clear();
     this.renderMobjects(mobjects);
+  }
+
+  /** SceneRenderer-shaped alias for renderScene(), satisfying the shared
+   *  interface in scene_renderer.ts. Purely delegating -- renderScene()
+   *  remains the primary, unchanged public method. */
+  renderFrame(mobjects: Mobject[]): void {
+    this.renderScene(mobjects);
   }
 
   // --- 3D depth-buffered path --------------------------------------------
