@@ -3,7 +3,10 @@
 // list of top-level mobjects once per frame) and awaits `render()`.
 
 import type { Mobject } from "../mobject/Mobject.ts";
+import { Group } from "../mobject/Mobject.ts";
 import type { Camera } from "../renderer/CanvasRenderer.ts";
+import { TransformMatchingAuto } from "../animation/auto_matching.ts";
+import type { AutoMatchingConfig } from "../animation/auto_matching.ts";
 
 /** A frame callback invoked once per frame with the top-level mobjects. */
 export type FrameHandler = (mobjects: Mobject[], frameCount: number, time: number) => void | Promise<void>;
@@ -140,6 +143,46 @@ export class Scene {
       const last = this.sections[this.sections.length - 1];
       if (last.endFrame < 0) last.endFrame = this.frameCount;
     }
+  }
+
+  /**
+   * Opt-in Reveal.js Auto-Animate-style section transition: snapshot the
+   * scene's current mobjects, let `buildNext()` mutate `this.mobjects` into
+   * the next section's state, then `play()` a `TransformMatchingAuto` between
+   * the two snapshots instead of a hard cut.
+   *
+   * This can't hook inside a plain `nextSection()` call itself -- the "after"
+   * state doesn't exist yet at that point; it's the author's own code
+   * (running after `nextSection()` returns) that builds it. Strictly opt-in:
+   * plain `nextSection()` never triggers whole-tree matching, since matching
+   * unrelated same-shape elements by default would be surprising.
+   */
+  async autoAnimateToNextSection(
+    name: string,
+    buildNext: () => void | Promise<void>,
+    config: AutoMatchingConfig & { type?: string; skipAnimations?: boolean } = {},
+  ): Promise<this> {
+    const before = new Group(...this.mobjects.map((m) => m.copy()));
+    await buildNext();
+    const after = new Group(...this.mobjects);
+    // Swap the live "after" mobjects out for the "before" copies: matched/
+    // unmatched-source Transforms/FadeOuts built below animate the "before"
+    // copies (disposable stand-ins that are actually in `this.mobjects` so
+    // they render), not the true live originals -- Transform.begin() would
+    // otherwise snapshot the ALREADY-mutated live state as its own start
+    // value and produce no visible motion. Unmatched-target FadeIns
+    // introduce the true live (new) mobjects directly.
+    this.remove(...after.submobjects);
+    this.add(...before.submobjects);
+    this.nextSection(name, config.type, config.skipAnimations ?? false);
+    await this.play(new TransformMatchingAuto(before, after, config));
+    // Land on the true live mobjects (already in their correct final state,
+    // untouched throughout) rather than the disposable "before" driver
+    // copies, so any later code holding a reference to the originals still
+    // affects what's rendered.
+    this.remove(...before.submobjects);
+    this.add(...after.submobjects);
+    return this;
   }
 
   /**

@@ -688,14 +688,29 @@ export class VMobject extends Mobject {
   // shape is preserved. Empty subpaths fall back to point-repetition.
   alignPointsWith(other: VMobject): this {
     const a = this.getSubpaths();
-    const b = other.getSubpaths();
-    const nSub = Math.max(a.length, b.length);
+    const bRaw = other.getSubpaths();
+    const nSub = Math.max(a.length, bRaw.length);
+    const lastOf = (arr: number[][]): number[] => (arr.length ? arr[arr.length - 1] : [0, 0, 0]);
+    const padTo = (subpaths: number[][][], padSource: number[][][]): number[][][] => {
+      const out = subpaths.slice();
+      while (out.length < nSub) out.push([lastOf(padSource[padSource.length - 1] ?? [])]);
+      return out;
+    };
+    const aPadded = padTo(a, a);
+    const bPadded = padTo(bRaw, bRaw);
+    // Cyclic-rotation correspondence search: a shape whose subpaths were
+    // authored/traversed starting from a different point in the cycle (e.g.
+    // the same polygon's outline walked from a different vertex) still gets
+    // matched subpath-for-subpath by position, not by original array order.
+    // nSub<=1 (the dominant case -- simple shapes, single glyphs) is a
+    // zero-cost no-op, skipped entirely.
+    const b = nSub > 1 ? VMobject._bestSubpathRotation(aPadded, bPadded) : bPadded;
+
     const newPoints: number[][] = [];
     const newStarts: number[] = [];
-    const lastOf = (arr: number[][]): number[] => (arr.length ? arr[arr.length - 1] : [0, 0, 0]);
     for (let i = 0; i < nSub; i++) {
-      const sa = a[i] ?? [lastOf(a[a.length - 1] ?? [])];
-      const sb = b[i] ?? [lastOf(b[b.length - 1] ?? [])];
+      const sa = aPadded[i];
+      const sb = b[i];
       const ncA = Math.floor((sa.length - 1) / 3);
       const ncB = Math.floor((sb.length - 1) / 3);
       const nc = Math.max(1, ncA, ncB);
@@ -706,6 +721,35 @@ export class VMobject extends Mobject {
     this.points = newPoints;
     this.subpathStarts = newStarts;
     return this;
+  }
+
+  // Try each of the nSub cyclic rotations of `b`'s subpath order, scoring by
+  // total centroid-to-centroid travel distance against `a`'s order, and keep
+  // the minimum -- O(n^2), capped at nSub<=32 (falls back to identity order
+  // above that, avoiding a perf blowup on pathological many-subpath shapes).
+  // Scope is deliberately narrow: subpath ORDER only, not a full permutation/
+  // Hungarian assignment, and not the deeper within-subpath starting-vertex
+  // twist (a separate, not-yet-scoped follow-up).
+  static _bestSubpathRotation(a: number[][][], b: number[][][]): number[][][] {
+    const nSub = a.length;
+    if (nSub > 32) return b;
+    const aCentroids = a.map((sp) => V.centerOfMass(sp));
+    const bCentroids = b.map((sp) => V.centerOfMass(sp));
+    const dist = (p: number[], q: number[]): number => {
+      const dx = p[0] - q[0], dy = p[1] - q[1], dz = (p[2] ?? 0) - (q[2] ?? 0);
+      return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    };
+    let bestRotation = 0;
+    let bestScore = Infinity;
+    for (let r = 0; r < nSub; r++) {
+      let score = 0;
+      for (let i = 0; i < nSub; i++) score += dist(aCentroids[i], bCentroids[(i + r) % nSub]);
+      if (score < bestScore) { bestScore = score; bestRotation = r; }
+    }
+    if (bestRotation === 0) return b;
+    const rotated: number[][][] = [];
+    for (let i = 0; i < nSub; i++) rotated.push(b[(i + bestRotation) % nSub]);
+    return rotated;
   }
 
   // Grow a single subpath's bezier list to exactly `nCurves` curves by

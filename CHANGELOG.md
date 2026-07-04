@@ -3,6 +3,31 @@
 ## Unreleased
 
 ### Added
+- **`Repeat`** (`src/animation/repeat.ts`): a standalone `Animation` wrapper
+  adding `count`/`yoyo`/`repeatDelay` to any leaf `Animation`, `AnimationGroup`,
+  or built `Timeline`, without reaching into their internals. `yoyo` mirrors
+  odd-indexed cycles; `repeatDelay` holds the previous cycle's end value
+  between cycles. Infinite repeat is out of scope (no infinite-time concept
+  in this render model); `count: Infinity` throws.
+- **Stagger value-transform helpers** (`src/animation/stagger.ts`):
+  `cycle(values)` (index-safe modulo cycling) and `staggerRange(from, to)`
+  (linear distribution by index), usable with `LaggedStartMap`'s widened
+  `(mobject, index, total)` factory signature (previously `(mobject)` only —
+  backward compatible, existing single-arg factories are unaffected).
+- **`Scene.autoAnimateToNextSection(name, buildNext, config?)`**: an opt-in
+  Reveal.js Auto-Animate-style section transition. Snapshots the scene, lets
+  `buildNext()` mutate `this.mobjects` into the next section's state (moves,
+  additions, removals), then plays a `TransformMatchingAuto` between the two
+  states instead of a hard cut — landing on the true original mobjects
+  afterward so identity is preserved for later code. Strictly opt-in; plain
+  `nextSection()` is unaffected.
+- **`VMobject.alignPointsWith()` now searches for the best cyclic subpath
+  rotation** between the two shapes' subpath orders (by total centroid-to-
+  centroid distance) before aligning, so a compound shape whose subpaths were
+  authored/traversed in a different order (but represent the same elements)
+  still matches subpath-for-subpath by position. Capped at 32 subpaths
+  (falls back to identity order above that); zero-cost no-op for the
+  dominant single-subpath case.
 - **Parameterized back/elastic easings**: `easeInBackFactory`/`easeOutBackFactory`/
   `easeInOutBackFactory(overshoot?)` and `easeInElasticFactory`/`easeOutElasticFactory`/
   `easeInOutElasticFactory(amplitude?, period?)` (GSAP's `back.out(2)`/

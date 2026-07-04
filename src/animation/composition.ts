@@ -104,10 +104,13 @@ export class Succession extends AnimationGroup {
   }
 }
 
-// Apply the same animation factory to many mobjects with a stagger.
+// Apply the same animation factory to many mobjects with a stagger. The
+// factory receives (mobject, index, total) -- existing single-arg factories
+// are unaffected (they simply ignore the extra args) -- so stagger.ts's
+// cycle()/staggerRange() helpers can key off index/total directly.
 export class LaggedStartMap extends LaggedStart {
-  constructor(animFactory: (m: any) => any, mobjects: any[], config: AnimationConfig = {}) {
-    super(mobjects.map((m) => animFactory(m)), config);
+  constructor(animFactory: (m: any, index: number, total: number) => any, mobjects: any[], config: AnimationConfig = {}) {
+    super(mobjects.map((m, i) => animFactory(m, i, mobjects.length)), config);
   }
 }
 

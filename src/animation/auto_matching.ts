@@ -41,8 +41,12 @@ export class TransformMatchingAuto extends AnimationGroup {
     const src = piecesOf(mobject).map((p) => [autoKey(p), p] as [string, any]);
     const tgt = piecesOf(target).map((p) => [autoKey(p), p] as [string, any]);
     super(buildMatchingFromKeyed(src, tgt, config), config);
-    this.introducer = true;
-    this.remover = true;
+    // NOTE: setting `this.introducer`/`this.remover` here would be dead code --
+    // AnimationGroup.getMobjectsToIntroduce()/getMobjectsToRemove() are
+    // overridden to flatMap each child's own introduce/remove list and never
+    // consult the group's own flags. The individual matched/unmatched child
+    // animations (Transform/FadeIn/FadeOut) already carry the correct
+    // introducer/remover flags themselves.
   }
 }
 
