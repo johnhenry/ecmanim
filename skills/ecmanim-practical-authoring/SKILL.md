@@ -95,19 +95,22 @@ const t = new Text(myString, { fontSize, color, point: [0, y, 0] });
 const width = t.getWidth();  // ground truth — the real, laid-out bounding box
 ```
 
-**In Node, that's only ground truth once a vector font has loaded in the
-process.** Before that, `Text` falls back to the same `CHAR_ASPECT` estimate
-as `estimateTextSize()` — so measuring in a layout-planning step that runs
-*before* your `render()` call can silently disagree with what the render
-actually produces (confirmed ~10% off in practice). `render()` loads the
-font itself before running your scene's `construct()`, so this only bites
-code that constructs/measures `Text` outside of `construct()`. Call
-`loadVectorFont()` (also from `ecmanim/node`) once before that code runs to
-force the same glyph-metric path render() uses:
+**In Node, `Text` auto-loads a system font (via fontconfig) the first time
+one is needed**, so `getWidth()` is ground truth by default — no setup call
+required. Before that first use (or if no system font is found at all), it
+falls back to the same `CHAR_ASPECT` estimate as `estimateTextSize()`, which
+treats every character as equal-width and can disagree with real glyph
+metrics by anywhere from ~0.5x to 2.4x depending on the string. The auto-load
+is memoized once per process, so this only bites you in the narrow case where
+the very first `Text` in a process is constructed and measured in the same
+tick the font is still resolving — negligible in practice. If you want a
+*non-default* font pattern, or want to pay the fontconfig lookup cost
+eagerly instead of on first use, call `loadVectorFont()` (or its synchronous
+sibling `loadVectorFontSync()`) yourself:
 
 ```ts
 import { loadVectorFont, estimateTextSize } from "ecmanim/node";
-await loadVectorFont(); // now Text.getWidth() matches what render() will produce
+await loadVectorFont("monospace"); // force a specific font pattern up front
 ```
 
 `assets/layout.ts` (below) wraps this as `textWidth()`/`textHeight()`. For

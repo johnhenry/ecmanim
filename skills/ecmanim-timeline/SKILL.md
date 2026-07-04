@@ -112,11 +112,13 @@ left edge `[-1,0,0]`) — the edge that stays anchored in place as the digit
 count changes across `setValue()` calls.
 
 **Gotcha:** it needs a loaded vector font and throws if none is available. In
-Node, call `loadVectorFont()` (from `ecmanim/node`, also used for `VText`)
-before constructing one, or pass `config.font` explicitly; in the browser call
-`await setDefaultFont(url)` first. This is a real, load-bearing requirement,
-not an edge case — a `VectorDecimalNumber` built before the font loads throws
-immediately in `_layout()`.
+Node this is auto-loaded lazily on first use (via fontconfig), so it normally
+just works; if no system font can be found, or you want a non-default
+pattern, call `loadVectorFont()` (from `ecmanim/node`, also used for `VText`)
+before constructing one, or pass `config.font` explicitly. In the browser
+call `await setDefaultFont(url)` first — there's no fontconfig to auto-resolve
+from. A `VectorDecimalNumber` built with no font available (browser with none
+loaded, or Node with no system font found) throws immediately in `_layout()`.
 
 ## Style + aspect-ratio presets
 

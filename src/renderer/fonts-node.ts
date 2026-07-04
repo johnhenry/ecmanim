@@ -7,6 +7,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import opentype from "opentype.js";
+import { setDefaultFontSync } from "../mobject/vectorized_text.ts";
 
 function fcMatch(pattern: string) {
   try {
@@ -57,16 +59,24 @@ export function resolveFontPath(pattern = "sans-serif") {
 }
 
 // Load a system font as an opentype.js Font (for VText / MathTex glyph outlines)
-// and register it as the library default. Node-only.
-export async function loadVectorFont(pattern = "sans-serif") {
+// and register it as the library default. Node-only. Synchronous so it can
+// be used as the lazy auto-loader `getDefaultFont()` calls on first use
+// (issue #16) -- the whole resolve+read+parse pipeline was already
+// synchronous under the hood; only the (no longer needed) dynamic imports
+// of opentype.js/vectorized_text.ts made this function itself async before.
+export function loadVectorFontSync(pattern = "sans-serif") {
   const path = resolveFontPath(pattern);
   if (!path) return null;
-  const opentype = (await import("opentype.js")).default;
   const buf = readFileSync(path);
   const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
-  const { setDefaultFontSync } = await import("../mobject/vectorized_text.ts");
   setDefaultFontSync(font);
   return font;
+}
+
+// Async wrapper kept for existing call sites (render()'s delayRenderUntil
+// gate, node-parallel.ts) and for callers who prefer an awaitable API.
+export async function loadVectorFont(pattern = "sans-serif") {
+  return loadVectorFontSync(pattern);
 }
 
 let registered = false;

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Fixed
+- **Node: `Text`/`estimateTextSize()` now auto-load a system font lazily on
+  first use, instead of silently falling back to the raster/`CHAR_ASPECT`
+  estimate until an explicit `loadVectorFont()` call** (issue #16). Follow-up
+  to 0.0.9's fix for #14: exporting `loadVectorFont()` gave callers a way to
+  force real glyph metrics, but it was still opt-in, and the raster estimate
+  treats every character as equal width — measured against real glyph
+  metrics, the two paths could disagree by anywhere from 0.53x to 2.4x
+  depending on the string's character composition (not the fixed ~10% a
+  single test case had suggested). `getDefaultFont()` now resolves a system
+  font via fontconfig the first time it's needed (memoized, at most once per
+  process, via a Node-only registration seam so the shared
+  `vectorized_text.ts` module stays browser-safe), so a fresh process
+  measures text the same way `render()` does without requiring any explicit
+  setup call. `loadVectorFont()`/`resolveFontPath()` remain available (now
+  alongside a synchronous `loadVectorFontSync()`) for callers who want to
+  choose a non-default font pattern or force the fc-match/parse cost eagerly.
+
 ## 0.0.9
 
 ### Fixed

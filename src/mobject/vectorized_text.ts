@@ -33,7 +33,30 @@ export interface VTextConfig {
 
 let _defaultFont: any = null;
 
+// Node-only auto-resolution seam (issue #16). This module stays browser-safe
+// (no Node imports of its own) -- src/node.ts registers a synchronous
+// system-font loader here, so getDefaultFont() can lazily resolve a default
+// font the first time nothing has been loaded yet, instead of every caller
+// needing to remember an explicit `await loadVectorFont()` call before
+// constructing/measuring a Text. Attempted at most once per process (a
+// failed lookup, e.g. no system font available, isn't retried on every call).
+type NodeFontAutoLoader = () => any;
+let _nodeAutoLoader: NodeFontAutoLoader | null = null;
+let _nodeAutoLoadAttempted = false;
+
+export function registerNodeFontAutoLoader(fn: NodeFontAutoLoader): void {
+  _nodeAutoLoader = fn;
+}
+
 export function getDefaultFont(): any {
+  if (_defaultFont == null && !_nodeAutoLoadAttempted && _nodeAutoLoader) {
+    _nodeAutoLoadAttempted = true;
+    try {
+      _nodeAutoLoader(); // sets _defaultFont itself via setDefaultFontSync()
+    } catch {
+      // No system font available -- callers fall back to the raster/estimate path.
+    }
+  }
   return _defaultFont;
 }
 

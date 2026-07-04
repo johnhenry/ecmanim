@@ -6,22 +6,30 @@ import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync, renameSync, existsSync, rmSync, readdirSync } from "node:fs";
 import { dirname, resolve, join, basename } from "node:path";
 import { Camera, CanvasRenderer } from "./renderer/CanvasRenderer.ts";
-import { autoRegisterFonts, loadVectorFont, resolveFontPath } from "./renderer/fonts-node.ts";
+import { autoRegisterFonts, loadVectorFont, loadVectorFontSync, resolveFontPath } from "./renderer/fonts-node.ts";
+import { registerNodeFontAutoLoader } from "./mobject/vectorized_text.ts";
 import { Scene } from "./scene/Scene.ts";
 import { makeScene, runConstruct } from "./scene/orchestrate.ts";
 import { QUALITIES } from "./index.ts";
 import { config as manimConfig, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
 import { startFfmpeg, writeToStream, encodeFrames, runFfmpeg, concatPartials, remuxCopy } from "./renderer/ffmpeg.ts";
 
+// Once ecmanim/node has been imported, Text/VText/VectorDecimalNumber lazily
+// auto-resolve a default system font the first time none is registered yet
+// (issue #16) -- so a caller who measures/constructs Text ahead of a
+// render() call no longer needs to remember an explicit loadVectorFont()
+// call to avoid the raster/CHAR_ASPECT estimate fallback. Registration
+// itself is free; the actual fc-match/directory-scan cost is only paid
+// lazily, on that first real lookup.
+registerNodeFontAutoLoader(() => loadVectorFontSync());
+
 export * from "./index.ts";
-// Load (and register as the library default) the same system vector font
-// `render()` resolves internally, for Text/VText/VectorDecimalNumber. Call
-// this before constructing any Text you intend to measure (getWidth()/
-// estimateTextSize()) ahead of a render() call in the same process --
-// otherwise that measurement uses the raster/CHAR_ASPECT estimate fallback,
-// which can disagree with the real glyph metrics render() ends up using by
-// ~10% (see issue #14). Idempotent-ish: safe to call more than once.
-export { loadVectorFont, resolveFontPath };
+// Force-load (and register as the library default) a specific system vector
+// font ahead of time -- e.g. to pick a non-default `pattern`, or to pay the
+// fc-match/scan cost eagerly instead of at the first Text construction.
+// Text/VText already auto-load a default font lazily on first use (above),
+// so this is no longer required just to avoid the raster/estimate fallback.
+export { loadVectorFont, loadVectorFontSync, resolveFontPath };
 export { MathTexDvisvgm, mathTexDvisvgm, mathTexDvisvgmOrFallback, texToSVGViaDvisvgm, detectDvisvgmToolchain } from "./mobject/mathtex_dvisvgm.ts";
 export { config, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
 // Parallel segment rendering (worker_threads over the partial-movie cache).
