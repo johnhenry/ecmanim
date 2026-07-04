@@ -225,6 +225,20 @@
   `SVGMobject`, plus matching gradient-export support in the SVG renderer.
 
 ### Fixed
+- **`Scene.play(animation, config)` no longer requires an undocumented
+  internal `_playConfig: true` marker on the config object** (GitHub issue
+  #19). Previously, a bare trailing config object like `{ runTime: 0.5 }`
+  — exactly the natural way to call `play()`, and how every one of this
+  codebase's OWN call sites did it, just always remembering the marker —
+  was silently treated as an animation instead of config if that marker
+  was missing, crashing with `"a.begin is not a function"` (or, depending
+  on what else was in the call, misbehaving in ways that looked like
+  corrupted opacity/positioning on a large `VGroup`/vector-field `FadeIn`).
+  `play()` now also recognizes config structurally: a trailing plain
+  object with neither `.begin` (Animation-shaped) nor `_isAnimateBuilder`
+  can only ever have been config, since anything else in that shape was
+  already guaranteed to crash — so this is strictly safer and fully
+  backward compatible with the existing marker.
 - **`alwaysRedraw()` was missing `"radius"` from its own hardcoded 7-field
   allowlist** (`reactive()`'s separate 9-field allowlist had it) — a
   `ValueTracker`-driven `alwaysRedraw(() => new Circle({ radius: r() }))`

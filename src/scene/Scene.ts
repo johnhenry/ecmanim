@@ -292,7 +292,20 @@ export class Scene {
   // Play one or more animations in parallel for max(runTime).
   async play(...animations: any[]): Promise<this> {
     let config: any = {};
-    if (animations.length && animations[animations.length - 1] && animations[animations.length - 1]._playConfig) {
+    const last = animations[animations.length - 1];
+    // A trailing config object is recognized either by the internal
+    // `_playConfig: true` marker (still supported), OR structurally: a
+    // plain object that isn't animation-shaped (no `.begin`, not an
+    // `.animate` builder, not an array). Every real call site in this
+    // codebase already marks its config with `_playConfig`, but a bare
+    // `{ runTime: ... }` passed WITHOUT the marker previously fell through
+    // to `anims` and crashed on `a.begin()` -- a real footgun (see GitHub
+    // issue #19) since the marker is undocumented and easy to omit. Any
+    // object this check newly accepts as config was previously guaranteed
+    // to crash, so this is a strictly safer, backward-compatible fix.
+    const looksLikeConfig = last != null && typeof last === "object" && !Array.isArray(last) &&
+      (last._playConfig || (typeof last.begin !== "function" && !last._isAnimateBuilder));
+    if (animations.length && looksLikeConfig) {
       config = animations.pop();
     }
     const anims = animations.flat().filter(Boolean).map((a) =>
