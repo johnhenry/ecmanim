@@ -16,3 +16,11 @@ export type { InteractiveCameraOptions, InteractiveCameraHandle, PickResult } fr
 
 export { ManimChartElement, defineManimChart } from "./studio/chart_element.ts";
 export type { ChartGraphBuilder } from "./studio/chart_element.ts";
+
+export {
+  timeToPixel, pixelToTime, frameToPixel, pixelToFrame,
+  computeSectionThumbnails, renderSectionOverview, computeStepMarkers,
+} from "./studio/timeline.ts";
+export type {
+  TimeAxisOptions, FrameAxisOptions, SectionThumbnailLayout, StepMarkerLayout,
+} from "./studio/timeline.ts";

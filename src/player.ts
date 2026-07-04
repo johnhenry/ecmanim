@@ -195,8 +195,16 @@ export class Player {
    * Run a Scene (or a bare construct function) and record EVERY emitted frame
    * into `this.frames`. Decoupled from real time — as fast as the machine can
    * compute. After this resolves, seek()/play() give random-access playback.
+   *
+   * `opts.props` supports parameter-only re-render (e.g. a Studio props
+   * panel calling `player.record(scene, { props })` again after an edit,
+   * instead of re-`import()`ing the module): threaded into the Scene's own
+   * constructor config (`config.props`) or passed as a bare construct
+   * function's 2nd argument. This still re-runs `construct()` and
+   * re-records every frame — it does not itself avoid that cost (see the
+   * render-caching item for that).
    */
-  async record(sceneOrConstruct: any): Promise<void> {
+  async record(sceneOrConstruct: any, opts: { props?: any } = {}): Promise<void> {
     const camera = new Camera({
       pixelWidth: this.pixelWidth,
       pixelHeight: this.pixelHeight,
@@ -211,7 +219,7 @@ export class Player {
     this._liveRenderer = this.ctx ? new CanvasRenderer(this.ctx, camera) : null;
     this._lastMobjects = null;
 
-    const scene = makeScene(sceneOrConstruct, { fps: this.fps, camera });
+    const scene = makeScene(sceneOrConstruct, { fps: this.fps, camera, props: opts.props });
     this.scene = scene;
     this.frames = [];
     this._current = 0;
@@ -226,7 +234,7 @@ export class Player {
     scene.log("record", "recording started", {
       pixelWidth: this.pixelWidth, pixelHeight: this.pixelHeight, fps: this.fps,
     });
-    await runConstruct(sceneOrConstruct, scene);
+    await runConstruct(sceneOrConstruct, scene, opts.props);
     scene.log("record", "recording finished", { frames: this.frames.length, duration: this.duration });
 
     // Show the first frame if we have a display surface.
@@ -238,7 +246,7 @@ export class Player {
     if (this.frames.length === 0) return;
     const i = Math.max(0, Math.min(this.frames.length - 1, Math.floor(frameIndex)));
     this._current = i;
-    this._draw(this.frames[i]);
+    this.drawFrameTo(this.ctx, i);
     this.onFrame?.(i, i / this.fps);
   }
 
@@ -250,10 +258,10 @@ export class Player {
   /**
    * Re-render the LAST recorded frame's live mobjects straight to the display
    * canvas, reflecting the current state of `this.camera` (e.g. after a
-   * Studio interactive-camera pan/zoom/orbit). Unlike seek()/_draw(), this
-   * does not read from `frames[]` — it re-runs `renderScene()` against the
-   * live mobject list, so camera changes are visible immediately without a
-   * re-record. No-op headless (no display canvas) or before any frame has
+   * Studio interactive-camera pan/zoom/orbit). Unlike seek()/drawFrameTo(),
+   * this does not read from `frames[]` — it re-runs `renderScene()` against
+   * the live mobject list, so camera changes are visible immediately without
+   * a re-record. No-op headless (no display canvas) or before any frame has
    * been recorded.
    */
   rerenderCurrentFrame(): void {
@@ -261,13 +269,30 @@ export class Player {
     this._liveRenderer.renderScene(this._lastMobjects);
   }
 
-  private _draw(frame: RecordedFrame): void {
-    if (!this.ctx || !frame) return;
+  /**
+   * Draw a specific recorded frame to an arbitrary ctx/size -- "nearly free"
+   * since every frame is already a rasterized bitmap. `seek()` uses this
+   * internally (drawing to the display canvas at full size); it's also the
+   * primitive behind presenter-mode "next section" thumbnails (drawing an
+   * upcoming section's first frame to a small preview canvas).
+   */
+  drawFrameTo(
+    ctx: any,
+    frameIndex: number,
+    opts: { width?: number; height?: number; x?: number; y?: number } = {},
+  ): void {
+    const frame = this.frames[frameIndex];
+    if (!ctx || !frame) return;
+    const w = opts.width ?? this.pixelWidth;
+    const h = opts.height ?? this.pixelHeight;
+    const x = opts.x ?? 0;
+    const y = opts.y ?? 0;
     try {
       if (frame.bitmap) {
-        this.ctx.drawImage(frame.bitmap, 0, 0, this.pixelWidth, this.pixelHeight);
+        ctx.drawImage(frame.bitmap, x, y, w, h);
       } else if (frame.imageData) {
-        this.ctx.putImageData(frame.imageData, 0, 0);
+        // putImageData has no scaling; only positions at (x, y).
+        ctx.putImageData(frame.imageData, x, y);
       }
       // A raw buffer with no ImageData can't be blitted portably; skip drawing.
     } catch { /* unsupported drawable in this host — ignore */ }
@@ -368,6 +393,45 @@ export class Player {
     const secs = this.sections();
     let target = 0;
     for (const s of secs) if (s.startFrame < this._current - 1) target = s.startFrame;
+    this.seek(target);
+  }
+
+  // --- step navigation (finer-grained, complementary to sections) ----------
+  // Mirrors the section-navigation methods above exactly, but reads
+  // scene.playRecords (already timestamps every play()/wait() call, so no
+  // Scene API changes are needed) instead of sections. Steps navigate
+  // independently of section boundaries. Known, deliberate limitation:
+  // PlayRecord has no name/label by design, so step UI can only show
+  // "step 3/17," not semantic labels.
+  /** The recorded scene's play()/wait() segments (empty if none). */
+  steps(): any[] {
+    return (this.scene as any)?.playRecords ?? [];
+  }
+
+  /** The step containing a frame index, if any. */
+  stepContaining(frame: number): any | undefined {
+    for (const s of this.steps()) if (frame >= s.startFrame && frame < s.endFrame) return s;
+    return undefined;
+  }
+
+  /** Seek to the start of a step (by 0-based index). */
+  seekToStep(index: number): void {
+    const steps = this.steps();
+    const step = steps[index];
+    if (step) this.seek(step.startFrame);
+  }
+
+  /** Jump to the next / previous step boundary. */
+  nextStep(): void {
+    const steps = this.steps();
+    const next = steps.find((s) => s.startFrame > this._current);
+    if (next) this.seek(next.startFrame);
+    else this.seek(this.frames.length - 1);
+  }
+  prevStep(): void {
+    const steps = this.steps();
+    let target = 0;
+    for (const s of steps) if (s.startFrame < this._current - 1) target = s.startFrame;
     this.seek(target);
   }
 }

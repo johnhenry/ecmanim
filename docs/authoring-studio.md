@@ -143,3 +143,31 @@ const controls = schemaToControls(MyScene.schema); // [{ name, control, min, max
 Turns a `defineSchema` spec into control descriptors for a props panel. This is
 data only — you render the controls with your own UI; Studio's harness page does
 not (yet) draw them.
+
+### Named camera stops + sections
+
+`MovingCameraScene.defineCameraStop()`/`goToCameraStop()` are sugar over the
+frame's own `animate.moveTo()/setWidth()/setHeight()` chain, meant to be
+paired with `nextSection()` so a presenter can jump straight to a named
+viewpoint at each section boundary:
+
+```js
+class MyScene extends MovingCameraScene {
+  async construct() {
+    this.defineCameraStop("wide", { center: [0, 0, 0], width: 14 });
+    this.defineCameraStop("closeup", { center: [3, 1, 0], zoom: 2 });
+
+    this.nextSection("overview");
+    await this.goToCameraStop("wide");
+    await this.play(/* ... */);
+
+    this.nextSection("detail");
+    await this.goToCameraStop("closeup", { runTime: 1.5 });
+    await this.play(/* ... */);
+  }
+}
+```
+`zoom` scales the frame's own width/height (`frame.animate.scale(1/zoom)`) —
+a different concept from the interactive camera's `camera.zoom` multiplier
+(`attachInteractiveCamera` above), which instead scales the projection at
+render time without touching the frame mobject. Don't conflate the two.

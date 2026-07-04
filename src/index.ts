@@ -69,6 +69,7 @@ export type {
 export { SVGMobject, parseXML, parseTransform } from "./mobject/svg_mobject.ts";
 export { ThreeDScene, ThreeDCamera, ThreeDAxes } from "./scene/three_d.ts";
 export { MovingCameraScene, ScreenRectangle, FullScreenRectangle } from "./scene/moving_camera_scene.ts";
+export type { CameraStop } from "./scene/moving_camera_scene.ts";
 export { ZoomedScene } from "./scene/zoomed_scene.ts";
 export { VectorScene, LinearTransformationScene } from "./scene/vector_space_scene.ts";
 export { MultiCamera } from "./camera/multi_camera.ts";

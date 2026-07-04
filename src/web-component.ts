@@ -216,6 +216,8 @@ function buildElementClass(): any {
     nextSection(): void { this._player?.nextSection(); }
     prevSection(): void { this._player?.prevSection(); }
     seekToSection(nameOrIndex: string | number): void { this._player?.seekToSection(nameOrIndex); }
+    nextStep(): void { this._player?.nextStep(); }
+    prevStep(): void { this._player?.prevStep(); }
     toggleFullscreen(): void {
       try {
         const doc: any = (globalThis as any).document;
@@ -224,11 +226,15 @@ function buildElementClass(): any {
       } catch { /* ignore */ }
     }
 
+    // Two keybinding tiers: plain Right/Left step through playRecords (finer-
+    // grained); Shift+Right/Left (or PageDown/PageUp) jump whole sections.
     _onKeyDown = (e: any): void => {
       switch (e.key) {
         case " ": case "k": e.preventDefault?.(); this._player?.playing ? this.pause() : this.play(); break;
-        case "ArrowRight": case "PageDown": this.nextSection(); break;
-        case "ArrowLeft": case "PageUp": this.prevSection(); break;
+        case "ArrowRight": if (e.shiftKey) this.nextSection(); else this.nextStep(); break;
+        case "ArrowLeft": if (e.shiftKey) this.prevSection(); else this.prevStep(); break;
+        case "PageDown": this.nextSection(); break;
+        case "PageUp": this.prevSection(); break;
         case "f": this.toggleFullscreen(); break;
         case "Home": this._player?.seek(0); break;
       }

@@ -38,6 +38,8 @@ export interface SceneSection {
   startFrame: number;
   endFrame: number;
   id: number;
+  /** Presenter-mode speaker notes for this section, if given to nextSection(). */
+  notes?: string;
 }
 
 /** A descriptor recorded for each play() call, used for content-addressed caching. */
@@ -119,7 +121,7 @@ export class Scene {
    * boundary at the current frame. The backend uses these boundaries to split
    * the rendered video into per-section files + a JSON index.
    */
-  nextSection(name = "unnamed", type: string = SectionType.NORMAL, skipAnimations = false): this {
+  nextSection(name = "unnamed", type: string = SectionType.NORMAL, skipAnimations = false, notes?: string): this {
     // Close the previous section (if any) at the current frame.
     if (this.sections.length) {
       const prev = this.sections[this.sections.length - 1];
@@ -132,8 +134,9 @@ export class Scene {
       startFrame: this.frameCount,
       endFrame: -1,
       id: this._sectionId++,
+      notes,
     });
-    this.log("section", `section: ${name}`, { name, type, skipAnimations, startFrame: this.frameCount });
+    this.log("section", `section: ${name}`, { name, type, skipAnimations, startFrame: this.frameCount, notes });
     return this;
   }
 

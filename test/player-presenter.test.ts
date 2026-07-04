@@ -45,3 +45,37 @@ test("sections() empty when no scene", () => {
   const p: any = new Player({ fps: 10 });
   assert.deepEqual(p.sections(), []);
 });
+
+test("sections carry presenter notes when nextSection() is given them", () => {
+  const p: any = new Player({ fps: 10 });
+  p.frames = new Array(10).fill({ width: 1, height: 1 });
+  p.scene = { sections: [
+    { name: "intro", startFrame: 0, endFrame: 10, type: "section.normal", notes: "Say hello" },
+  ] };
+  assert.equal(p.sections()[0].notes, "Say hello");
+});
+
+test("drawFrameTo() draws an arbitrary recorded frame to an arbitrary ctx/size", () => {
+  const p = fakePlayer();
+  p.frames = p.frames.map(() => ({ bitmap: {}, width: 64, height: 36 }));
+  const calls: any[] = [];
+  const fakeCtx = { drawImage: (...args: any[]) => calls.push(args) };
+  p.drawFrameTo(fakeCtx, 5, { width: 32, height: 18 });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].slice(1), [0, 0, 32, 18]);
+});
+
+test("drawFrameTo() defaults to the Player's own pixel dimensions", () => {
+  const p = fakePlayer();
+  p.frames = p.frames.map(() => ({ bitmap: {}, width: 64, height: 36 }));
+  const calls: any[] = [];
+  const fakeCtx = { drawImage: (...args: any[]) => calls.push(args) };
+  p.drawFrameTo(fakeCtx, 0);
+  assert.deepEqual(calls[0].slice(1), [0, 0, p.pixelWidth, p.pixelHeight]);
+});
+
+test("drawFrameTo() is a no-op for an out-of-range frame index or missing ctx", () => {
+  const p = fakePlayer();
+  assert.doesNotThrow(() => p.drawFrameTo(null, 0));
+  assert.doesNotThrow(() => p.drawFrameTo({ drawImage() {} }, 999));
+});

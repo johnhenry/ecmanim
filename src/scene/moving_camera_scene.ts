@@ -9,6 +9,24 @@ import type { SceneConfig } from "./Scene.ts";
 import { Rectangle } from "../mobject/geometry.ts";
 import type { Camera } from "../renderer/CanvasRenderer.ts";
 import * as V from "../core/math/vector.ts";
+import { ApplyMethod } from "../animation/Animation.ts";
+import type { AnimationConfig } from "../animation/Animation.ts";
+
+/**
+ * A named camera viewpoint (center/width/height/zoom), recalled via
+ * `goToCameraStop()`. `zoom` here is a scale factor applied to the frame's
+ * OWN width/height (`frame.animate.scale(1/zoom)`) — a DIFFERENT concept
+ * from the interactive camera's `camera.zoom` multiplier
+ * (`src/studio/interactive.ts`), which instead scales the projection at
+ * render time without touching the frame mobject's own geometry. Don't
+ * conflate the two.
+ */
+export interface CameraStop {
+  center?: number[];
+  width?: number;
+  height?: number;
+  zoom?: number;
+}
 
 /**
  * A Rectangle sized to (a fraction of) the camera frame, invisible by default.
@@ -75,5 +93,47 @@ export class MovingCameraScene extends Scene {
   getFrame(): Rectangle {
     this.setupFrame();
     return (this.camera as Camera).frame as Rectangle;
+  }
+
+  private _cameraStops = new Map<string, CameraStop>();
+
+  /** Name a camera viewpoint, recallable later via `goToCameraStop(name)`. */
+  defineCameraStop(name: string, stop: CameraStop): this {
+    this._cameraStops.set(name, stop);
+    return this;
+  }
+
+  /**
+   * Animate the camera frame to a previously-defined stop. Pure sugar over
+   * `camera.frame.animate.moveTo()/setWidth()/setHeight()` -- applied as a
+   * SINGLE ApplyMethod (not one animation per field) so multiple fields
+   * changing at once compose correctly instead of racing to overwrite the
+   * same frame mobject's points each tick.
+   */
+  async goToCameraStop(name: string, config: AnimationConfig = {}): Promise<this> {
+    const stop = this._cameraStops.get(name);
+    if (!stop) throw new Error(`goToCameraStop: no camera stop named "${name}"`);
+    const frame = this.getFrame();
+    // Config fields are set directly on the built Animation rather than
+    // passed into ApplyMethod's constructor -- its trailing-args config
+    // detection only fires for objects marked `_animConfig` (never actually
+    // set anywhere in this codebase), so a plain config object passed as a
+    // constructor arg would silently be treated as an extra method argument
+    // instead of runTime/rateFunc, same pattern transitions.ts's
+    // buildTransition() already uses for exactly this reason.
+    const anim = new ApplyMethod(frame, function (this: any): void {
+      if (stop.center) this.moveTo(stop.center);
+      // stretch=true: setWidth/setHeight default to aspect-preserving uniform
+      // rescale, which would let a subsequent setHeight() undo the width just
+      // set. A camera stop specifies width/height independently, so scale
+      // each axis on its own.
+      if (stop.width != null) this.setWidth(stop.width, true);
+      if (stop.height != null) this.setHeight(stop.height, true);
+      if (stop.zoom != null) this.scale(1 / stop.zoom);
+    });
+    if (config.runTime != null) anim.runTime = config.runTime;
+    if (config.rateFunc != null) anim.rateFunc = config.rateFunc;
+    await this.play(anim);
+    return this;
   }
 }

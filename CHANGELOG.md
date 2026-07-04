@@ -3,6 +3,37 @@
 ## Unreleased
 
 ### Added
+- **Parameter-only re-render primitive**: `runConstruct(sceneOrConstruct,
+  scene, props?)` and `Player.record(sceneOrConstruct, { props? })` thread
+  `props` through to a Scene subclass's own `config.props` or a bare
+  construct function's 2nd argument — both additive/opt-in. This still
+  re-runs `construct()` and re-records every frame; it doesn't itself avoid
+  that cost.
+- **`Player` step navigation**: `steps()`/`stepContaining()`/`seekToStep()`/
+  `nextStep()`/`prevStep()`, mirroring the existing section-navigation
+  methods but reading `scene.playRecords` (finer-grained, independent of
+  section boundaries). `<manim-player>`'s presenter keydown handler now has
+  two tiers: plain Right/Left step; Shift+Right/Left (or PageDown/PageUp)
+  jump whole sections.
+- **`Scene.nextSection()` gains an optional `notes` parameter** (and
+  `SceneSection.notes`) for presenter-mode speaker notes.
+- **`Player.drawFrameTo(ctx, frameIndex, opts?)`**: draws an arbitrary
+  recorded frame to an arbitrary ctx/position/size — "nearly free" since
+  frames are already rasterized bitmaps. `seek()` now uses this internally;
+  it's also the primitive behind section-overview thumbnails.
+- **`src/studio/timeline.ts`**: shared time/frame↔pixel mapping
+  (`timeToPixel`/`pixelToTime`/`frameToPixel`/`pixelToFrame`) plus
+  `computeSectionThumbnails()`/`renderSectionOverview()` (a jump-to-section
+  overview strip) and `computeStepMarkers()`. Each render function has a
+  DOM-free "compute layout" half, independently unit-testable.
+- **`MovingCameraScene.defineCameraStop(name, stop)` /
+  `goToCameraStop(name, config?)`**: named camera viewpoints
+  (center/width/height/zoom), sugar over `camera.frame.animate.moveTo()/
+  setWidth()/setHeight()`, applied as a single composed animation (not one
+  per field, which would otherwise race to overwrite the frame mobject's
+  points each tick). `zoom` scales the frame's own width/height — documented
+  as a distinct concept from the interactive camera's `camera.zoom`
+  multiplier.
 - **`copyMemberwiseStyle(dest, src, extraExclude?)`** (`src/mobject/copy_style.ts`):
   a shared denylist-based memberwise style copy, extracted from
   `Mobject.become()`. Now also used by `alwaysRedraw()` and `reactive()`'s
