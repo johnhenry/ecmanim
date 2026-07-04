@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **`copyMemberwiseStyle(dest, src, extraExclude?)`** (`src/mobject/copy_style.ts`):
+  a shared denylist-based memberwise style copy, extracted from
+  `Mobject.become()`. Now also used by `alwaysRedraw()` and `reactive()`'s
+  rebuild step, in place of their own independently-hardcoded allowlists —
+  any current or future custom field on a `Mobject` subclass now redraws
+  correctly through all three paths, not just the fields each one happened
+  to enumerate.
 - **`KeyframeTrack<T>` / `PlayKeyframeTrack` / `animateSignal()`**
   (`src/animation/keyframe_track.ts`): a unified keyframe-track primitive
   that, unlike every other easing tool here, keeps its structured, mutable
@@ -121,6 +128,14 @@
   `SVGMobject`, plus matching gradient-export support in the SVG renderer.
 
 ### Fixed
+- **`alwaysRedraw()` was missing `"radius"` from its own hardcoded 7-field
+  allowlist** (`reactive()`'s separate 9-field allowlist had it) — a
+  `ValueTracker`-driven `alwaysRedraw(() => new Circle({ radius: r() }))`
+  could silently stop reflecting radius changes depending on which of the
+  two rebuild paths built it. Both now use `copyMemberwiseStyle()`.
+- **`Mobject.become()` no longer copies `updatingSuspended` from its
+  source** — previously it could silently un-suspend a mid-animation
+  mobject.
 - **`SVGMobject` no longer renders `<defs>`/`<clipPath>`/`<linearGradient>`
   contents as visible shapes** — these definition-only containers were
   previously not excluded from the render walk.

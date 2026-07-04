@@ -66,6 +66,23 @@ test("become copies geometry, style and submobjects (deep)", () => {
   assert.equal(b.points[0][0], 0);
 });
 
+test("become does not un-suspend a mid-animation mobject via updatingSuspended", () => {
+  const a = makeMob([[0, 0, 0]]);
+  const b = makeMob([[1, 1, 0]]);
+  b.suspendUpdating();
+  assert.equal(b.updatingSuspended, true);
+  b.become(a);
+  assert.equal(b.updatingSuspended, true, "become() must not silently copy updatingSuspended from its source");
+});
+
+test("become copies arbitrary custom fields via the shared copyMemberwiseStyle denylist", () => {
+  const a: any = makeMob([[0, 0, 0]]);
+  a.myCustomField = "hello";
+  const b: any = makeMob([[1, 1, 0]]);
+  b.become(a);
+  assert.equal(b.myCustomField, "hello");
+});
+
 test("saveState / restore round-trips geometry", () => {
   const m = makeMob([[0, 0, 0], [1, 0, 0]]);
   m.saveState();

@@ -3,6 +3,7 @@
 
 import { Mobject } from "./Mobject.ts";
 import { RasterText } from "./text/Text.ts";
+import { copyMemberwiseStyle } from "./copy_style.ts";
 import type { Vec3 } from "../core/types.ts";
 
 /** Config accepted by DecimalNumber/Integer (extends Text's config loosely). */
@@ -123,10 +124,9 @@ export function alwaysRedraw(fn: () => Mobject): Mobject {
     const fresh = fn();
     mob.points = fresh.points;
     mob.submobjects = fresh.submobjects;
-    // Copy common style fields so the redraw is visible.
-    for (const k of ["fillColor", "strokeColor", "fillOpacity", "strokeOpacity", "strokeWidth", "color", "text", "opacity"]) {
-      if (k in fresh) (mob as any)[k] = (fresh as any)[k];
-    }
+    // Copy every style field (not a hardcoded allowlist) so custom fields on
+    // a user's Mobject subclass redraw correctly too.
+    copyMemberwiseStyle(mob, fresh);
   });
   return current;
 }

@@ -4,6 +4,7 @@
 import * as V from "../core/math/vector.ts";
 import { Color } from "../core/color.ts";
 import { makeAnimateBuilder } from "../animation/composition.ts";
+import { copyMemberwiseStyle } from "./copy_style.ts";
 import type { Vec3, ColorLike } from "../core/types.ts";
 
 let _idCounter = 0;
@@ -329,11 +330,9 @@ export class Mobject {
     this._color = Color.parse(src.color);
     this.opacity = src.opacity;
     this.zIndex = src.zIndex;
-    // Copy any extra style fields subclasses added (fill/stroke/etc.).
-    for (const key of Object.keys(src)) {
-      if (["id", "points", "submobjects", "color", "_color", "updaters", "savedState", "target"].includes(key)) continue;
-      (this as any)[key] = (src as any)[key];
-    }
+    // Copy any extra style fields subclasses added (fill/stroke/etc.) --
+    // the primitive behind always_redraw and transform-less morphs.
+    copyMemberwiseStyle(this, src);
     this.submobjects = src.submobjects;
     return this;
   }

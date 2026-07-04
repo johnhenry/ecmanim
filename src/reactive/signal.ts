@@ -13,6 +13,7 @@
 
 import { Mobject } from "../mobject/Mobject.ts";
 import { ValueTracker } from "../mobject/value_tracker.ts";
+import { copyMemberwiseStyle } from "../mobject/copy_style.ts";
 
 // --- core types ------------------------------------------------------------
 
@@ -260,19 +261,9 @@ export function reactive(fn: () => Mobject): Mobject {
     if (!fresh) return;
     current.points = fresh.points;
     current.submobjects = fresh.submobjects;
-    for (const k of [
-      "radius",
-      "fillColor",
-      "strokeColor",
-      "fillOpacity",
-      "strokeOpacity",
-      "strokeWidth",
-      "color",
-      "text",
-      "opacity",
-    ]) {
-      if (k in fresh) (current as any)[k] = (fresh as any)[k];
-    }
+    // Copy every style field (not a hardcoded allowlist) so custom fields on
+    // a user's Mobject subclass rebuild correctly too.
+    copyMemberwiseStyle(current, fresh);
   }
 
   current.addUpdater((_mob: Mobject) => {

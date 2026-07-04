@@ -130,6 +130,19 @@ test("reactive: rebuilds a Circle when its radius signal changes on update", () 
   assert.ok(mob.getWidth() > w1 * 1.5); // geometry actually grew
 });
 
+test("reactive: rebuild copies custom fields too, not just the old hardcoded allowlist", () => {
+  const n = createSignal(1);
+  const mob = reactive(() => {
+    const c: any = new Circle({ radius: 1 });
+    c.myCustomField = n();
+    return c;
+  });
+  assert.equal((mob as any).myCustomField, 1);
+  n.set(5);
+  mob.update(0);
+  assert.equal((mob as any).myCustomField, 5);
+});
+
 test("bind: sets a mobject property from a signal on update", () => {
   const opacity = createSignal(1);
   const c = new Circle();
