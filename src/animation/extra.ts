@@ -34,6 +34,15 @@ interface ExtraConfig extends AnimationConfig {
   startRadius?: number;
   fillOpacity?: number;
   strokeWidth?: number;
+  /** Force the highlight geometry to render fixed-in-frame / fixed-
+   *  orientation under a 3D camera (see the `_fixedInFrame`/
+   *  `_fixedOrientation` doc note above each class below). Defaults to
+   *  whatever the target mobject already carries when one is available
+   *  (Circumscribe always has one; Flash/FocusOn only when called with a
+   *  mobject rather than a raw point) -- set explicitly to override, or to
+   *  supply the flag when only a raw point is available. */
+  fixedInFrame?: boolean;
+  fixedOrientation?: boolean;
 }
 
 // Snapshot every family member's points (deep copy) for later reconstruction.
@@ -329,7 +338,11 @@ export class Flash extends Animation {
     const numLines = config.numLines ?? 12;
     const lineLength = config.lineLength ?? 0.2;
     const flashRadius = config.flashRadius ?? 0.3;
-    const center = point ?? V.ORIGIN;
+    // A caller with a Mobject in hand (not just its raw center) can pass it
+    // directly -- lets us inherit its fixed-in-frame/orientation flags below,
+    // same detection FocusOn already does for its own `point` parameter.
+    const sourceMobject = point && typeof point === "object" && !Array.isArray(point) && typeof point.getCenter === "function" ? point : null;
+    const center = sourceMobject ? sourceMobject.getCenter() : (point ?? V.ORIGIN);
 
     const lines = new VGroup();
     for (let i = 0; i < numLines; i++) {
@@ -341,6 +354,16 @@ export class Flash extends Animation {
       line.setColor(color);
       lines.add(line);
     }
+    // Bug (issue #21): built flat in the mobject's local XY plane with no
+    // fixed-in-frame/orientation flags of its own, so under a 3D camera it
+    // renders as an oblique, asymmetric burst instead of a symmetric one --
+    // even when the point came from an already-fixed-in-frame mobject.
+    // Inherit from a source Mobject when we have one; otherwise an explicit
+    // config override is the only way to get this right for a raw point.
+    const fixedInFrame = config.fixedInFrame ?? !!sourceMobject?._fixedInFrame;
+    const fixedOrientation = config.fixedOrientation ?? !!sourceMobject?._fixedOrientation;
+    if (fixedInFrame) lines.getFamily().forEach((m: any) => { m._fixedInFrame = true; });
+    if (fixedOrientation) lines.getFamily().forEach((m: any) => { m._fixedOrientation = true; });
 
     super(lines, { ...config, introducer: true, remover: true });
     this.point = center;
@@ -432,6 +455,15 @@ export class Circumscribe extends Animation {
     rect.setColor(config.color ?? "#FFFF00");
     rect.fillOpacity = 0;
     rect.moveTo(target.getCenter());
+    // Bug (issue #21): built flat in the target's local XY plane, so under a
+    // 3D camera it renders as a skewed parallelogram instead of an
+    // axis-aligned rectangle -- even when the target itself is already
+    // fixed-in-frame (addFixedInFrameMobjects only flags the target, and
+    // this `rect` is a brand-new mobject the target's flag never reaches).
+    // `target` is always a real Mobject here (unlike Flash/FocusOn's `point`,
+    // which may be a raw coordinate), so this can inherit automatically.
+    (rect as any)._fixedInFrame = config.fixedInFrame ?? !!(target as any)._fixedInFrame;
+    (rect as any)._fixedOrientation = config.fixedOrientation ?? !!(target as any)._fixedOrientation;
 
     super(rect, {
       rateFunc: config.rateFunc ?? rf.smooth,
@@ -480,9 +512,8 @@ export class FocusOn extends Animation {
   startOpacities!: Array<{ fill: number; stroke: number; op: number }>;
 
   constructor(point: any, config: ExtraConfig = {}) {
-    const target = point instanceof Object && !Array.isArray(point) && point.getCenter
-      ? point.getCenter()
-      : (point ?? V.ORIGIN);
+    const sourceMobject = point instanceof Object && !Array.isArray(point) && point.getCenter ? point : null;
+    const target = sourceMobject ? sourceMobject.getCenter() : (point ?? V.ORIGIN);
     // Build the spotlight ring lazily via Circle-like bezier points using Line
     // segments would be lossy; import Circle here to keep the shape true.
     // (Imported below to avoid a circular concern at module top.)
@@ -493,6 +524,13 @@ export class FocusOn extends Animation {
     circle.fillOpacity = config.fillOpacity ?? 0.2;
     circle.strokeWidth = config.strokeWidth ?? 0;
     circle.moveTo(target);
+    // Bug (issue #21): same root cause as Circumscribe/Flash above -- a
+    // brand-new flat circle never inherits the source's fixed-in-frame/
+    // orientation flags. Inherit automatically when called with a Mobject
+    // (as `sourceMobject` here); a raw point has no flags to inherit, so an
+    // explicit config override is the only way to get this right for one.
+    (circle as any)._fixedInFrame = config.fixedInFrame ?? !!(sourceMobject as any)?._fixedInFrame;
+    (circle as any)._fixedOrientation = config.fixedOrientation ?? !!(sourceMobject as any)?._fixedOrientation;
 
     super(circle, {
       rateFunc: config.rateFunc ?? rf.smooth,
