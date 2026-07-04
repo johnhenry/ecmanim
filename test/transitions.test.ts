@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { crossFade, slide, wipe } from "../src/animation/transitions.ts";
+import { crossFade, slide, wipe, linearTiming, springTiming } from "../src/animation/transitions.ts";
 import { Circle } from "../src/mobject/geometry.ts";
 import { linear } from "../src/animation/rate_functions.ts";
+import { measureSpring } from "../src/animation/spring.ts";
 
 test("crossFade: a fades out while b fades in across the timeline", () => {
   const a = new Circle();
@@ -79,6 +80,42 @@ test("slide: a moves out the opposite way (positive direction)", () => {
   g.interpolate(1);
   const endX = a.getCenter()[0];
   assert.ok(endX > homeA[0] + 1, `a slides right/out, got x=${endX}`);
+});
+
+test("linearTiming(customEase) reproduces today's flat rateFunc behavior exactly", () => {
+  const a1 = new Circle(), b1 = new Circle();
+  const g1 = crossFade(a1, b1, { overlap: 1, rateFunc: linear });
+
+  const a2 = new Circle(), b2 = new Circle();
+  const g2 = crossFade(a2, b2, { overlap: 1, timing: linearTiming(linear) });
+
+  g1.begin(); g2.begin();
+  for (const t of [0, 0.25, 0.5, 0.75, 1]) {
+    g1.interpolate(t); g2.interpolate(t);
+    assert.ok(Math.abs(a1.strokeOpacity - a2.strokeOpacity) < 1e-9, `a mismatch at t=${t}`);
+    assert.ok(Math.abs(b1.strokeOpacity - b2.strokeOpacity) < 1e-9, `b mismatch at t=${t}`);
+  }
+});
+
+test("springTiming() without an explicit runTime measures its own settle time", () => {
+  const a = new Circle(), b = new Circle();
+  const fps = 60;
+  const expectedSettleFrames = measureSpring({ fps });
+  const g: any = crossFade(a, b, { timing: springTiming(undefined, undefined), fps });
+  assert.ok(Math.abs(g.runTime - expectedSettleFrames / fps) < 1e-9);
+});
+
+test("explicit config.runTime still overrides a timing preset's computed duration", () => {
+  const a = new Circle(), b = new Circle();
+  const g: any = crossFade(a, b, { timing: springTiming(), runTime: 2.5 });
+  assert.equal(g.runTime, 2.5);
+});
+
+test("springTiming() with an explicit durationInFrames uses that instead of measuring", () => {
+  const a = new Circle(), b = new Circle();
+  const fps = 30;
+  const g: any = crossFade(a, b, { timing: springTiming(undefined, 45), fps });
+  assert.ok(Math.abs(g.runTime - 45 / fps) < 1e-9);
 });
 
 test("wipe: b slides in while a fades and drifts out", () => {

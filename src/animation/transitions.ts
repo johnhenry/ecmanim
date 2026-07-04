@@ -21,13 +21,45 @@
 import { AnimationGroup } from "./composition.ts";
 import { FadeIn, FadeOut, ApplyMethod } from "./Animation.ts";
 import { squishRateFunc, smooth } from "./rate_functions.ts";
+import { springRate, measureSpring } from "./spring.ts";
+import type { SpringConfig } from "./spring.ts";
 import type { RateFunc } from "../core/types.ts";
+
+// --- timing presets (GSAP's TransitionSeries linearTiming/springTiming
+// ergonomic): a preset supplies the shared rateFunc AND, optionally, a
+// suggested runTime -- explicit config.runTime always wins over a preset's
+// computed duration (same "preset suggests, explicit config overrides"
+// precedence as the KeyframeTrack primitive elsewhere in this codebase).
+export interface TimingPresetResult {
+  rateFunc: RateFunc;
+  runTime?: number;
+}
+export type TimingPreset = (opts: { fps: number }) => TimingPresetResult;
+
+export function linearTiming(rateFunc: RateFunc = smooth): TimingPreset {
+  return () => ({ rateFunc });
+}
+
+/** A spring-eased timing preset; measures its own natural settle time (in
+ *  seconds, at `opts.fps`) unless `durationInFrames` is given explicitly. */
+export function springTiming(config?: SpringConfig, durationInFrames?: number): TimingPreset {
+  return ({ fps }) => {
+    const settle = durationInFrames ?? measureSpring({ fps, config });
+    return { rateFunc: springRate(config, fps, settle), runTime: settle / fps };
+  };
+}
 
 export interface TransitionConfig {
   runTime?: number;
   rateFunc?: (t: number) => number;
   direction?: [number, number, number];
   overlap?: number; // 0 = strict A-then-B; 1 = fully simultaneous
+  /** A timing preset (linearTiming/springTiming) supplying rateFunc and,
+   *  optionally, a suggested runTime -- explicit `runTime` above still wins. */
+  timing?: TimingPreset;
+  /** fps used to resolve a timing preset's frame-accurate duration. Default 60;
+   *  pass scene.fps for a frame-accurate springTiming(). */
+  fps?: number;
 }
 
 // --- TIMING helper (presentation-agnostic) ---------------------------------
@@ -64,8 +96,9 @@ function buildTransition(
   incoming: any,
   config: TransitionConfig,
 ): AnimationGroup {
-  const runTime = config.runTime ?? 1;
-  const base: RateFunc = config.rateFunc ?? smooth;
+  const preset = config.timing?.({ fps: config.fps ?? 60 });
+  const runTime = config.runTime ?? preset?.runTime ?? 1;
+  const base: RateFunc = config.rateFunc ?? preset?.rateFunc ?? smooth;
   const overlap = config.overlap ?? 1;
   const { out, in: inW } = overlapWindows(overlap);
 

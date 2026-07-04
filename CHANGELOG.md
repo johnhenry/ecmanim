@@ -3,6 +3,31 @@
 ## Unreleased
 
 ### Added
+- **Parameterized back/elastic easings**: `easeInBackFactory`/`easeOutBackFactory`/
+  `easeInOutBackFactory(overshoot?)` and `easeInElasticFactory`/`easeOutElasticFactory`/
+  `easeInOutElasticFactory(amplitude?, period?)` (GSAP's `back.out(2)`/
+  `elastic.out(1, 0.3)` ergonomic), byte-identical to the existing plain
+  exports at default args. Registered as `"backIn"/"backOut"/"backInOut"` and
+  `"elasticIn"/"elasticOut"/"elasticInOut"` rate-function factories, so
+  `running("backOut:2")` / `running("elasticOut:1,0.3")` resolve them by name.
+- **Unified rate-function registry**: `running()` now checks
+  `registry.rateFunctions`/`registry.rateFunctionFactories` *before* the
+  built-in `RATE_FUNCTIONS` map, so a plugin can override a built-in name by
+  registering under the same key. Added colon-parameterized name parsing
+  (`"name:arg1,arg2"`) dispatching to a registered factory. `"spring"`
+  (an fps=60 convenience default; use `springRate(config, scene.fps)` directly
+  for frame-accurate springs) and a `"bezier:x1,y1,x2,y2"` factory
+  (wrapping `Easing.bezier`) are now registered built-ins.
+- **`TransitionConfig.timing`**: a `TimingPreset` (`linearTiming(rateFunc?)` /
+  `springTiming(config?, durationInFrames?)`) supplying `crossFade`/`slide`/
+  `wipe`'s shared `rateFunc` and, optionally, a suggested `runTime` — explicit
+  `config.runTime` always wins over a preset's computed duration.
+  `springTiming()` measures its own natural settle time via `measureSpring()`
+  unless `durationInFrames` is given explicitly.
+- **Style-preset registration API**: `registry.stylePresets` +
+  `registerStylePreset(name, preset)`, checked by `resolveStyle()` alongside
+  the built-in `STYLE_PRESETS` map — the same plugin-registry pattern already
+  used for colors/rate-functions/mobjects.
 - **Word-wrap for `Text`**: a new `width` config option greedily wraps long
   lines to fit, using real glyph-advance measurement when a vector font is
   loaded or the `CHAR_ASPECT` estimate otherwise. `estimateTextSize()` gained

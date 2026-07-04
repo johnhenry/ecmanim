@@ -54,7 +54,11 @@ import * as indicationExtra from "../animation/indication_extra.ts";
 import * as changingAnim from "../animation/changing.ts";
 import * as specializedAnim from "../animation/specialized.ts";
 import * as complexVT from "../mobject/complex_value_tracker.ts";
-import { RATE_FUNCTIONS } from "../animation/rate_functions.ts";
+import {
+  RATE_FUNCTIONS,
+  easeInBackFactory, easeOutBackFactory, easeInOutBackFactory,
+  easeInElasticFactory, easeOutElasticFactory, easeInOutElasticFactory,
+} from "../animation/rate_functions.ts";
 import { springRate } from "../animation/spring.ts";
 import { Easing } from "../animation/easing.ts";
 import * as colorMod from "../core/color.ts";
@@ -101,6 +105,14 @@ export function registerBuiltins(): typeof registry {
   // lookup) referenceable anywhere a rate-function string is accepted, with
   // no per-curve registration step.
   registry.registerRateFunctionFactory("bezier", (x1, y1, x2, y2) => Easing.bezier(x1, y1, x2, y2));
+  // Parameterized back/elastic (GSAP's back.out(2)/elastic.out(1, 0.3)
+  // ergonomic) -- "backOut:2", "elasticOut:1,0.3", etc.
+  registry.registerRateFunctionFactory("backIn", (overshoot) => easeInBackFactory(overshoot));
+  registry.registerRateFunctionFactory("backOut", (overshoot) => easeOutBackFactory(overshoot));
+  registry.registerRateFunctionFactory("backInOut", (overshoot) => easeInOutBackFactory(overshoot));
+  registry.registerRateFunctionFactory("elasticIn", (amplitude, period) => easeInElasticFactory(amplitude, period));
+  registry.registerRateFunctionFactory("elasticOut", (amplitude, period) => easeOutElasticFactory(amplitude, period));
+  registry.registerRateFunctionFactory("elasticInOut", (amplitude, period) => easeInOutElasticFactory(amplitude, period));
 
   for (const [name, value] of Object.entries(colorMod)) {
     if (typeof value === "string" && value.startsWith("#")) registry.registerColor(name, value);

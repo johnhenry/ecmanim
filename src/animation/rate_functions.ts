@@ -176,31 +176,88 @@ export const easeInOutCirc = (t: number): number =>
     : (Math.sqrt(1 - Math.pow(-2 * t + 2, 2)) + 1) / 2;
 
 const C1 = 1.70158;
-const C2 = C1 * 1.525;
-const C3 = C1 + 1;
 
-export const easeInBack = (t: number): number => C3 * t * t * t - C1 * t * t;
-export const easeOutBack = (t: number): number =>
-  1 + C3 * Math.pow(t - 1, 3) + C1 * Math.pow(t - 1, 2);
-export const easeInOutBack = (t: number): number =>
-  t < 0.5
-    ? (Math.pow(2 * t, 2) * ((C2 + 1) * 2 * t - C2)) / 2
-    : (Math.pow(2 * t - 2, 2) * ((C2 + 1) * (t * 2 - 2) + C2) + 2) / 2;
+// Parameterized "back" ease factories (GSAP's back.in/out/inOut(overshoot)
+// ergonomic) -- these are the exact same formula the plain exports below
+// already used, just with the overshoot constant exposed as an argument
+// instead of hardcoded, so the default-argument call collapses to byte-
+// identical output.
+export function easeInBackFactory(overshoot = C1): RateFunc {
+  const c3 = overshoot + 1;
+  return (t: number) => c3 * t * t * t - overshoot * t * t;
+}
+export function easeOutBackFactory(overshoot = C1): RateFunc {
+  const c3 = overshoot + 1;
+  return (t: number) => 1 + c3 * Math.pow(t - 1, 3) + overshoot * Math.pow(t - 1, 2);
+}
+export function easeInOutBackFactory(overshoot = C1): RateFunc {
+  const c2 = overshoot * 1.525;
+  return (t: number) =>
+    t < 0.5
+      ? (Math.pow(2 * t, 2) * ((c2 + 1) * 2 * t - c2)) / 2
+      : (Math.pow(2 * t - 2, 2) * ((c2 + 1) * (t * 2 - 2) + c2) + 2) / 2;
+}
+
+export const easeInBack: RateFunc = easeInBackFactory();
+export const easeOutBack: RateFunc = easeOutBackFactory();
+export const easeInOutBack: RateFunc = easeInOutBackFactory();
 
 const C4 = (2 * Math.PI) / 3;
 const C5 = (2 * Math.PI) / 4.5;
+const DEFAULT_AMPLITUDE = 1;
+const DEFAULT_PERIOD = 0.3;
 
-export const easeInElastic = (t: number): number => {
+// Parameterized "elastic" ease factories (GSAP's elastic.in/out/inOut
+// (amplitude, period) ergonomic). Safe fast path: at the exact defaults,
+// return the existing hardcoded function unchanged (same constants, zero
+// floating-point-drift risk) -- the general GSAP-style amplitude/period
+// formula below is only exercised for genuinely custom arguments, so there's
+// no "should algebraically collapse" assumption to get subtly wrong.
+export function easeInElasticFactory(amplitude = DEFAULT_AMPLITUDE, period = DEFAULT_PERIOD): RateFunc {
+  if (amplitude === DEFAULT_AMPLITUDE && period === DEFAULT_PERIOD) return easeInElastic;
+  const a = Math.max(1, amplitude);
+  const s = amplitude < 1 ? period / 4 : (period / (2 * Math.PI)) * Math.asin(1 / a);
+  return (t: number) => {
+    if (t === 0) return 0;
+    if (t === 1) return 1;
+    return -(a * Math.pow(2, 10 * (t - 1)) * Math.sin(((t - 1 - s) * 2 * Math.PI) / period));
+  };
+}
+export function easeOutElasticFactory(amplitude = DEFAULT_AMPLITUDE, period = DEFAULT_PERIOD): RateFunc {
+  if (amplitude === DEFAULT_AMPLITUDE && period === DEFAULT_PERIOD) return easeOutElastic;
+  const a = Math.max(1, amplitude);
+  const s = amplitude < 1 ? period / 4 : (period / (2 * Math.PI)) * Math.asin(1 / a);
+  return (t: number) => {
+    if (t === 0) return 0;
+    if (t === 1) return 1;
+    return a * Math.pow(2, -10 * t) * Math.sin(((t - s) * 2 * Math.PI) / period) + 1;
+  };
+}
+export function easeInOutElasticFactory(amplitude = DEFAULT_AMPLITUDE, period = DEFAULT_PERIOD): RateFunc {
+  if (amplitude === DEFAULT_AMPLITUDE && period === DEFAULT_PERIOD) return easeInOutElastic;
+  const a = Math.max(1, amplitude);
+  const s = amplitude < 1 ? period / 4 : (period / (2 * Math.PI)) * Math.asin(1 / a);
+  const p = period * 1.5;
+  return (t: number) => {
+    if (t === 0) return 0;
+    if (t === 1) return 1;
+    const tt = t * 2;
+    if (tt < 1) return -0.5 * (a * Math.pow(2, 10 * (tt - 1)) * Math.sin(((tt - 1 - s) * 2 * Math.PI) / p));
+    return a * Math.pow(2, -10 * (tt - 1)) * Math.sin(((tt - 1 - s) * 2 * Math.PI) / p) * 0.5 + 1;
+  };
+}
+
+export const easeInElastic: RateFunc = (t: number): number => {
   if (t === 0) return 0;
   if (t === 1) return 1;
   return -Math.pow(2, 10 * t - 10) * Math.sin((t * 10 - 10.75) * C4);
 };
-export const easeOutElastic = (t: number): number => {
+export const easeOutElastic: RateFunc = (t: number): number => {
   if (t === 0) return 0;
   if (t === 1) return 1;
   return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * C4) + 1;
 };
-export const easeInOutElastic = (t: number): number => {
+export const easeInOutElastic: RateFunc = (t: number): number => {
   if (t === 0) return 0;
   if (t === 1) return 1;
   return t < 0.5
