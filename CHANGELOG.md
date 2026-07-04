@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.0.11
+
 ### Added
 - **Page-transition playback resume** (`ecmanim/browser`):
   `enablePageTransitionResume(playerEl, opts?)` carries a `<manim-player>`'s
