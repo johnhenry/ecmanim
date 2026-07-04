@@ -3,6 +3,26 @@
 ## Unreleased
 
 ### Added
+- **`Circumscribe`/`Flash`/`FocusOn` now support camera-facing billboarding
+  for a genuinely-3D (non-fixed) target** (issue #29 — the remaining half
+  of issue #21 the 0.0.13 fix explicitly deferred). Pass a 3D camera via
+  the new `camera` config option (e.g. `new Circumscribe(worldDot, {
+  camera: this.camera })` inside a `ThreeDScene`) to build the highlight
+  directly in the target's camera-tangent plane — the two world-space
+  directions that project to flat screen X/Y under the current camera
+  orientation — instead of a fixed world-XY plane. The ordinary 3D
+  pipeline then projects it back out undistorted, still perspective-scaled
+  and depth-tested against other 3D content, at any camera angle. The
+  basis is recomputed every `interpolateMobject()` frame (not cached at
+  construction), so an orbiting camera (`beginAmbientCameraRotation()`,
+  `moveCamera()`) is tracked correctly throughout the highlight's runtime.
+  Ignored (falls back to issue #21's existing flag-propagation path) when
+  the target is already fixed-in-frame/fixed-orientation. Confirmed via
+  direct rendered-frame inspection: a `Circumscribe`/`Flash` on a genuine
+  3D point under a 65°/-70° camera now renders a proper undistorted square
+  and symmetric burst (previously a skewed parallelogram and lopsided
+  starburst), including across 4 sampled frames spanning a full ambient
+  camera rotation.
 - **`Camera`/`ThreeDCamera` gain an opt-in `superSample` option** (issue
   #26) fixing badly aliased 3D-scene rendering: `src/renderer/zbuffer.ts`'s
   `ZBuffer` (used for every non-fixed-in-frame mobject in a `ThreeDScene`)
