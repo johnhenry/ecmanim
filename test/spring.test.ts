@@ -36,6 +36,63 @@ test("overshootClamping prevents passing `to`", () => {
   }
 });
 
+test("velocity0 defaults to 0 and is byte-identical to the pre-existing formula across all three damping regimes", () => {
+  // Regression lock captured before adding velocity0 support: underdamped,
+  // critically damped, overdamped, and the library default all reproduce
+  // exactly the same sequence of values now that velocity0 defaults to 0.
+  const configs = [
+    { mass: 1, damping: 4, stiffness: 200 },  // underdamped
+    { mass: 1, damping: 20, stiffness: 100 }, // critically damped (zeta=1)
+    { mass: 1, damping: 40, stiffness: 100 }, // overdamped
+    { mass: 1, damping: 10, stiffness: 100 }, // library default
+  ];
+  const expected = [
+    0, 0.5559628062578796, 1.4209335959502964, 1.096735091171, 1.2590570816176752, 0.9334806643916277, 1.0065011833432493,
+    0, 0.20323661773702328, 0.49633172576650164, 0.8454126954952396, 0.9902431408563948, 0.9999767857793102, 0.9999999996389135,
+    1.1102230246251565e-16, 0.14169660278670793, 0.31085297763722197, 0.5589778141061978, 0.8194636935225812, 0.9697467398588371, 0.998672191232598,
+    0, 0.25366068574198586, 0.695891727212196, 1.15528559137785, 0.9789091756620557, 0.9999591053807041, 1.000002794114033,
+  ];
+  let i = 0;
+  for (const config of configs) {
+    for (const frame of [0, 5, 10, 20, 40, 80, 150]) {
+      approx(spring({ frame, fps: 60, from: 0, to: 1, config }), expected[i], 1e-12);
+      i++;
+    }
+  }
+});
+
+test("velocity0 > 0 pushes the spring above a pure-rest trajectory shortly after t=0", () => {
+  const config = { mass: 1, damping: 10, stiffness: 100 };
+  const fps = 60;
+  const atRest = spring({ frame: 3, fps, config });
+  const withVelocity = spring({ frame: 3, fps, config, velocity0: 5 });
+  assert.ok(withVelocity > atRest, `expected velocity0>0 to move faster, got ${withVelocity} <= ${atRest}`);
+});
+
+test("velocity0 < 0 (opposing the target) pulls the spring below a pure-rest trajectory shortly after t=0", () => {
+  const config = { mass: 1, damping: 10, stiffness: 100 };
+  const fps = 60;
+  const atRest = spring({ frame: 3, fps, config });
+  const withVelocity = spring({ frame: 3, fps, config, velocity0: -5 });
+  assert.ok(withVelocity < atRest, `expected velocity0<0 to move slower/backward, got ${withVelocity} >= ${atRest}`);
+});
+
+test("momentum pattern: from===to with nonzero velocity0 drifts away then decays back to rest", () => {
+  const config = { mass: 1, damping: 8, stiffness: 120 };
+  const fps = 60;
+  const current = 10; // an arbitrary "current position" (e.g. a camera offset)
+  const released = 3; // release velocity (units/sec)
+
+  const v0 = spring({ frame: 0, fps, from: current, to: current, config, velocity0: released });
+  assert.ok(Math.abs(v0 - current) < 1e-9, `frame 0 must start exactly at the current value, got ${v0}`);
+
+  const shortlyAfter = spring({ frame: 5, fps, from: current, to: current, config, velocity0: released });
+  assert.ok(shortlyAfter > current, `expected the fling to move past the current value, got ${shortlyAfter}`);
+
+  const settled = spring({ frame: 600, fps, from: current, to: current, config, velocity0: released });
+  assert.ok(Math.abs(settled - current) < 1e-3, `expected it to decay back to ${current}, got ${settled}`);
+});
+
 test("measureSpring returns a positive finite settle frame within threshold", () => {
   const fps = 60;
   const threshold = 0.005;

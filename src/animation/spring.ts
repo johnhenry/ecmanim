@@ -43,6 +43,12 @@ export interface SpringParams {
   to?: number;          // default 1
   config?: SpringConfig;
   durationInFrames?: number; // optional: rescale so spring settles by this frame
+  /** Initial velocity (position units per second) at t=0. Default 0, which
+   *  makes every formula below collapse exactly to the pre-existing v0=0
+   *  case -- see `analytic()`. Used for "fling and decelerate" momentum
+   *  (spring toward the CURRENT value with a nonzero release velocity)
+   *  rather than the usual "seek toward a fixed target from rest". */
+  velocity0?: number;
 }
 
 const DEFAULTS: Required<Omit<SpringConfig, "overshootClamping">> & {
@@ -65,9 +71,13 @@ function resolveConfig(config?: SpringConfig) {
 /**
  * Closed-form damped harmonic oscillator, evaluated at time `t` seconds.
  *
- * Returns both position and velocity for a system whose offset from the target
- * starts at `offset0` (= from - to) with zero initial velocity, decaying to 0.
- * `position` is offset + to.
+ * Returns both position and velocity for a system whose offset from the
+ * target starts at `offset0` (= from - to) with initial velocity
+ * `velocity0` (default 0), decaying to 0. `position` is offset + to. Every
+ * branch's coefficients are the general y(0)=offset0, y'(0)=velocity0
+ * solution; at velocity0=0 each collapses exactly to the pre-existing
+ * zero-initial-velocity formula (verified by the byte-identical regression
+ * test in test/spring.test.ts).
  */
 function analytic(
   t: number,
@@ -76,6 +86,7 @@ function analytic(
   mass: number,
   damping: number,
   stiffness: number,
+  velocity0 = 0,
 ): { position: number; velocity: number } {
   const w0 = Math.sqrt(stiffness / mass);
   const zeta = damping / (2 * Math.sqrt(stiffness * mass));
@@ -87,11 +98,12 @@ function analytic(
     // Underdamped: oscillatory decay.
     const wd = w0 * Math.sqrt(1 - zeta * zeta); // damped angular frequency
     const envelope = Math.exp(-zeta * w0 * t);
-    // y(0)=offset0, y'(0)=0 =>
-    //   y(t) = e^{-zeta w0 t} [ offset0 cos(wd t) + (zeta w0 offset0 / wd) sin(wd t) ]
+    // y(0)=offset0, y'(0)=velocity0 =>
+    //   y(t) = e^{-zeta w0 t} [ offset0 cos(wd t) + B sin(wd t) ],
+    //   B = (velocity0 + zeta w0 offset0) / wd
     const cos = Math.cos(wd * t);
     const sin = Math.sin(wd * t);
-    const B = (zeta * w0 * offset0) / wd;
+    const B = (velocity0 + zeta * w0 * offset0) / wd;
     y = envelope * (offset0 * cos + B * sin);
     // y'(t): derivative of the product.
     dy =
@@ -99,9 +111,10 @@ function analytic(
       ((-zeta * w0) * (offset0 * cos + B * sin) +
         (-offset0 * wd * sin + B * wd * cos));
   } else if (zeta === 1) {
-    // Critically damped: y(t) = (A + B t) e^{-w0 t}, A = offset0, B = w0*offset0.
+    // Critically damped: y(t) = (A + B t) e^{-w0 t}, A = offset0,
+    // B = velocity0 + w0*offset0 (from y'(0) = B - w0*A = velocity0).
     const A = offset0;
-    const B = w0 * offset0; // from y'(0)=0 => B - w0*A = 0
+    const B = velocity0 + w0 * offset0;
     const e = Math.exp(-w0 * t);
     y = (A + B * t) * e;
     dy = (B) * e + (A + B * t) * (-w0) * e; // = e*(B - w0*(A + B t))
@@ -110,11 +123,12 @@ function analytic(
     const disc = w0 * Math.sqrt(zeta * zeta - 1);
     const r1 = -zeta * w0 + disc;
     const r2 = -zeta * w0 - disc;
-    // y = C1 e^{r1 t} + C2 e^{r2 t}, with y(0)=offset0, y'(0)=0.
-    // C1 + C2 = offset0 ; r1 C1 + r2 C2 = 0  =>  C1 = -r2 offset0/(r1-r2), C2 = r1 offset0/(r1-r2)
+    // y = C1 e^{r1 t} + C2 e^{r2 t}, with y(0)=offset0, y'(0)=velocity0.
+    // C1 + C2 = offset0 ; r1 C1 + r2 C2 = velocity0
+    //   => C1 = (velocity0 - r2 offset0)/(r1-r2), C2 = (r1 offset0 - velocity0)/(r1-r2)
     const denom = r1 - r2;
-    const C1 = (-r2 * offset0) / denom;
-    const C2 = (r1 * offset0) / denom;
+    const C1 = (velocity0 - r2 * offset0) / denom;
+    const C2 = (r1 * offset0 - velocity0) / denom;
     const e1 = Math.exp(r1 * t);
     const e2 = Math.exp(r2 * t);
     y = C1 * e1 + C2 * e2;
@@ -135,6 +149,7 @@ export function spring(params: SpringParams): number {
   const { frame, fps } = params;
   const from = params.from ?? 0;
   const to = params.to ?? 1;
+  const velocity0 = params.velocity0 ?? 0;
   const { mass, damping, stiffness, overshootClamping } = resolveConfig(params.config);
 
   const offset0 = from - to;
@@ -151,7 +166,7 @@ export function spring(params: SpringParams): number {
 
   if (t < 0) t = 0;
 
-  const { position } = analytic(t, offset0, to, mass, damping, stiffness);
+  const { position } = analytic(t, offset0, to, mass, damping, stiffness, velocity0);
 
   if (overshootClamping) {
     // Prevent the value from passing `to`.

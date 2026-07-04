@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- **`SpringParams.velocity0`**: the analytic spring (`src/animation/spring.ts`)
+  now accepts a nonzero initial velocity (default 0, byte-identical to the
+  prior zero-initial-velocity formula in every damping regime). Enables
+  "fling and decelerate" momentum — spring a value back toward *itself*
+  (`from === to`) seeded with a release velocity, instead of the usual
+  "seek a fixed target from rest".
+- **Studio drag momentum** (`src/studio/interactive.ts`):
+  `attachInteractiveCamera(..., { momentum: true })` continues panning (2D)
+  or orbiting (3D) after a drag release, decelerating via a spring seeded
+  with the release velocity (from a short ring buffer of recent pointer
+  samples). Opt-in via `momentum`, tunable via `momentumConfig`; a fresh
+  drag cancels any in-flight momentum. `now`/`scheduleFrame`/`cancelFrame`
+  are injectable (default `Date.now`/`requestAnimationFrame`) for
+  deterministic testing.
 - **`Repeat`** (`src/animation/repeat.ts`): a standalone `Animation` wrapper
   adding `count`/`yoyo`/`repeatDelay` to any leaf `Animation`, `AnimationGroup`,
   or built `Timeline`, without reaching into their internals. `yoyo` mirrors
