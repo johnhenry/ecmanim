@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Added
+- **WebGL raster-text batching** (`ThreeRenderer`): raster `Text`
+  (`RasterText`) mobjects now render as ONE shared texture atlas + ONE
+  merged quad mesh instead of one `THREE.Sprite` (own `CanvasTexture`) per
+  mobject — converts N draw calls into 1. New `src/renderer/text_atlas.ts`'s
+  `buildTextAtlas()` does simple shelf-packing (sort tallest-first, pack
+  into rows). Scoped to a 2D-orthographic camera, where a flat quad is
+  visually identical to a billboarded sprite (the camera always looks
+  straight down -Z); a genuine 3D/perspective camera keeps the original
+  per-sprite path so real per-mobject billboarding still works. Falls back
+  to the per-sprite path gracefully wherever no synchronous canvas/document
+  backend is available (e.g. headless Node), same as the pre-existing
+  per-sprite code already did.
 - **`Mobject.cacheStatic()`** + `CanvasRenderer` static-subtree render cache:
   an opt-in marker that, on an unchanged frame (content-based fingerprint
   of geometry/style AND camera state — NOT reference equality, since

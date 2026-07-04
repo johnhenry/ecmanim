@@ -10,6 +10,7 @@
 import * as V from "../core/math/vector.ts";
 import { collectBuffers } from "./geometry_util.ts";
 import { makeBezierStrokeMaterial, buildStrokeGeometry } from "./bezier_shader.ts";
+import { buildTextAtlas } from "./text_atlas.ts";
 import type { Mobject } from "../mobject/Mobject.ts";
 
 export interface ThreeRendererOptions {
@@ -131,7 +132,22 @@ export class ThreeRenderer {
     if (buf.lines.positions.length) {
       this.group.add(this.strokeMode === "sdf" ? this._sdfStrokes(buf.lines) : this._lines(buf.lines));
     }
-    for (const t of buf.texts) { const s = this._textSprite(t); if (s) this.group.add(s); }
+    if (buf.texts.length) {
+      // Batched path: one atlas texture + one merged quad mesh for ALL text
+      // mobjects (N draw calls -> 1). Only valid for a 2D-orthographic camera,
+      // where a flat quad is visually identical to a billboarded sprite (the
+      // camera always looks straight down -Z) -- a genuine 3D/perspective
+      // camera still needs real per-mobject billboarding, so it keeps the
+      // original per-sprite path. Falls back to per-sprite too if the atlas
+      // can't build (headless, no document -- same case _textSprite() itself
+      // already skips).
+      const batched = this.is3D() ? null : this._batchedTextMesh(buf.texts);
+      if (batched) {
+        this.group.add(batched);
+      } else {
+        for (const t of buf.texts) { const s = this._textSprite(t); if (s) this.group.add(s); }
+      }
+    }
     for (const im of buf.images) { const p = this._imageQuad(im); if (p) this.group.add(p); }
 
     this.syncCamera();
@@ -212,6 +228,42 @@ export class ThreeRenderer {
     const wh = mob.getHeight() || mob.fontSize || 0.5;
     sprite.scale.set(wh * (canvas.width / canvas.height), wh, 1);
     return sprite;
+  }
+
+  /**
+   * ONE atlas texture + ONE merged quad mesh for every raster Text mobject
+   * (converts N draw calls into 1). Returns null if no atlas could be built
+   * (e.g. headless with no `document`), so the caller falls back to
+   * _textSprite()'s per-mobject path.
+   */
+  _batchedTextMesh(texts: any[]): any {
+    const { THREE } = this;
+    const atlas = buildTextAtlas(texts);
+    if (!atlas) return null;
+
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    for (const r of atlas.regions) {
+      const [cx, cy, cz] = r.worldCenter;
+      const hw = r.worldWidth / 2, hh = r.worldHeight / 2;
+      const tl = [cx - hw, cy + hh, cz];
+      const bl = [cx - hw, cy - hh, cz];
+      const br = [cx + hw, cy - hh, cz];
+      const tr = [cx + hw, cy + hh, cz];
+      // Same winding/UV convention as _imageQuad(): [tl,bl,br] + [tl,br,tr].
+      positions.push(...tl, ...bl, ...br, ...tl, ...br, ...tr);
+      uvs.push(
+        r.u0, r.v1, r.u0, r.v0, r.u1, r.v0,
+        r.u0, r.v1, r.u1, r.v0, r.u1, r.v1,
+      );
+    }
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    const tex = new THREE.CanvasTexture(atlas.canvas);
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    return new THREE.Mesh(g, mat);
   }
 
   // A textured quad built from the ImageMobject's four (possibly transformed)
