@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.0.12
+
+### Fixed
+- **`startStudio()` was hardcoded to bind only to `127.0.0.1`, with no way to
+  configure it** — unreachable from any device other than the one running
+  the dev server, which reads exactly like a firewall problem (connection
+  refused, not filtered) if you're viewing from another machine on the LAN
+  or over a remote/SSH-tunneled session. Added a `host` option (still
+  defaults to `127.0.0.1` — this dev server has no auth); passing
+  `host: "0.0.0.0"` binds wide-open. `StudioHandle` gained `urls: string[]`,
+  every address the server is actually reachable at (loopback + every
+  discovered LAN address when wildcard-bound), since a literal
+  `http://0.0.0.0:PORT/` URL isn't reliably browsable as-is.
+
 ## 0.0.11
 
 ### Added

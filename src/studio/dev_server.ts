@@ -14,6 +14,12 @@ export interface StudioOptions {
   /** Static root served over http (default cwd; must contain dist/browser.js). */
   root?: string;
   port?: number;
+  /** Bind address. Default "127.0.0.1" (localhost-only, the safe default —
+   *  this dev server has no auth). Pass "0.0.0.0" to expose it on the LAN
+   *  (e.g. to view from another device, or over a remote/SSH-tunneled
+   *  session where "127.0.0.1" only means the *server's own* loopback, not
+   *  yours). Understand the exposure before doing this on an untrusted network. */
+  host?: string;
   quality?: string;
   background?: string;
   /** Attach pointer-driven pan/zoom/orbit to the live preview (default false). */
@@ -161,7 +167,18 @@ ${opts.props ? `<div id="props" style="display:flex;flex-wrap:wrap;gap:10px;marg
 </script></body></html>`;
 }
 
-export interface StudioHandle { url: string; port: number; close: () => void; }
+export interface StudioHandle {
+  /** Best-guess browsable URL: the bind host itself, or (when bound to the
+   *  wildcard "0.0.0.0"/"::") the first discovered LAN address -- falling
+   *  back to "127.0.0.1" if none is found. See `urls` for every candidate. */
+  url: string;
+  /** Every URL the server is actually reachable at (loopback + LAN, when
+   *  wildcard-bound) -- useful when accessing from a different device than
+   *  the one running the server. */
+  urls: string[];
+  port: number;
+  close: () => void;
+}
 
 /** Start the Studio dev server. Returns a handle with the URL and a close(). */
 export async function startStudio(options: StudioOptions): Promise<StudioHandle> {
@@ -202,9 +219,28 @@ export async function startStudio(options: StudioOptions): Promise<StudioHandle>
     res.end(fs.readFileSync(p));
   });
 
+  const host = options.host ?? "127.0.0.1";
   const port = await new Promise<number>((resolve) => {
-    server.listen(options.port ?? 0, "127.0.0.1", () => resolve((server.address() as any).port));
+    server.listen(options.port ?? 0, host, () => resolve((server.address() as any).port));
   });
+
+  // "0.0.0.0"/"::" (wildcard bind) isn't reliably browsable as a literal URL
+  // (behavior varies by browser/OS) -- enumerate actual reachable addresses
+  // instead, so a device other than the one running the server has a real
+  // address to use.
+  let urls: string[];
+  if (host === "0.0.0.0" || host === "::") {
+    const os = await import("node:os");
+    const lan: string[] = [];
+    for (const addrs of Object.values(os.networkInterfaces())) {
+      for (const addr of addrs ?? []) {
+        if (addr.family === "IPv4" && !addr.internal) lan.push(addr.address);
+      }
+    }
+    urls = [`http://127.0.0.1:${port}/`, ...lan.map((ip) => `http://${ip}:${port}/`)];
+  } else {
+    urls = [`http://${host}:${port}/`];
+  }
 
   // Watch for changes → notify SSE clients.
   const watchTargets = options.watch ?? [path.dirname(path.resolve(root, options.sceneModule))];
@@ -217,7 +253,8 @@ export async function startStudio(options: StudioOptions): Promise<StudioHandle>
   }
 
   return {
-    url: `http://127.0.0.1:${port}/`,
+    url: urls[0],
+    urls,
     port,
     close: () => { for (const w of watchers) try { w.close(); } catch { /* */ } try { server.close(); } catch { /* */ } },
   };

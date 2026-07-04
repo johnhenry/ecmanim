@@ -95,11 +95,48 @@ test("startStudio serves the harness and closes cleanly", async () => {
   const studio = await startStudio({ sceneModule: "scene.js", root: dir, port: 0 });
   try {
     assert.match(studio.url, /^http:\/\/127\.0\.0\.1:\d+\//);
+    assert.deepEqual(studio.urls, [studio.url]);
     const html = await fetch(studio.url).then((r) => r.text());
     assert.match(html, /manim-player/);
     // static file served
     const js = await fetch(studio.url + "scene.js").then((r) => r.text());
     assert.match(js, /export default/);
+  } finally {
+    studio.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("startStudio defaults to a loopback-only bind (127.0.0.1), not reachable from other addresses", async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const os = await import("node:os"); const path = await import("node:path");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "mjs-studio-"));
+  writeFileSync(path.join(dir, "scene.js"), "export default class {}\n");
+  const studio = await startStudio({ sceneModule: "scene.js", root: dir, port: 0 });
+  try {
+    assert.equal(studio.urls.length, 1);
+    assert.match(studio.urls[0], /^http:\/\/127\.0\.0\.1:/);
+  } finally {
+    studio.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("startStudio({ host: '0.0.0.0' }) reports every reachable address (loopback + LAN)", async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const os = await import("node:os"); const path = await import("node:path");
+  const dir = mkdtempSync(path.join(os.tmpdir(), "mjs-studio-"));
+  writeFileSync(path.join(dir, "scene.js"), "export default class {}\n");
+  const studio = await startStudio({ sceneModule: "scene.js", root: dir, port: 0, host: "0.0.0.0" });
+  try {
+    assert.ok(studio.urls.length >= 1);
+    assert.match(studio.urls[0], /^http:\/\/127\.0\.0\.1:/, "127.0.0.1 is always listed first");
+    assert.equal(studio.url, studio.urls[0]);
+    // Every reported URL should actually be reachable.
+    for (const u of studio.urls) {
+      const html = await fetch(u).then((r) => r.text());
+      assert.match(html, /manim-player/);
+    }
   } finally {
     studio.close();
     rmSync(dir, { recursive: true, force: true });

@@ -75,6 +75,17 @@ console.log(studio.url); // open it; edit the scene file → the browser hot-rel
 Serves your Scene in a `<manim-player>` and re-imports + re-renders on every save
 (file-watch + Server-Sent Events, dependency-free).
 
+**Bind address**: defaults to `host: "127.0.0.1"` (loopback-only — this dev
+server has no auth). If you're viewing from a different device (another
+machine on the LAN, or a remote/SSH-tunneled session where "127.0.0.1" only
+means the *server's own* loopback), pass `host: "0.0.0.0"` and read
+`studio.urls` for every address it's actually reachable at:
+
+```js
+const studio = await startStudio({ sceneModule: "scenes/demo.js", host: "0.0.0.0" });
+console.log(studio.urls); // e.g. ["http://127.0.0.1:PORT/", "http://192.168.1.42:PORT/"]
+```
+
 **What Studio is today, honestly:** the hot-reload dev server, the interactive
 camera controller, `<manim-chart>`, a rendered props panel (`{ props: true }`,
 wired to parameter-only re-render — see below), and a waveform strip
