@@ -86,6 +86,15 @@ export {
 export {
   Polyhedron, Tetrahedron, Octahedron, Icosahedron, Dodecahedron, ConvexHull3D,
 } from "./mobject/polyhedra.ts";
+export {
+  loadMeshOBJ, extractMeshData, extractMeshDataFromGeometry, isMeshLoaderAvailable,
+} from "./loaders/mesh_obj.ts";
+export type { MeshOBJImportOptions } from "./loaders/mesh_obj.ts";
+export { loadMeshSTL } from "./loaders/mesh_stl.ts";
+export type { MeshSTLImportOptions } from "./loaders/mesh_stl.ts";
+export { Mesh3D } from "./mobject/mesh3d.ts";
+export { loadMesh3D } from "./loaders/mesh3d_loader.ts";
+export type { Mesh3DImportOptions } from "./loaders/mesh3d_loader.ts";
 export { NumberLine, Axes, NumberPlane, PolarPlane, ComplexPlane, UnitInterval } from "./mobject/coordinate_systems.ts";
 export { reprojectCurve } from "./mobject/coordinate_reprojection.ts";
 export type { CoordSystemLike, ReprojectOptions } from "./mobject/coordinate_reprojection.ts";

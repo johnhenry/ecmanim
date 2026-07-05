@@ -38,6 +38,13 @@ export interface GraphConfig extends VMobjectConfig {
 export interface PolyhedronConfig {
   facesConfig?: FacesConfig;
   graphConfig?: GraphConfig;
+  /** Add the vertex Dots to the group (default true, preserving the existing
+   *  Platonic-solid look). An imported mesh generally wants false — dots at
+   *  every vertex read as a wireframe overlay, not a solid model. Vertices
+   *  are still built (this.vertices is populated) either way. */
+  showVertices?: boolean;
+  /** Same as showVertices, for the edge Lines (default true). */
+  showEdges?: boolean;
 }
 
 // A single polygonal face carrying its unshaded base color, shaded by normal.
@@ -108,7 +115,9 @@ export class Polyhedron extends VGroup {
       this.edges.set(`${i},${j}`, line);
     }
 
-    this.add(this.faces, this.vertices, ...this.edges.values());
+    this.add(this.faces);
+    if (config.showVertices ?? true) this.add(this.vertices);
+    if (config.showEdges ?? true) this.add(...this.edges.values());
   }
 
   // Unique undirected edges (i < j) across all faces.

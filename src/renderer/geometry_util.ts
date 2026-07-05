@@ -20,6 +20,7 @@ interface CollectedBuffers {
   lines: VertexBuffer;
   texts: any[];
   images: any[];
+  meshes: any[];
 }
 
 // Flatten a VMobject's subpaths into world-space polygon loops.
@@ -55,6 +56,7 @@ export function collectBuffers(mobjects: any[]): CollectedBuffers {
   const lines: VertexBuffer = { positions: [], colors: [] };
   const texts: any[] = [];
   const images: any[] = [];
+  const meshes: any[] = [];
 
   const pushTri = (target: VertexBuffer, a: number[], b: number[], c: number[], ca: number[], cb: number[], cc: number[]): void => {
     target.positions.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
@@ -62,7 +64,14 @@ export function collectBuffers(mobjects: any[]): CollectedBuffers {
   };
 
   const walk = (m: any): void => {
-    if (m.points && m.points.length) {
+    if (m._isMesh3D) {
+      // Mesh3D's own `points` is only a cheap 8-corner bounding-box proxy
+      // (src/mobject/mesh3d.ts), not real face geometry -- route it to its
+      // own bucket instead of falling into the generic VMobject
+      // fan-triangulation path below, which would otherwise draw that proxy
+      // box as if it were the actual mesh.
+      meshes.push(m);
+    } else if (m.points && m.points.length) {
       if (m._isText) {
         texts.push(m);
       } else if (m._isImage) {
@@ -114,5 +123,5 @@ export function collectBuffers(mobjects: any[]): CollectedBuffers {
   };
 
   for (const m of mobjects) walk(m);
-  return { opaque, transparent: [...tBuckets.values()], lines, texts, images };
+  return { opaque, transparent: [...tBuckets.values()], lines, texts, images, meshes };
 }

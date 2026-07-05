@@ -201,7 +201,14 @@ export class CanvasRenderer {
     const draw = (m: any, fixedInFrame: boolean, fixedOrient: boolean) => {
       const fif = fixedInFrame || !!m._fixedInFrame;
       const fo = fixedOrient || !!m._fixedOrientation;
-      if (m.points && m.points.length) {
+      // Mesh3D (src/mobject/mesh3d.ts) is the GPU-only tier -- its own
+      // `points` is just a cheap bounding-box proxy, not real face geometry,
+      // so rasterizing it here would draw a wrong box shape. There is
+      // deliberately no CPU fallback for this tier (see the mesh-import
+      // plan's Phase 2 perf gate) -- render via ThreeRenderer instead.
+      if (m._isMesh3D) {
+        // skip
+      } else if (m.points && m.points.length) {
         if (fif || fo) fixed.push({ mob: m, fixedInFrame: fif, fixedOrient: fo });
         else if (m._isText || m._isImage) overlay.push(m);
         else this._rasterMobject(m);
@@ -339,7 +346,9 @@ export class CanvasRenderer {
     let seq = 0;
     const collect = (m: any, inheritedZ: number) => {
       const z = m.zIndex ?? inheritedZ;
-      if (m.points && m.points.length) {
+      // Mesh3D is GPU-only (see renderScene3D()'s equivalent skip above) --
+      // its `points` is just a bounding-box proxy, not real geometry.
+      if (!m._isMesh3D && m.points && m.points.length) {
         const depth = camera3d ? camera3d.projectionDepth!(centroid(m.points)) : 0;
         flat.push({ mob: m, z, depth, seq: seq++ });
       }

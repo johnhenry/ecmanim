@@ -90,3 +90,26 @@ test("Polyhedron base class builds faces/vertices/edges from tables", () => {
   assert.equal(p.getVertexMobjects().length, 4);
   assert.equal(p.getFaceMobjects().length, 4);
 });
+
+test("showVertices/showEdges default to true, preserving existing Platonic-solid behavior", () => {
+  const t = new Tetrahedron();
+  // faces group + vertices group + each of the 6 edge Lines individually.
+  assert.equal(t.submobjects.length, 2 + t.edges.size);
+  assert.ok(t.submobjects.includes(t.faces));
+  assert.ok(t.submobjects.includes(t.vertices));
+  for (const line of t.edges.values()) assert.ok(t.submobjects.includes(line));
+});
+
+test("showVertices: false, showEdges: false hides the vertex/edge overlay but still builds them", () => {
+  const p = new Polyhedron(
+    [[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]],
+    [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]],
+    { showVertices: false, showEdges: false },
+  );
+  // Only the faces group is a submobject -- no vertex Dots, no edge Lines.
+  assert.equal(p.submobjects.length, 1);
+  assert.equal(p.submobjects[0], p.faces);
+  // Still built (populated), just not displayed.
+  assert.equal(p.vertices.submobjects.length, 4);
+  assert.equal(p.edges.size, 6);
+});

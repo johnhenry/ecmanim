@@ -171,10 +171,14 @@
           <optgroup label="Data">
             <option value="graph">Graph f(x)</option>
           </optgroup>
+          <optgroup label="Media">
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="sound">Sound</option>
+          </optgroup>
           <optgroup label="Advanced">
             <option value="code">Code</option>
             <option value="scene">Scene</option>
-            <option value="sound">Sound</option>
           </optgroup>
         </select>
       </div>
@@ -279,6 +283,7 @@ import {
   Circle, Square, Dot, Text, Camera, CanvasRenderer, Color,
   KeyframeTrack, Line, Arrow, Star, Ellipse, Rectangle, RegularPolygon, Axes, VGroup, initMathTex, MathTex,
   getAudioData, getWaveformPortion, sampleSceneAt,
+  ImageMobject, loadImage, loadVideo,
 } from "/dist/browser.js";
 // The full namespace, handed to user-authored "Code" layers (see the code
 // layer type below) so a snippet can reach any ecmanim export (MathTex,
@@ -425,6 +430,11 @@ const TYPE_DEFAULTS = {
   // alongside x -- write "k*Math.sin(x)" and keyframe k for a parameterized
   // tween, instead of only ever jumping discretely between two expressions.
   graph: { expr: "0.35*x*x - 1.5", k: 1, color: "#58c4dd" },
+  // assetId points into the IndexedDB-backed asset store (see the "Asset
+  // cache" section below) -- fileUrl is a live, session-only blob URL
+  // re-derived from the stored blob on every load, never persisted itself.
+  image: { assetId: null, fileName: null, fileUrl: null, width: 3, height: 3 },
+  video: { assetId: null, fileName: null, fileUrl: null, width: 3, height: 3 },
   code: { code: CODE_LAYER_EXAMPLE },
   scene: { code: SCENE_LAYER_EXAMPLE },
 };
@@ -468,6 +478,14 @@ const TYPE_FIELDS = {
     { key: "expr", label: "f(x) =", type: "text" },
     { key: "k", label: "k", type: "number", step: 0.1 },
   ],
+  image: [
+    { key: "width", label: "Width", type: "number", step: 0.1, min: 0.05 },
+    { key: "height", label: "Height", type: "number", step: 0.1, min: 0.05 },
+  ],
+  video: [
+    { key: "width", label: "Width", type: "number", step: 0.1, min: 0.05 },
+    { key: "height", label: "Height", type: "number", step: 0.1, min: 0.05 },
+  ],
 };
 const COMMON_FIELDS = [
   { key: "x", label: "X", type: "number", step: 0.1 },
@@ -507,7 +525,7 @@ function addObject(type) {
   const count = objects.filter((o) => o.type === type).length + 1;
   // Sound isn't a Mobject -- no x/y/opacity/color, just a file + gain.
   const props = type === "sound"
-    ? { fileUrl: null, fileName: null, gain: 1 }
+    ? { assetId: null, fileUrl: null, fileName: null, gain: 1 }
     : { x: 0, y: 0, rotation: 0, scale: 1, opacity: 1, ...TYPE_DEFAULTS[type] };
   objects.push({
     id,
@@ -563,6 +581,10 @@ function cloneObjectDeep(obj) {
     clone._audioData = obj._audioData;
     clone._audioEl = new Audio(obj.props.fileUrl);
     clone._audioEl.volume = clone.props.gain ?? 1;
+  } else if (obj.type === "image" && obj._imageEl) {
+    clone._imageEl = obj._imageEl; // decoded bitmap is read-only -- safe to share directly
+  } else if (obj.type === "video" && obj._videoProvider) {
+    clone._videoProvider = obj._videoProvider; // decoded frames are read-only -- safe to share directly
   }
   // Compiled-code/scene/expr caches (obj._compiledSource, obj._sceneCompiledSource,
   // obj._exprSource, ...) are deliberately NOT copied -- they're all keyed by
@@ -641,6 +663,7 @@ function commitBurst() {
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();
   burstBaseline = null;
   refreshUndoRedoButtons();
+  scheduleAutosave();
 }
 
 function undo() {
@@ -651,6 +674,7 @@ function undo() {
   redoStack.push(current);
   restoreSnapshot(prev);
   refreshUndoRedoButtons();
+  scheduleAutosave();
 }
 
 function redo() {
@@ -660,6 +684,7 @@ function redo() {
   undoStack.push(current);
   restoreSnapshot(next);
   refreshUndoRedoButtons();
+  scheduleAutosave();
 }
 
 function refreshUndoRedoButtons() {
@@ -667,14 +692,128 @@ function refreshUndoRedoButtons() {
   document.getElementById("redo-btn").disabled = redoStack.length === 0;
 }
 
+// ---------------------------------------------------------------------------
+// Project autosave: the lightweight project STRUCTURE (layers, timing,
+// keyframes, settings) is serialized to a small JSON blob in localStorage --
+// plain text, well within its quota, unlike the binary asset payloads (see
+// the "Asset cache" section above, which uses IndexedDB instead). This is
+// deliberately a separate, plain-JSON serialization from cloneObjectDeep()
+// (used by undo/redo): it drops session-only derived state (fileUrl blob
+// URLs, decoded _audioEl/_imageEl/_videoProvider handles) that can't survive
+// a reload, keeping only assetId/fileName so a restore can re-fetch the
+// actual bytes from IndexedDB and re-decode via hydrateAssetObject() -- the
+// SAME function a fresh upload uses, so the two paths can't drift apart.
+// ---------------------------------------------------------------------------
+
+const AUTOSAVE_KEY = "ecmanim-compositor-project-v1";
+let autosaveTimer = null;
+
+function serializeProjectObject(obj) {
+  const props = { ...obj.props };
+  delete props.fileUrl; // session-only blob URL, never valid after a reload
+  return {
+    id: obj.id,
+    type: obj.type,
+    name: obj.name,
+    props,
+    tracks: Object.fromEntries(Object.entries(obj.tracks).map(([key, track]) => [
+      key, { keyframes: track.keyframes.map((k) => ({ ...k })), kind: track._kind },
+    ])),
+    inTime: obj.inTime,
+    outTime: obj.outTime,
+    collapsed: obj.collapsed,
+  };
+}
+
+function deserializeProjectObject(saved) {
+  return {
+    id: saved.id,
+    type: saved.type,
+    name: saved.name,
+    props: { ...saved.props },
+    tracks: Object.fromEntries(Object.entries(saved.tracks ?? {}).map(([key, t]) => {
+      const track = new KeyframeTrack(t.keyframes.map((k) => ({ ...k })), trackOptsForKind(t.kind));
+      track._kind = t.kind;
+      return [key, track];
+    })),
+    inTime: saved.inTime,
+    outTime: saved.outTime,
+    collapsed: saved.collapsed,
+  };
+}
+
+function serializeProject() {
+  return {
+    v: 1,
+    objects: objects.map(serializeProjectObject),
+    projectSettings: { ...projectSettings },
+    rangeStart, rangeEnd, loopEnabled,
+    selectedId, nextId,
+  };
+}
+
+function scheduleAutosave() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(serializeProject()));
+    } catch (e) {
+      console.warn("project autosave failed (localStorage full or unavailable):", e);
+    }
+  }, 800);
+}
+
+// Restores the last-autosaved project structure, then best-effort rehydrates
+// every asset-backed layer (sound/image/video) from IndexedDB -- a missing or
+// corrupt asset just leaves that one layer showing its "please re-choose"
+// placeholder rather than failing the whole restore. Returns false (leaving
+// `objects` untouched) when there's nothing valid to restore, so the caller
+// can fall back to the default bootstrap object.
+async function restoreProject() {
+  const raw = localStorage.getItem(AUTOSAVE_KEY);
+  if (!raw) return false;
+  let saved;
+  try {
+    saved = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (!saved || !Array.isArray(saved.objects)) return false;
+
+  objects.length = 0;
+  objects.push(...saved.objects.map(deserializeProjectObject));
+  Object.assign(projectSettings, saved.projectSettings ?? {});
+  rangeStart = saved.rangeStart ?? null;
+  rangeEnd = saved.rangeEnd ?? null;
+  loopEnabled = !!saved.loopEnabled;
+  selectedId = saved.selectedId ?? (objects[0]?.id ?? null);
+  nextId = saved.nextId ?? (objects.reduce((m, o) => Math.max(m, o.id), 0) + 1);
+  document.getElementById("loop-btn").classList.toggle("active", loopEnabled);
+  applyFrameSettings();
+
+  await Promise.all(objects.filter((o) => o.props?.assetId).map(async (o) => {
+    try {
+      const blob = await getAsset(o.props.assetId);
+      if (blob) await hydrateAssetObject(o, blob);
+      else o._assetMissing = true;
+    } catch {
+      o._assetMissing = true;
+    }
+  }));
+
+  return true;
+}
+
 function selected() {
   return objects.find((o) => o.id === selectedId) ?? null;
 }
 
+const NO_COLOR_FIELD_TYPES = new Set(["code", "scene", "image", "video"]);
 function fieldsFor(obj) {
-  // Code/Scene layers pick their own colors internally -- a global "Color"
-  // field wouldn't map to anything.
-  const common = (obj.type === "code" || obj.type === "scene")
+  // Code/Scene pick their own colors internally, and Image/Video are already
+  // full-color raster content -- a global "Color" tint field wouldn't map to
+  // anything for any of these.
+  const common = NO_COLOR_FIELD_TYPES.has(obj.type)
     ? COMMON_FIELDS.filter((f) => f.key !== "color") : COMMON_FIELDS;
   return [...common, ...(TYPE_FIELDS[obj.type] ?? [])];
 }
@@ -988,6 +1127,28 @@ function buildMobject(obj) {
     if (obj._sceneMobjects) mob = new VGroup(...obj._sceneMobjects);
     else if (obj._sceneRuntimeError) mob = new Text(`⚠ ${obj._sceneRuntimeError}`, { color: "#ff5555", fontSize: 0.3 });
     else mob = new Text("sampling…", { color: "#7b8290", fontSize: 0.3 });
+  } else if (obj.type === "image") {
+    if (obj._imageEl) {
+      mob = new ImageMobject(obj._imageEl, { width: Math.max(0.05, p.width), height: Math.max(0.05, p.height) });
+    } else {
+      mob = new Text(obj._imageError ? `⚠ ${obj._imageError}` : obj.props.fileName ? "loading…" : "no image", {
+        color: obj._imageError ? "#ff5555" : "#7b8290", fontSize: 0.3,
+      });
+    }
+  } else if (obj.type === "video") {
+    // A fresh ImageMobject wrapping this frame's bitmap every render -- never
+    // reuses/re-transforms a persistent mobject, so rotate/scale (both
+    // relative transforms) never compound across renders, same reasoning as
+    // the animated Graph/Code/Scene layers above.
+    if (obj._videoProvider) {
+      const t = Math.max(0, playhead - obj.inTime);
+      const frame = obj._videoProvider.frameAt(t) ?? obj._videoProvider.frameAt(0);
+      mob = new ImageMobject(frame, { width: Math.max(0.05, p.width), height: Math.max(0.05, p.height) });
+    } else {
+      mob = new Text(obj._videoError ? `⚠ ${obj._videoError}` : obj.props.fileName ? "loading video…" : "no video", {
+        color: obj._videoError ? "#ff5555" : "#7b8290", fontSize: 0.3,
+      });
+    }
   }
   // Rotate/scale about the shape's own (pre-move) center, THEN move to its
   // final position -- so rotation/scale never orbits it away from (x, y).
@@ -1130,9 +1291,10 @@ function refreshLayerList() {
     row.draggable = true;
     const swatch = document.createElement("div");
     swatch.className = "swatch";
-    if (obj.type === "sound" || obj.type === "code" || obj.type === "scene") {
+    const ICONS = { sound: "♪", code: "{ }", scene: "▶", image: "🖼", video: "🎞" };
+    if (ICONS[obj.type]) {
       swatch.classList.add("swatch-icon");
-      swatch.textContent = obj.type === "sound" ? "♪" : obj.type === "code" ? "{ }" : "▶";
+      swatch.textContent = ICONS[obj.type];
     } else {
       swatch.style.background = effectiveProps(obj).color;
     }
@@ -1294,6 +1456,8 @@ function refreshInspector() {
 
   if (obj.type === "code") renderCodeSection(obj);
   if (obj.type === "scene") renderSceneSection(obj);
+  if (obj.type === "image") renderImageSection(obj);
+  if (obj.type === "video") renderVideoSection(obj);
 
   renderTimingSection(obj);
 }
@@ -1421,6 +1585,172 @@ function renderTimingSection(obj) {
 }
 
 // ---------------------------------------------------------------------------
+// Asset cache: uploaded Sound/Image/Video files are persisted as raw Blobs in
+// IndexedDB (keyed by a generated assetId), so a page reload can re-derive a
+// fresh blob URL and re-decode instead of losing the upload entirely -- a
+// plain Web Storage (localStorage) string store can't hold binary Blobs
+// without a lossy/bloated base64 round-trip, and its ~5-10MB quota is far too
+// small for audio/video anyway; IndexedDB has no such size assumption and
+// stores Blobs natively. The lightweight PROJECT STRUCTURE itself (layers,
+// timing, keyframes) is a separate, much smaller autosave to localStorage --
+// see "Project autosave" further down -- which references assets by id.
+// ---------------------------------------------------------------------------
+
+const ASSET_DB_NAME = "ecmanim-compositor-assets";
+const ASSET_STORE = "files";
+
+function openAssetDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(ASSET_DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(ASSET_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function putAsset(id, blob) {
+  const db = await openAssetDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ASSET_STORE, "readwrite");
+    tx.objectStore(ASSET_STORE).put(blob, id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function getAsset(id) {
+  if (!id) return null;
+  const db = await openAssetDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ASSET_STORE, "readonly");
+    const req = tx.objectStore(ASSET_STORE).get(id);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function deleteAsset(id) {
+  if (!id) return;
+  const db = await openAssetDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(ASSET_STORE, "readwrite");
+    tx.objectStore(ASSET_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+function newAssetId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// Entry point for a freshly user-chosen File (Sound/Image/Video's "Choose
+// file…" button) -- persists it to IndexedDB, then hands off to
+// hydrateAssetObject() for the type-specific decode, which is ALSO the path
+// used to restore a previously-uploaded asset after a reload (see
+// restoreProject() further down), so the two paths can never drift apart.
+async function loadAssetFile(obj, file) {
+  beginChange();
+  const oldAssetId = obj.props.assetId;
+  const assetId = newAssetId();
+  obj.props.assetId = assetId;
+  obj.props.fileName = file.name;
+  obj._assetMissing = false;
+  refreshInspector();
+  refreshLayerList();
+  refreshTimeline();
+  try {
+    await putAsset(assetId, file);
+    if (oldAssetId && oldAssetId !== assetId) deleteAsset(oldAssetId).catch(() => {});
+  } catch (e) {
+    console.warn("failed to persist asset to IndexedDB (will still work this session):", e);
+  }
+  // applyDefaults: true -- this is a genuinely NEW file choice, so size/
+  // duration should be (re-)derived from it. A project restore calls this
+  // same function with applyDefaults left false, so reloading a project
+  // never silently stomps a width/height/outTime the user already trimmed.
+  await hydrateAssetObject(obj, file, { applyDefaults: true });
+}
+
+// Type-specific decode/setup from a raw Blob (a fresh upload OR one fetched
+// back from IndexedDB on project restore). Sets obj.props.fileUrl to a fresh
+// blob URL for sound/video (Audio/<video> need a URL, not a raw Blob);
+// loadImage() takes the Blob directly, no URL needed.
+async function hydrateAssetObject(obj, blob, { applyDefaults = false } = {}) {
+  if (obj.type === "sound" || obj.type === "video") {
+    if (obj.props.fileUrl) { try { URL.revokeObjectURL(obj.props.fileUrl); } catch {} }
+    obj.props.fileUrl = URL.createObjectURL(blob);
+  }
+
+  if (obj.type === "sound") {
+    if (obj._audioEl) obj._audioEl.pause();
+    obj._audioData = null;
+    const audio = new Audio(obj.props.fileUrl);
+    audio.volume = obj.props.gain ?? 1;
+    obj._audioEl = audio;
+    refreshInspector();
+    refreshLayerList();
+    refreshTimeline();
+    try {
+      obj._audioData = await getAudioData(obj.props.fileUrl);
+      // Only snap outTime to the clip's full length on a genuinely fresh
+      // upload -- a project restore must never silently discard a trim the
+      // user already made to a previously-loaded sound's exit point.
+      if (applyDefaults) obj.outTime = obj.inTime + obj._audioData.durationInSeconds;
+    } catch (e) {
+      obj._audioData = null;
+      obj._audioError = e.message;
+    }
+  } else if (obj.type === "image") {
+    obj._imageError = null;
+    obj._imageEl = null;
+    refreshInspector();
+    try {
+      const img = await loadImage(blob);
+      obj._imageEl = img;
+      if (applyDefaults) {
+        const aspect = (img.width || 1) / (img.height || 1) || 1;
+        if (aspect >= 1) { obj.props.width = 3; obj.props.height = 3 / aspect; }
+        else { obj.props.height = 3; obj.props.width = 3 * aspect; }
+      }
+    } catch (e) {
+      obj._imageError = e.message;
+    }
+  } else if (obj.type === "video") {
+    obj._videoError = null;
+    obj._videoProvider = null;
+    refreshInspector();
+    try {
+      // "auto" prefers a single-pass WebCodecs decode (frame-accurate) and
+      // falls back to seek-and-capture -- both give exact, deterministic
+      // frameAt(t) lookups, which is what a scrubbable timeline needs (unlike
+      // "live" mode's best-effort real-time seek, meant for live playback).
+      // Wrapped in a timeout: loadVideo()'s metadata wait has no internal
+      // deadline, so an unsupported codec or a browser that never fires
+      // loadedmetadata (some automation/headless contexts) would otherwise
+      // hang this UI forever with no visible error.
+      const videoMob = await Promise.race([
+        loadVideo(obj.props.fileUrl, { mode: "auto", fps: projectSettings.fps }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("video load timed out after 20s")), 20000)),
+      ]);
+      obj._videoProvider = videoMob.provider;
+      // Same "only on a fresh upload" rule as sound/image above -- a restore
+      // must not stomp a user's already-adjusted width/height/outTime.
+      if (applyDefaults) {
+        const aspect = (obj._videoProvider.width / obj._videoProvider.height) || 1;
+        if (aspect >= 1) { obj.props.width = 3; obj.props.height = 3 / aspect; }
+        else { obj.props.height = 3; obj.props.width = 3 * aspect; }
+        obj.outTime = obj.inTime + obj._videoProvider.duration;
+      }
+    } catch (e) {
+      obj._videoError = e.message;
+    }
+  }
+
+  refreshInspector();
+  refreshLayerList();
+  refreshTimeline();
+  render();
+  scheduleAutosave();
+}
+
+// ---------------------------------------------------------------------------
 // Sound layer: not a Mobject (no x/y/color/opacity), just a file + gain.
 // Reuses the SAME appearance-window machinery as every visual layer:
 // inTime IS the sound's timeOffset, and outTime is set to inTime+duration
@@ -1444,16 +1774,15 @@ function renderSoundFields(obj) {
   fileInput.style.display = "none";
   fileInput.addEventListener("change", () => {
     const file = fileInput.files[0];
-    if (file) loadSoundFile(obj, file);
+    if (file) loadAssetFile(obj, file);
   });
   fileBtn.addEventListener("click", () => fileInput.click());
   inspectorFields.append(fileBtn, fileInput);
 
   const nameLine = document.createElement("div");
   nameLine.className = "sound-file-name";
-  nameLine.textContent = obj.props.fileName
-    ? `${obj.props.fileName}${obj._audioData ? ` (${obj._audioData.durationInSeconds.toFixed(1)}s)` : " (decoding…)"}`
-    : "No file selected";
+  nameLine.textContent = assetStatusText(obj, obj._audioEl, obj._audioError,
+    obj._audioData ? ` (${obj._audioData.durationInSeconds.toFixed(1)}s)` : " (decoding…)");
   inspectorFields.appendChild(nameLine);
 
   const gainRow = document.createElement("div");
@@ -1472,27 +1801,83 @@ function renderSoundFields(obj) {
   inspectorFields.appendChild(gainRow);
 }
 
-async function loadSoundFile(obj, file) {
-  if (obj._audioEl) { obj._audioEl.pause(); obj._audioEl.src = ""; }
-  const url = URL.createObjectURL(file);
-  obj.props.fileUrl = url;
-  obj.props.fileName = file.name;
-  obj._audioData = null; // stale waveform cleared while decoding
-  const audio = new Audio(url);
-  audio.volume = obj.props.gain ?? 1;
-  obj._audioEl = audio;
-  refreshInspector();
-  refreshLayerList();
-  refreshTimeline();
-  try {
-    obj._audioData = await getAudioData(url);
-    obj.outTime = obj.inTime + obj._audioData.durationInSeconds;
-  } catch (e) {
-    obj._audioData = null;
+// Shared "file chosen? loaded? errored? missing from storage?" status line
+// for Sound/Image/Video's inspector section.
+function assetStatusText(obj, loadedHandle, error, loadedSuffix) {
+  if (obj._assetMissing && !loadedHandle) {
+    return `⚠ "${obj.props.fileName}" not found in this browser's storage — please re-choose the file`;
   }
-  refreshInspector();
-  refreshTimeline();
-  render();
+  if (!obj.props.fileName) return "No file selected";
+  if (error) return `${obj.props.fileName} (error: ${error})`;
+  if (loadedHandle) return `${obj.props.fileName}${loadedSuffix ?? ""}`;
+  return `${obj.props.fileName} (loading…)`;
+}
+
+// ---------------------------------------------------------------------------
+// Image layer: a static ImageMobject built fresh each render (see
+// buildMobject()) from the decoded bitmap cached on obj._imageEl.
+// ---------------------------------------------------------------------------
+
+function renderImageSection(obj) {
+  const header = document.createElement("div");
+  header.className = "section-label";
+  header.textContent = "Image";
+  inspectorFields.appendChild(header);
+
+  const fileBtn = document.createElement("button");
+  fileBtn.className = "sound-file-btn";
+  fileBtn.textContent = obj.props.fileName ? "Change image…" : "Choose image file…";
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "image/*";
+  fileInput.style.display = "none";
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (file) loadAssetFile(obj, file);
+  });
+  fileBtn.addEventListener("click", () => fileInput.click());
+  inspectorFields.append(fileBtn, fileInput);
+
+  const nameLine = document.createElement("div");
+  nameLine.className = "sound-file-name";
+  nameLine.textContent = assetStatusText(obj, obj._imageEl, obj._imageError, "");
+  inspectorFields.appendChild(nameLine);
+}
+
+// ---------------------------------------------------------------------------
+// Video layer: silent (frame-only) playback -- obj._videoProvider decodes
+// once on load; buildMobject() samples provider.frameAt(t) fresh each render
+// into a throwaway ImageMobject (never reuses/re-transforms a persistent
+// mobject, so rotate/scale never compound -- same principle as the animated
+// Graph/Code/Scene layers). No audio track sync; pair with a separate Sound
+// layer if the source clip's audio is wanted.
+// ---------------------------------------------------------------------------
+
+function renderVideoSection(obj) {
+  const header = document.createElement("div");
+  header.className = "section-label";
+  header.textContent = "Video (frames only, no audio)";
+  inspectorFields.appendChild(header);
+
+  const fileBtn = document.createElement("button");
+  fileBtn.className = "sound-file-btn";
+  fileBtn.textContent = obj.props.fileName ? "Change video…" : "Choose video file…";
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "video/*";
+  fileInput.style.display = "none";
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (file) loadAssetFile(obj, file);
+  });
+  fileBtn.addEventListener("click", () => fileInput.click());
+  inspectorFields.append(fileBtn, fileInput);
+
+  const nameLine = document.createElement("div");
+  nameLine.className = "sound-file-name";
+  nameLine.textContent = assetStatusText(obj, obj._videoProvider, obj._videoError,
+    obj._videoProvider ? ` (${obj._videoProvider.duration.toFixed(1)}s)` : "");
+  inspectorFields.appendChild(nameLine);
 }
 
 // Keeps every sound's <audio> element in sync with the playhead: plays
@@ -1925,7 +2310,6 @@ window.addEventListener("keydown", (ev) => {
 
 document.getElementById("undo-btn").addEventListener("click", undo);
 document.getElementById("redo-btn").addEventListener("click", redo);
-refreshUndoRedoButtons();
 
 // ---------------------------------------------------------------------------
 // Export: generate a runnable ecmanim Scene construct() body from the
@@ -1935,6 +2319,12 @@ refreshUndoRedoButtons();
 
 function jsLiteral(v) {
   return JSON.stringify(v);
+}
+
+// "rotation" -> "Rotation" -- for building track variable names like
+// obj3RotationTrack (see generateSceneCode()'s per-object track emission).
+function cap(s) {
+  return s[0].toUpperCase() + s.slice(1);
 }
 
 // Standalone OKLab helper emitted into exported code (once) so a color
@@ -2017,12 +2407,27 @@ function generateSceneCode() {
   const usesTracks = visualObjs.some((o) => Object.keys(o.tracks).length > 0);
   const usesColorTrack = visualObjs.some((o) => o.tracks.color);
   const usesStepTrack = visualObjs.some((o) => Object.values(o.tracks).some((t) => t._kind === "step"));
-  const usesExprBlendTrack = visualObjs.some((o) => Object.values(o.tracks).some((t) => t._kind === "expr-blend"));
+  // compileGraphExpr() (from GRAPH_EXPR_SOURCE) is called unconditionally by
+  // an animated graph's Rebuild() regardless of which of its keys is
+  // actually tracked -- k-only animation still calls it -- so this must be
+  // gated on "any graph object has any track at all", not narrowly on
+  // whether an expr-blend-KIND track exists (that would miss a k-only or
+  // color-only animated graph and throw a ReferenceError at runtime).
+  const usesExprBlendTrack = visualObjs.some((o) => o.type === "graph" && Object.keys(o.tracks).length > 0);
   const usesMathTex = visualObjs.some((o) => o.type === "mathtex");
   const usesGraph = visualObjs.some((o) => o.type === "graph");
   const usesCode = visualObjs.some((o) => o.type === "code");
   const usesScene = visualObjs.some((o) => o.type === "scene");
-  const usesVGroup = usesGraph || usesCode || usesScene;
+  const usesImage = visualObjs.some((o) => o.type === "image");
+  const usesVideo = visualObjs.some((o) => o.type === "video");
+  // An animated video's Rebuild() constructs a fresh ImageMobject per tick
+  // from the decoded provider's current frame (see the "video" branch
+  // below) -- needed even when no Image LAYER exists at all.
+  const usesVideoRebuild = visualObjs.some((o) => o.type === "video" && Object.keys(o.tracks).length > 0);
+  // Any tracked object -- of ANY type -- now goes through a VGroup-wrapped
+  // Rebuild()+addUpdater() (see the per-object loop below), so VGroup is
+  // needed whenever anything at all is animated, not just graph/code/scene.
+  const usesVGroup = usesGraph || usesCode || usesScene || usesTracks;
   const duration = projectDuration();
   const lines = [];
 
@@ -2031,10 +2436,19 @@ function generateSceneCode() {
     ...(usesMathTex ? ["MathTex", "initMathTex"] : []),
     ...(usesGraph ? ["Axes"] : []),
     ...(usesVGroup ? ["VGroup"] : []),
-    ...(usesTracks ? ["bindTrack"] : []),
     ...(usesScene ? ["sampleSceneAt"] : []),
+    ...(usesImage || usesVideoRebuild ? ["ImageMobject"] : []),
   ];
   lines.push(`import { ${imports.join(", ")} } from "ecmanim";`);
+  // loadImage()/loadVideo() are NOT exported from the isomorphic "ecmanim"
+  // barrel -- only from the environment-specific "ecmanim/browser" (Blob/
+  // WebCodecs-based) and "ecmanim/node" (ffmpeg-based) subpaths, since their
+  // actual decode implementations are backend-specific. The compositor only
+  // ever decoded these assets in a browser, so the export targets that
+  // subpath -- swap to "ecmanim/node" (and a real file path, not a blob URL)
+  // to render this scene from Node instead.
+  const browserImports = [...(usesImage ? ["loadImage"] : []), ...(usesVideo ? ["loadVideo"] : [])];
+  if (browserImports.length) lines.push(`import { ${browserImports.join(", ")} } from "ecmanim/browser";`);
   // Code/Scene layers reference a bare `ecmanim` identifier (matching the
   // live preview's (ecmanim, ...) signature) -- give them the same namespace
   // here as a plain module-level binding, so their body needs no rewriting.
@@ -2057,9 +2471,46 @@ function generateSceneCode() {
   lines.push(`    super({ fps: ${projectSettings.fps}, ...config });`);
   lines.push(`  }`);
   lines.push(`  async construct() {`);
+  // Animated objects read their current value via track.valueAt(scene.time)
+  // inside a plain `function ...Rebuild() {}` declaration -- plain functions
+  // don't lexically inherit `this`, so a captured `scene` reference (rather
+  // than `this.time`) is what makes that work when Rebuild is invoked bare
+  // from an updater.
+  if (usesTracks) lines.push(`    const scene = this;`);
   if (usesMathTex) lines.push(`    await initMathTex();`);
-  if (usesScene) lines.push(`    const fps = this.fps;`);
+  if (usesScene || usesVideo) lines.push(`    const fps = this.fps;`);
   lines.push("");
+
+  // Builds the "fresh, from-scratch" construction expression for the 10
+  // simple shape types (everything except graph/code/scene/image/video,
+  // which have their own bespoke construction below) -- used identically for
+  // a one-time-only static object AND inside a per-tick Rebuild() for an
+  // animated one, via the `val(key, literal)` resolver (returns a fresh
+  // `track.valueAt(scene.time)` lookup when `key` is animated, else the
+  // plain literal). Returns null for graph/code/scene/image/video.
+  function freshConstructExpr(obj, val) {
+    const p = obj.props;
+    if (obj.type === "text") {
+      return `new Text(${val("text", jsLiteral(p.text))}, { fontSize: ${val("fontSize", p.fontSize)}, color: ${val("color", jsLiteral(p.color))} })`;
+    } else if (obj.type === "circle") {
+      return `new Circle({ radius: ${val("radius", p.radius)}, color: ${val("color", jsLiteral(p.color))}, fillColor: ${val("color", jsLiteral(p.color))}, fillOpacity: 1, strokeWidth: 0 })`;
+    } else if (obj.type === "square") {
+      return `new Square({ sideLength: ${val("sideLength", p.sideLength)}, color: ${val("color", jsLiteral(p.color))}, fillColor: ${val("color", jsLiteral(p.color))}, fillOpacity: 1, strokeWidth: 0 })`;
+    } else if (obj.type === "dot") {
+      return `new Dot({ radius: ${val("radius", p.radius)}, color: ${val("color", jsLiteral(p.color))} })`;
+    } else if (obj.type === "ellipse" || obj.type === "rectangle") {
+      return `new ${ctor[obj.type]}({ width: ${val("width", p.width)}, height: ${val("height", p.height)}, color: ${val("color", jsLiteral(p.color))}, fillColor: ${val("color", jsLiteral(p.color))}, fillOpacity: 1, strokeWidth: 0 })`;
+    } else if (obj.type === "polygon") {
+      return `new RegularPolygon(Math.round(${val("sides", p.sides)}), { radius: ${val("radius", p.radius)}, color: ${val("color", jsLiteral(p.color))}, fillColor: ${val("color", jsLiteral(p.color))}, fillOpacity: 1, strokeWidth: 0 })`;
+    } else if (obj.type === "line" || obj.type === "arrow") {
+      return `(() => { const half = (${val("length", p.length)}) / 2; const rad = (${val("angle", p.angle)} * Math.PI) / 180; const dx = Math.cos(rad) * half, dy = Math.sin(rad) * half; return new ${ctor[obj.type]}([-dx, -dy, 0], [dx, dy, 0], { color: ${val("color", jsLiteral(p.color))} }); })()`;
+    } else if (obj.type === "star") {
+      return `new Star(Math.round(${val("points", p.points)}), { outerRadius: ${val("outerRadius", p.outerRadius)}, color: ${val("color", jsLiteral(p.color))}, fillColor: ${val("color", jsLiteral(p.color))}, fillOpacity: 1, strokeWidth: 0 })`;
+    } else if (obj.type === "mathtex") {
+      return `new MathTex(${val("tex", jsLiteral(p.tex))}, { color: ${val("color", jsLiteral(p.color))}, fontSize: ${val("fontSize", p.fontSize)} })`;
+    }
+    return null;
+  }
 
   // Construct every object + its property tracks up front; VISIBILITY
   // (this.add()/this.remove()) is scheduled separately below, since two
@@ -2068,68 +2519,89 @@ function generateSceneCode() {
   for (const obj of visualObjs) {
     const varName = "obj" + obj.id;
     const p = obj.props;
-    const rotRad = (p.rotation * Math.PI) / 180;
-    const hasRotate = !!p.rotation;
-    const hasScale = p.scale != null && p.scale !== 1;
-    let graphAnimated = false;
+    const hasTracks = Object.keys(obj.tracks).length > 0;
 
-    if (obj.type === "text") {
-      lines.push(`    const ${varName} = new Text(${jsLiteral(p.text)}, { fontSize: ${p.fontSize}, color: ${jsLiteral(p.color)} });`);
-    } else if (obj.type === "circle" || obj.type === "square") {
-      const sizeKey = obj.type === "circle" ? "radius" : "sideLength";
-      const sizeArg = obj.type === "circle" ? `radius: ${p[sizeKey]}` : `sideLength: ${p[sizeKey]}`;
-      lines.push(`    const ${varName} = new ${ctor[obj.type]}({ ${sizeArg}, color: ${jsLiteral(p.color)}, fillColor: ${jsLiteral(p.color)}, fillOpacity: 1, strokeWidth: 0 });`);
-    } else if (obj.type === "dot") {
-      lines.push(`    const ${varName} = new Dot({ radius: ${p.radius}, color: ${jsLiteral(p.color)} });`);
-    } else if (obj.type === "ellipse" || obj.type === "rectangle") {
-      lines.push(`    const ${varName} = new ${ctor[obj.type]}({ width: ${p.width}, height: ${p.height}, color: ${jsLiteral(p.color)}, fillColor: ${jsLiteral(p.color)}, fillOpacity: 1, strokeWidth: 0 });`);
-    } else if (obj.type === "polygon") {
-      lines.push(`    const ${varName} = new RegularPolygon(${Math.round(p.sides)}, { radius: ${p.radius}, color: ${jsLiteral(p.color)}, fillColor: ${jsLiteral(p.color)}, fillOpacity: 1, strokeWidth: 0 });`);
-    } else if (obj.type === "line" || obj.type === "arrow") {
-      const half = p.length / 2;
-      const rad = (p.angle * Math.PI) / 180;
-      const dx = Math.cos(rad) * half, dy = Math.sin(rad) * half;
-      lines.push(`    const ${varName} = new ${ctor[obj.type]}([${(-dx).toFixed(4)}, ${(-dy).toFixed(4)}, 0], [${dx.toFixed(4)}, ${dy.toFixed(4)}, 0], { color: ${jsLiteral(p.color)} });`);
-    } else if (obj.type === "star") {
-      lines.push(`    const ${varName} = new Star(${Math.round(p.points)}, { outerRadius: ${p.outerRadius}, color: ${jsLiteral(p.color)}, fillColor: ${jsLiteral(p.color)}, fillOpacity: 1, strokeWidth: 0 });`);
-    } else if (obj.type === "mathtex") {
-      lines.push(`    const ${varName} = new MathTex(${jsLiteral(p.tex)}, { color: ${jsLiteral(p.color)}, fontSize: ${p.fontSize} });`);
+    // Every animated key gets a `this.track(...)` const up front, resolved
+    // below via a fresh `.valueAt(scene.time)` lookup wherever it's read --
+    // KeyframeTrack.valueAt() is a PURE function of t, so the exact same
+    // call is correct whether made once (a static object) or every tick
+    // (inside a Rebuild()), with no separate manual dt-accumulation needed.
+    const trackVarFor = {};
+    for (const [key, track] of Object.entries(obj.tracks)) {
+      const kfs = track.keyframes.map((k) => `{ t: ${k.t.toFixed(3)}, value: ${jsLiteral(k.value)} }`).join(", ");
+      const trackOpts = track._kind === "color" ? ", { interpolate: lerpColorOklab }"
+        : track._kind === "step" ? ", { interpolate: stepSwap }"
+        : track._kind === "expr-blend" ? ", { interpolate: exprBlendInterpolate }"
+        : "";
+      const trackVar = `${varName}${cap(key)}Track`;
+      lines.push(`    const ${trackVar} = this.track([${kfs}]${trackOpts});`);
+      trackVarFor[key] = trackVar;
+    }
+    const val = (key, literalExpr) => (trackVarFor[key] ? `${trackVarFor[key]}.valueAt(scene.time)` : literalExpr);
+    const rotRadExpr = trackVarFor.rotation ? `((${val("rotation", p.rotation)}) * Math.PI / 180)` : `${(p.rotation * Math.PI) / 180}`;
+    const scaleExpr = val("scale", p.scale);
+    const hasRotate = !!trackVarFor.rotation || !!p.rotation;
+    const hasScale = !!trackVarFor.scale || (p.scale != null && p.scale !== 1);
+
+    const simple = freshConstructExpr(obj, val);
+    if (simple) {
+      if (!hasTracks) {
+        // Fully static: exactly the original one-time construction, no
+        // Rebuild/updater machinery at all.
+        lines.push(`    const ${varName} = ${simple};`);
+        if (hasRotate) lines.push(`    ${varName}.rotate(${rotRadExpr});`);
+        if (hasScale) lines.push(`    ${varName}.scale(${scaleExpr});`);
+        lines.push(`    ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
+        lines.push(`    ${varName}.setOpacity(${p.opacity});`);
+      } else {
+        // At least one animated key (position/rotation/scale/color/size/...):
+        // rebuild the shape from scratch every tick, reading each prop's
+        // current value fresh. rotate()/scale() are RELATIVE transforms, so
+        // they're applied to a throwaway wrapper around the FRESH geometry
+        // (never the persistent container) to avoid compounding; moveTo/
+        // setOpacity stay direct since those are absolute/idempotent.
+        lines.push(`    const ${varName} = new VGroup();`);
+        lines.push(`    function ${varName}Rebuild() {`);
+        lines.push(`      const wrap = new VGroup(${simple});`);
+        lines.push(`      wrap.rotate(${rotRadExpr});`);
+        lines.push(`      wrap.scale(${scaleExpr});`);
+        lines.push(`      ${varName}.submobjects = wrap.submobjects;`);
+        lines.push(`      ${varName}.moveTo([${val("x", p.x)}, ${val("y", p.y)}, 0]);`);
+        lines.push(`      ${varName}.setOpacity(${val("opacity", p.opacity)});`);
+        lines.push(`    }`);
+        lines.push(`    ${varName}Rebuild();`);
+        lines.push(`    ${varName}.addUpdater(() => ${varName}Rebuild());`);
+      }
     } else if (obj.type === "graph") {
-      graphAnimated = !!(obj.tracks.k || obj.tracks.expr);
-      if (!graphAnimated) {
+      if (!hasTracks) {
         lines.push(`    const ${varName}Axes = new Axes({ xRange: [-4, 4, 1], yRange: [-4, 4, 1] });`);
         lines.push(`    const ${varName}Curve = ${varName}Axes.plot((x) => (${p.expr}), { color: ${jsLiteral(p.color)} });`);
         lines.push(`    const ${varName} = new VGroup(${varName}Axes, ${varName}Curve);`);
+        if (hasRotate) lines.push(`    ${varName}.rotate(${rotRadExpr});`);
+        if (hasScale) lines.push(`    ${varName}.scale(${scaleExpr});`);
+        lines.push(`    ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
+        lines.push(`    ${varName}.setOpacity(${p.opacity});`);
       } else {
-        // k and/or expr can change over time -- Axes.plot() bakes points once
-        // at call time, so a FRESH Axes+curve pair must be built from scratch
+        // k, expr, and/or any common field (x/y/rotation/scale/opacity/
+        // color) can change over time -- Axes.plot() bakes points once at
+        // call time, so a FRESH Axes+curve pair must be built from scratch
         // every rebuild (reusing one persistent Axes across rebuilds would
-        // mean rotate()/scale() below -- both RELATIVE transforms -- get
-        // reapplied to the SAME already-transformed points every single call,
-        // compounding without bound). k/expr's live values are plain local
-        // variables, ticked directly inside ${varName}'s own updater (which
-        // already receives dt) rather than via bindTrack: bindTrack requires
-        // its target to sit in the scene's update-traversal tree, which a
-        // throwaway-rebuilt Axes never does.
-        lines.push(`    let ${varName}K = ${p.k};`);
-        lines.push(`    let ${varName}Expr = ${jsLiteral(p.expr)};`);
+        // mean rotate()/scale() below get reapplied to the SAME already-
+        // transformed points every call, compounding without bound).
         lines.push(`    const ${varName} = new VGroup();`);
         lines.push(`    function ${varName}Rebuild() {`);
-        lines.push(`      const fn = compileGraphExpr(${varName}Expr);`);
+        lines.push(`      const fn = compileGraphExpr(${val("expr", jsLiteral(p.expr))});`);
         lines.push(`      const axes = new Axes({ xRange: [-4, 4, 1], yRange: [-4, 4, 1] });`);
-        lines.push(`      const curve = axes.plot((x) => fn(x, ${varName}K), { color: ${jsLiteral(p.color)} });`);
-        // Apply rotate/scale to a throwaway wrapper around this FRESH
-        // geometry, then adopt its (now-transformed) children into the
-        // persistent container; moveTo/setOpacity stay direct since those are
-        // absolute, not relative, so reapplying is idempotent.
+        lines.push(`      const curve = axes.plot((x) => fn(x, ${val("k", p.k)}), { color: ${val("color", jsLiteral(p.color))} });`);
         lines.push(`      const wrap = new VGroup(axes, curve);`);
-        if (hasRotate) lines.push(`      wrap.rotate(${rotRad});`);
-        if (hasScale) lines.push(`      wrap.scale(${p.scale});`);
+        lines.push(`      wrap.rotate(${rotRadExpr});`);
+        lines.push(`      wrap.scale(${scaleExpr});`);
         lines.push(`      ${varName}.submobjects = wrap.submobjects;`);
-        lines.push(`      ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
-        lines.push(`      ${varName}.setOpacity(${p.opacity});`);
+        lines.push(`      ${varName}.moveTo([${val("x", p.x)}, ${val("y", p.y)}, 0]);`);
+        lines.push(`      ${varName}.setOpacity(${val("opacity", p.opacity)});`);
         lines.push(`    }`);
         lines.push(`    ${varName}Rebuild();`);
+        lines.push(`    ${varName}.addUpdater(() => ${varName}Rebuild());`);
       }
     } else if (obj.type === "scene") {
       // Embeds a real ecmanim construct() script (scene.play()/scene.wait()
@@ -2142,6 +2614,11 @@ function generateSceneCode() {
       // synchronous. The loop's own stopping condition (`sampled.time < `
       // the time it asked for) detects when the sub-script finished
       // naturally, without a separate up-front "get the total duration" pass.
+      // Rotate/scale stay STATIC-only here (a documented, narrow gap): they'd
+      // need re-deriving per DISPLAY frame off the parent timeline while
+      // each baked frame is keyed to the embedded scene's own independent
+      // clock -- a genuinely different problem from the position/opacity
+      // fix below, not attempted in this pass.
       lines.push(`    async function ${varName}Construct(scene, props) {`);
       for (const codeLine of obj.props.code.split("\n")) lines.push(`      ${codeLine}`);
       lines.push(`    }`);
@@ -2149,11 +2626,8 @@ function generateSceneCode() {
       lines.push(`    for (let f = 0; ; f++) {`);
       lines.push(`      const sampled = await sampleSceneAt(${varName}Construct, f / fps, { fps });`);
       if (hasRotate || hasScale) {
-        // Rotate/scale is baked into each frame ONCE here (not per
-        // ApplyFrame call below) -- these frames are static snapshots, so
-        // there's no "every frame" compounding risk to avoid in the first place.
         lines.push(`      const wrap = new VGroup(...sampled.mobjects);`);
-        if (hasRotate) lines.push(`      wrap.rotate(${rotRad});`);
+        if (hasRotate) lines.push(`      wrap.rotate(${(p.rotation * Math.PI) / 180});`);
         if (hasScale) lines.push(`      wrap.scale(${p.scale});`);
         lines.push(`      ${varName}Frames.push(wrap.submobjects);`);
       } else {
@@ -2166,23 +2640,80 @@ function generateSceneCode() {
       lines.push(`    function ${varName}ApplyFrame(elapsed) {`);
       lines.push(`      const idx = Math.max(0, Math.min(${varName}Frames.length - 1, Math.round(elapsed * fps)));`);
       lines.push(`      ${varName}.submobjects = ${varName}Frames[idx];`);
-      lines.push(`      ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
-      lines.push(`      ${varName}.setOpacity(${p.opacity});`);
+      lines.push(`      ${varName}.moveTo([${val("x", p.x)}, ${val("y", p.y)}, 0]);`);
+      lines.push(`      ${varName}.setOpacity(${val("opacity", p.opacity)});`);
       lines.push(`    }`);
       lines.push(`    ${varName}ApplyFrame(0);`);
       lines.push(`    ${varName}.addUpdater((m, dt) => { ${varName}Elapsed += dt; ${varName}ApplyFrame(${varName}Elapsed); });`);
-    }
-
-    if (obj.type === "code") {
+    } else if (obj.type === "image") {
+      lines.push(`    // NOTE: point this at your actual image file -- the compositor only holds an in-browser blob reference, not a real path.`);
+      lines.push(`    const ${varName}Img = await loadImage(${jsLiteral("./" + (obj.props.fileName || "image.png"))});`);
+      if (!hasTracks) {
+        lines.push(`    const ${varName} = new ImageMobject(${varName}Img, { width: ${p.width}, height: ${p.height} });`);
+        if (hasRotate) lines.push(`    ${varName}.rotate(${rotRadExpr});`);
+        if (hasScale) lines.push(`    ${varName}.scale(${scaleExpr});`);
+        lines.push(`    ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
+        lines.push(`    ${varName}.setOpacity(${p.opacity});`);
+      } else {
+        // Width/height (and any other animated common field) rebuild a fresh
+        // ImageMobject each tick around the SAME already-loaded bitmap --
+        // decode happens exactly once, above.
+        lines.push(`    const ${varName} = new VGroup();`);
+        lines.push(`    function ${varName}Rebuild() {`);
+        lines.push(`      const wrap = new VGroup(new ImageMobject(${varName}Img, { width: ${val("width", p.width)}, height: ${val("height", p.height)} }));`);
+        lines.push(`      wrap.rotate(${rotRadExpr});`);
+        lines.push(`      wrap.scale(${scaleExpr});`);
+        lines.push(`      ${varName}.submobjects = wrap.submobjects;`);
+        lines.push(`      ${varName}.moveTo([${val("x", p.x)}, ${val("y", p.y)}, 0]);`);
+        lines.push(`      ${varName}.setOpacity(${val("opacity", p.opacity)});`);
+        lines.push(`    }`);
+        lines.push(`    ${varName}Rebuild();`);
+        lines.push(`    ${varName}.addUpdater(() => ${varName}Rebuild());`);
+      }
+    } else if (obj.type === "video") {
+      lines.push(`    // NOTE: point this at your actual video file -- the compositor only holds an in-browser blob reference, not a real path. Video is frames-only here (no audio) -- pair with a Sound layer if the clip's audio track is wanted.`);
+      if (!hasTracks) {
+        lines.push(`    const ${varName} = await loadVideo(${jsLiteral("./" + (obj.props.fileName || "video.mp4"))}, { fps, width: ${p.width}, height: ${p.height} });`);
+        if (hasRotate) lines.push(`    ${varName}.rotate(${rotRadExpr});`);
+        if (hasScale) lines.push(`    ${varName}.scale(${scaleExpr});`);
+        lines.push(`    ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
+        lines.push(`    ${varName}.setOpacity(${p.opacity});`);
+      } else {
+        // Any animated prop here needs a per-tick rebuild, which rules out
+        // loadVideo()'s convenience VideoMobject wrapper -- its own internal
+        // playback state (_elapsed) would reset to 0 every rebuild. Extract
+        // just the decoded provider instead and derive the displayed frame
+        // straight from scene.time minus this object's own inTime (the same
+        // absolute clock every other track lookup here already uses),
+        // building a fresh throwaway ImageMobject each tick -- exactly
+        // mirroring how the live preview's own buildMobject() samples a
+        // video layer (obj._videoProvider.frameAt(t)), never the real
+        // VideoMobject class, for this same reason.
+        lines.push(`    const ${varName}Provider = (await loadVideo(${jsLiteral("./" + (obj.props.fileName || "video.mp4"))}, { fps })).provider;`);
+        lines.push(`    const ${varName} = new VGroup();`);
+        lines.push(`    function ${varName}Rebuild() {`);
+        lines.push(`      const t = Math.max(0, scene.time - ${obj.inTime.toFixed(3)});`);
+        lines.push(`      const frame = ${varName}Provider.frameAt(t) ?? ${varName}Provider.frameAt(0);`);
+        lines.push(`      const wrap = new VGroup(new ImageMobject(frame, { width: ${val("width", p.width)}, height: ${val("height", p.height)} }));`);
+        lines.push(`      wrap.rotate(${rotRadExpr});`);
+        lines.push(`      wrap.scale(${scaleExpr});`);
+        lines.push(`      ${varName}.submobjects = wrap.submobjects;`);
+        lines.push(`      ${varName}.moveTo([${val("x", p.x)}, ${val("y", p.y)}, 0]);`);
+        lines.push(`      ${varName}.setOpacity(${val("opacity", p.opacity)});`);
+        lines.push(`    }`);
+        lines.push(`    ${varName}Rebuild();`);
+        lines.push(`    ${varName}.addUpdater(() => ${varName}Rebuild());`);
+      }
+    } else if (obj.type === "code") {
       // Re-invoked every frame via addUpdater() -- Mobject.update(dt) already
       // recurses into submobjects (src/mobject/Mobject.ts), so a plain
       // updater on this container is all real playback needs, exactly
       // mirroring how the live preview rebuilds this layer from scratch
-      // every frame. moveTo/setOpacity are re-applied inside the rebuild
-      // (not just once) since a fresh build starts back at its own local
-      // coordinates each time; rotate/scale go on a throwaway wrapper
-      // around the fresh content for the same reason the graph branch above
-      // does (relative transforms would compound on a persistent container).
+      // every frame. moveTo/setOpacity/rotate/scale are re-applied inside
+      // the rebuild (not just once), resolved via val() so animating any of
+      // them (separately from the code's own t-based content) works too;
+      // rotate/scale go on a throwaway wrapper around the fresh content for
+      // the same reason every other animated branch above does.
       lines.push(`    function ${varName}Content(t) {`);
       for (const codeLine of obj.props.code.split("\n")) lines.push(`      ${codeLine}`);
       lines.push(`    }`);
@@ -2191,47 +2722,16 @@ function generateSceneCode() {
       lines.push(`    function ${varName}Rebuild(t) {`);
       lines.push(`      const result = ${varName}Content(t);`);
       lines.push(`      const wrap = new VGroup(...(Array.isArray(result) ? result : [result]));`);
-      if (hasRotate) lines.push(`      wrap.rotate(${rotRad});`);
-      if (hasScale) lines.push(`      wrap.scale(${p.scale});`);
+      lines.push(`      wrap.rotate(${rotRadExpr});`);
+      lines.push(`      wrap.scale(${scaleExpr});`);
       lines.push(`      ${varName}.submobjects = wrap.submobjects;`);
-      lines.push(`      ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
-      lines.push(`      ${varName}.setOpacity(${p.opacity});`);
+      lines.push(`      ${varName}.moveTo([${val("x", p.x)}, ${val("y", p.y)}, 0]);`);
+      lines.push(`      ${varName}.setOpacity(${val("opacity", p.opacity)});`);
       lines.push(`    }`);
       lines.push(`    ${varName}Rebuild(0);`);
       lines.push(`    ${varName}.addUpdater((m, dt) => { ${varName}Time += dt; ${varName}Rebuild(${varName}Time); });`);
-    } else if (obj.type !== "scene" && !graphAnimated) {
-      // Scene layers and an animated graph already apply rotate/scale/
-      // moveTo/setOpacity inside their own ApplyFrame()/Rebuild() above --
-      // doing it again here would just be redundant, not incorrect, but let's not.
-      if (hasRotate) lines.push(`    ${varName}.rotate(${rotRad});`);
-      if (hasScale) lines.push(`    ${varName}.scale(${p.scale});`);
-      lines.push(`    ${varName}.moveTo([${p.x}, ${p.y}, 0]);`);
-      lines.push(`    ${varName}.setOpacity(${p.opacity});`);
     }
-    const graphTrackVars = {}; // key ("k"/"expr") -> the `this.track(...)` const name, graph-animated only
-    for (const [key, track] of Object.entries(obj.tracks)) {
-      const kfs = track.keyframes.map((k) => `{ t: ${k.t.toFixed(3)}, value: ${jsLiteral(k.value)} }`).join(", ");
-      const trackOpts = track._kind === "color" ? ", { interpolate: lerpColorOklab }"
-        : track._kind === "step" ? ", { interpolate: stepSwap }"
-        : track._kind === "expr-blend" ? ", { interpolate: exprBlendInterpolate }"
-        : "";
-      if (obj.type === "graph" && (key === "k" || key === "expr")) {
-        // Not bindTrack -- there is no persistent, tree-resident mobject to
-        // bind onto (see the "graph" branch above); ticked manually inside
-        // ${varName}'s own updater instead, right below.
-        const trackVar = `${varName}${key === "k" ? "K" : "Expr"}Track`;
-        lines.push(`    const ${trackVar} = this.track([${kfs}]${trackOpts});`);
-        graphTrackVars[key] = trackVar;
-      } else {
-        lines.push(`    bindTrack(${varName}, ${jsLiteral(key)}, this.track([${kfs}]${trackOpts}));`);
-      }
-    }
-    if (graphAnimated) {
-      const tickAssignments = [];
-      if (graphTrackVars.k) tickAssignments.push(`${varName}K = ${graphTrackVars.k}.tick(dt);`);
-      if (graphTrackVars.expr) tickAssignments.push(`${varName}Expr = ${graphTrackVars.expr}.tick(dt);`);
-      lines.push(`    ${varName}.addUpdater((m, dt) => { ${tickAssignments.join(" ")} ${varName}Rebuild(); });`);
-    }
+
     lines.push("");
   }
 
@@ -2384,8 +2884,15 @@ function refreshAll() {
   render();
 }
 
-addObject("circle");
-refreshAll();
+(async () => {
+  const restored = await restoreProject().catch((e) => {
+    console.warn("project restore failed, starting fresh:", e);
+    return false;
+  });
+  if (!restored) addObject("circle");
+  refreshAll();
+  refreshUndoRedoButtons();
+})();
 </script>
 </body>
 </html>

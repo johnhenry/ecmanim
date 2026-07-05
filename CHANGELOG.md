@@ -67,6 +67,32 @@
   via direct pixel inspection of a cropped, zoomed rendered frame:
   `superSample: 1` shows the exact staircase-stepped glyph edges reported;
   2x and 3x both show smooth, gray-blended anti-aliased edges.
+- **3D mesh import** (`.obj`/`.stl`), two tiers:
+  - **`loadMeshOBJ`/`loadMeshSTL`** (`src/loaders/mesh_obj.ts`, `mesh_stl.ts`):
+    parse a mesh into a `Polyhedron` (`src/mobject/polyhedra.ts`) — arbitrary
+    `(vertexCoords, facesList)` was already supported there, so rotate/scale/
+    moveTo/copy all work for free via the same real per-point transform code
+    every Mobject uses. Both loaders dedupe coincident vertices (raw parser
+    output usually has zero vertex sharing, which would otherwise make every
+    triangle a disconnected island) and share that dedup logic via a new
+    `src/loaders/mesh_util.ts`. Uses `three`'s own bundled `OBJLoader`/
+    `STLLoader` (already an `optionalDependency`) — no new dependency.
+    `Polyhedron` gained `showVertices`/`showEdges` config (default `true`,
+    unchanged for the existing Platonic solids) so an imported mesh doesn't
+    show a vertex-dot/wireframe overlay by default.
+  - **`loadMesh3D`/`Mesh3D`** (`src/loaders/mesh3d_loader.ts`,
+    `src/mobject/mesh3d.ts`): a GPU-tier alternative for larger meshes.
+    Benchmarked: the `Polyhedron` path's per-frame CPU cost degrades sharply
+    with triangle count (~600ms just to construct a ~10k-triangle mesh,
+    ~76ms/frame to render it — well past a 24fps budget); `Mesh3D` instead
+    accumulates transforms into a single 4×4 matrix (applied as the built
+    `THREE.Mesh`'s own matrix, cached and reused across frames) rather than
+    touching a per-point array, dropping construction to ~2ms regardless of
+    size. `ThreeRenderer` gained a `meshes` bucket in `collectBuffers()`
+    (`src/renderer/geometry_util.ts`) for this; `CanvasRenderer` has no CPU
+    path for it (explicitly skipped, not mis-rasterized as its lightweight
+    bounding-box proxy).
+  - GLTF import and compositor integration are tracked as follow-up work.
 
 ### Fixed
 - **The render cache silently reused stale segments when only the

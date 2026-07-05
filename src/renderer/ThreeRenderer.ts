@@ -149,6 +149,7 @@ export class ThreeRenderer {
       }
     }
     for (const im of buf.images) { const p = this._imageQuad(im); if (p) this.group.add(p); }
+    for (const mesh of buf.meshes) this.group.add(this._mesh3D(mesh));
 
     this.syncCamera();
     this.renderer.render(this.scene, this.threeCamera);
@@ -282,6 +283,52 @@ export class ThreeRenderer {
     tex.needsUpdate = true;
     const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: mob.opacity ?? 1, side: THREE.DoubleSide });
     return new THREE.Mesh(g, m);
+  }
+
+  // Mesh3D (src/mobject/mesh3d.ts) -- the GPU tier for imported meshes. The
+  // built BufferGeometry (position/normal/index) is cached ON THE MOBJECT
+  // (mob._threeGeometryCache, shared across copy() clones -- read-only-safe,
+  // same reasoning as ImageMobject sharing its decoded bitmap) since the raw
+  // vertex/face data never changes; only the transform does, applied here as
+  // the THREE.Mesh's own matrix rather than baked into the geometry. Note:
+  // _clearGroup() disposes every child's geometry every frame (the existing,
+  // shared render-loop contract for ALL mesh types here, not new for Mesh3D)
+  // -- so this still pays a GPU re-upload cost every frame, same as
+  // everything else in this renderer; what the cache actually saves is the
+  // CPU-side cost of rebuilding the typed arrays and recomputing normals,
+  // which don't need redoing since the underlying mesh data is immutable.
+  // A "never re-upload" cache would need a broader change to _clearGroup()'s
+  // always-dispose-and-rebuild model, out of scope here.
+  _mesh3D(mob: any): any {
+    const { THREE } = this;
+    if (!mob._threeGeometryCache) {
+      const positions = new Float32Array(mob.vertexCoords.length * 3);
+      for (let i = 0; i < mob.vertexCoords.length; i++) {
+        const p = mob.vertexCoords[i];
+        positions[i * 3] = p[0]; positions[i * 3 + 1] = p[1]; positions[i * 3 + 2] = p[2];
+      }
+      const index: number[] = [];
+      for (const f of mob.facesList) {
+        // Fan-triangulate in case a face has more than 3 vertices (OBJ/STL
+        // import always emits triangles today, but this stays correct if a
+        // future mesh source produces n-gon faces).
+        for (let i = 1; i + 1 < f.length; i++) index.push(f[0], f[i], f[i + 1]);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      g.setIndex(index);
+      g.computeVertexNormals();
+      mob._threeGeometryCache = g;
+    }
+    const col = mob.color ?? { r: 0.35, g: 0.77, b: 0.85 };
+    const colorHex = new THREE.Color(col.r ?? 0.35, col.g ?? 0.77, col.b ?? 0.85);
+    const material = this.lit
+      ? new THREE.MeshStandardMaterial({ color: colorHex, side: THREE.DoubleSide, roughness: 0.6, metalness: 0.0 })
+      : new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide });
+    const threeMesh = new THREE.Mesh(mob._threeGeometryCache, material);
+    threeMesh.matrixAutoUpdate = false;
+    threeMesh.matrix.set(...(mob.transform as number[]));
+    return threeMesh;
   }
 
   _clearGroup(): void {
