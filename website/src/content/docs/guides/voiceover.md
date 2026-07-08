@@ -5,10 +5,13 @@ title: "Voiceover / TTS-synced narration"
 Phase-3 adoption (manim-voiceover style). Exported from `ecmanim/node`.
 
 ```js
-import { render, voiceover } from "ecmanim/node";
+import { render, voiceover, Scene, Circle, Square, Create, FadeIn } from "ecmanim/node";
 
 class Narrated extends Scene {
   async construct() {
+    const circle = new Circle();
+    const square = new Square().shift([2, 0, 0]);
+
     await voiceover(
       this,
       "First a circle <bookmark mark='sq'/> then a square.",
@@ -21,6 +24,8 @@ class Narrated extends Scene {
     );
   }
 }
+
+await render(Narrated);
 ```
 
 `voiceover()` synthesizes the narration, adds it to the scene at the current time

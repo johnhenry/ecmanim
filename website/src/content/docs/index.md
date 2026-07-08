@@ -53,9 +53,11 @@ document.getElementById('replay').addEventListener('click', run);
 document.getElementById('download').addEventListener('click', async () => {
   const blob = await record(Demo, { quality: 'high', background: '#0d1117' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  a.href = url;
   a.download = 'ecmanim-demo.webm';
   a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 </script>
 

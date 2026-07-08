@@ -71,7 +71,7 @@ thumbnail preview, and behind `src/studio/timeline.ts`'s
 
 Named camera stops (`MovingCameraScene.defineCameraStop()`/`goToCameraStop()`)
 pair naturally with sections — see
-[docs/authoring-studio.md](authoring-studio.md#named-camera-stops--sections).
+[Authoring Studio](/guides/authoring-studio/#named-camera-stops--sections).
 
 ## Resuming playback across a page navigation
 

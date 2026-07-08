@@ -134,7 +134,7 @@ once and runs on both engines. Nothing in a manifest executes arbitrary code —
 expressions are parsed by a safe recursive-descent evaluator (no `eval`).
 
 The full spec (JSON Schema + grammar) lives in
-[`packages/plugin-spec/README.md`](../packages/plugin-spec/README.md).
+[`packages/plugin-spec/README.md`](https://github.com/johnhenry/ecmanim/blob/main/packages/plugin-spec/README.md).
 
 ### Shape
 

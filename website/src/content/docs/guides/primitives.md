@@ -107,7 +107,7 @@ await scene.play(animateSignal(mySignal, track));
 Default interpolation handles `number`/`number[]` via `V.lerp`;
 `options.interpolate` is the escape hatch for other types (e.g. `Color.lerp`
 for a color-typed track). See
-[docs/authoring-studio.md](authoring-studio.md#property-keyframe-tracks--a-draggable-timeline-editor)
+[Authoring Studio](/guides/authoring-studio/#property-keyframe-tracks--a-draggable-timeline-editor)
 for the Studio-facing `scene.track()`/`bindTrack()`/draggable-timeline-editor
 layer built on top of this.
 
