@@ -1,0 +1,84 @@
+/*
+ * Circuit ↔ Starlight bridge — same pattern used across the erisera OSS
+ * family (erisera-code/circuit, johnhenry/ai.matey, johnhenry/mcp-query),
+ * with --hue set to ecmanim's registered hue (285°, violet).
+ */
+
+@import '@erisera/circuit/tokens.css';
+@import '@erisera/circuit/components.css';
+@import '@erisera/circuit/palette.css';
+
+:root {
+  --hue: 285;
+
+  --sl-font: var(--f-body);
+  --sl-font-mono: var(--f-mono);
+
+  --sl-color-accent-low: var(--accent-soft);
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: var(--accent-hover);
+
+  --sl-color-text: var(--ink);
+  --sl-color-text-accent: var(--accent);
+  --sl-color-bg: var(--bg);
+  --sl-color-bg-nav: var(--bg-panel);
+  --sl-color-bg-sidebar: var(--bg-panel);
+  --sl-color-bg-inline-code: var(--bg-inset);
+  --sl-color-bg-accent: var(--accent);
+  --sl-color-hairline-light: var(--line);
+  --sl-color-hairline: var(--line);
+  --sl-color-hairline-shade: var(--line);
+
+  /* Verified against Starlight's real asides.css: note=blue, tip=PURPLE
+     (not green — unused by any built-in aside type), caution=orange, red=danger. */
+  --sl-color-blue: var(--info);
+  --sl-color-blue-low: var(--info-soft);
+  --sl-color-blue-high: var(--info);
+  --sl-color-purple: var(--success);
+  --sl-color-purple-low: var(--success-soft);
+  --sl-color-purple-high: var(--success);
+  --sl-color-green: var(--success);
+  --sl-color-green-low: var(--success-soft);
+  --sl-color-green-high: var(--success);
+  --sl-color-orange: var(--warning);
+  --sl-color-orange-low: var(--warning-soft);
+  --sl-color-orange-high: var(--warning);
+  --sl-color-red: var(--error);
+  --sl-color-red-low: var(--error-soft);
+  --sl-color-red-high: var(--error);
+}
+
+:root[data-theme='light'] {
+  --sl-color-text-accent: var(--accent);
+  --sl-color-bg-nav: var(--bg-panel);
+  --sl-color-bg-sidebar: var(--bg-panel);
+  --sl-color-bg-inline-code: var(--bg-inset);
+  --sl-color-hairline-light: var(--line);
+  --sl-color-hairline-shade: var(--line);
+}
+
+header.header {
+  border-top: 2px solid var(--accent);
+}
+
+/* live demo canvas frame (used on the homepage) */
+.ecmanim-demo {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: #000;
+  margin: 20px 0;
+}
+.ecmanim-demo canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #000;
+}
+.ecmanim-demo .controls {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-panel);
+}

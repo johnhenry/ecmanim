@@ -1,0 +1,4 @@
+public/ecmanim-dist/
+node_modules/
+dist/
+.astro/

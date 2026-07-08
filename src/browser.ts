@@ -158,11 +158,22 @@ export async function record(sceneOrConstruct: any, options: BrowserOptions = {}
 
   const nextFrame = () => new Promise<number>((r) => requestAnimationFrame(r));
   const scene = makeScene(sceneOrConstruct, { fps, camera });
+  // MediaRecorder timestamps captured frames by real wall-clock time (there is
+  // no way to hand it a synthetic per-frame duration), so each frame must be
+  // held until its real target time (`start + frame * 1000 / fps`). Without
+  // this, an unthrottled rAF loop (e.g. headless/software Chrome, where rAF
+  // fires far faster than `fps`) compresses the whole capture into a fraction
+  // of `runTime` and produces a WebM with a nonsensical frame rate. Mirrors the
+  // pacing in `ecmanim/browser-three`'s `record()`.
+  const start = performance.now();
+  let frame = 0;
   scene.frameHandler = async (mobjects: any) => {
     renderer.renderScene(mobjects);
     // Push exactly one frame into the capture stream.
     if (track.requestFrame) track.requestFrame();
-    await nextFrame();
+    frame++;
+    const target = start + (frame * 1000) / fps;
+    while (performance.now() < target) await nextFrame();
   };
   await runConstruct(sceneOrConstruct, scene);
 
