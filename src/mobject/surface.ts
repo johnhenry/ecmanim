@@ -122,6 +122,33 @@ export class Surface extends VGroup {
     return len < 1e-9 ? [0, 0, 1] : V.scale(n, 1 / len);
   }
 
+  /**
+   * Re-parameterize IN PLACE (3b1b sphere-unwrap style morphs): swap the
+   * surface function (and optionally u/v ranges) and rebuild the face mesh,
+   * preserving mobject identity so updaters can call this per frame:
+   *
+   * ```ts
+   * surf.addUpdater(() => surf.setFunc((u, v) => unroll(u, v, tracker.value)));
+   * ```
+   * Faces are rebuilt from scratch each call (constructor-equivalent), so
+   * shading/checkerboard reapply exactly as at construction.
+   */
+  setFunc(
+    func: (u: number, v: number) => number[],
+    ranges: { uRange?: [number, number]; vRange?: [number, number] } = {},
+  ): this {
+    this.func = func;
+    if (ranges.uRange) this.uRange = ranges.uRange;
+    if (ranges.vRange) this.vRange = ranges.vRange;
+    this.submobjects.length = 0;
+    this._build();
+    if (this.shade) {
+      this.applyShading(this.lightDirection);
+      if (this.smooth) this.applySmoothShading(this.lightDirection);
+    }
+    return this;
+  }
+
   _build(): void {
     const [nu, nv] = this.resolution;
     const [u0, u1] = this.uRange;

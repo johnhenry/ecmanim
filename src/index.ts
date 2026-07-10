@@ -227,6 +227,10 @@ export { hexbin, hexagonPoints } from "./layout/hexbin.ts";
 export { feature, mesh, decodeArc } from "./loaders/topojson.ts";
 export type { Topology } from "./loaders/topojson.ts";
 export { dataJoin, interpolateFrames, rankFrame } from "./animation/data_join.ts";
+
+// --- 3b1b campaign (v0.5.0) ---------------------------------------------------
+export { sieve, primesUpTo, isPrime, eigen2x2 } from "./core/math/primes.ts";
+export { hilbertCurve, lsystem } from "./layout/hilbert.ts";
 export type { DataJoinConfig, DataJoinResult } from "./animation/data_join.ts";
 export type { FbmOptions } from "./core/noise.ts";
 // Scene templates + themes (pure factories; compose with Timeline/transitions).
