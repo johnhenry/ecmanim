@@ -231,6 +231,10 @@ export { dataJoin, interpolateFrames, rankFrame } from "./animation/data_join.ts
 // --- 3b1b campaign (v0.5.0) ---------------------------------------------------
 export { sieve, primesUpTo, isPrime, eigen2x2 } from "./core/math/primes.ts";
 export { hilbertCurve, lsystem } from "./layout/hilbert.ts";
+export { FourierPath, dftOfPath, samplePath } from "./mobject/fourier_path.ts";
+export type { FourierCoefficient, FourierPathConfig } from "./mobject/fourier_path.ts";
+export { NeuralNetworkMobject } from "./mobject/neural_network.ts";
+export type { NeuralNetworkConfig, ForwardPassConfig } from "./mobject/neural_network.ts";
 export type { DataJoinConfig, DataJoinResult } from "./animation/data_join.ts";
 export type { FbmOptions } from "./core/noise.ts";
 // Scene templates + themes (pure factories; compose with Timeline/transitions).
