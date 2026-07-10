@@ -38,14 +38,17 @@ export function format(specifier = ""): (v: number) => string {
     if (type === "d") {
       out = Math.round(Math.abs(v)).toString();
     } else if (type === "s") {
-      // SI prefix: engineering exponent.
+      // SI prefix: engineering exponent. Precision clamps to >= 1 (d3 does;
+      // ".0s" used to throw via toPrecision(0)), and output stays PLAIN
+      // notation (toPrecision can emit "4e+2"; d3 never does for SI).
       const abs = Math.abs(v);
       const exp = abs === 0 ? 0 : Math.max(-24, Math.min(24, Math.floor(Math.log10(abs) / 3) * 3));
       const scaled = v / Math.pow(10, exp);
-      const p = precision ?? 3;
+      const p = Math.max(1, precision ?? 3);
       let str = scaled.toPrecision(p);
+      if (str.includes("e")) str = Number(str).toString();
       if (trim || precStr === undefined) str = String(parseFloat(str));
-      out = str.replace("-", "") ;
+      out = str.replace("-", "");
       suffix = SI_PREFIXES[exp / 3 + 8] + suffix;
     } else if (type === "e") {
       out = Math.abs(v).toExponential(precision ?? 6);

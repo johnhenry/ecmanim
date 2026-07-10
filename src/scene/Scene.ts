@@ -277,7 +277,37 @@ export class Scene {
         : "";
       parts.push(`${cls}:${npts}:${fam.length}:${geom}:${paint}:${extra}:${a?.runTime ?? ""}`);
     }
+    // Placeholder-driven animations (tween(cb), tweenSignal) have EMPTY
+    // families — their hash would be scene-blind, so two different scenes
+    // with byte-identical callbacks collided in the shared cache (found by
+    // the D3 force ports). Fold in the scene-content fingerprint.
+    const total = anims.reduce((n, a: any) => {
+      const fam = typeof a?.mobject?.getFamily === "function" ? a.mobject.getFamily() : [];
+      return n + fam.reduce((m: number, f: any) => m + (f?.points?.length ?? 0), 0);
+    }, 0);
+    if (total === 0) parts.push(`scene:${this._sceneContentFingerprint()}`);
     return fnv1a(parts.join("|"));
+  }
+
+  // Family-deep fingerprint of everything currently on the scene (used by
+  // wait-segment hashes and by play-segment hashes for geometry-less
+  // animations). Per-leaf position + fill + opacity + strokeEnd.
+  private _sceneContentFingerprint(): string {
+    return this.mobjects.map((m: any) => {
+      const fam: any[] = typeof m?.getFamily === "function" ? m.getFamily() : [m];
+      let npts = 0;
+      const bits: string[] = [];
+      for (const f of fam) {
+        npts += Array.isArray(f?.points) ? f.points.length : 0;
+        const c = typeof f?.getCenter === "function" && f.points?.length ? f.getCenter() : [0, 0, 0];
+        bits.push(
+          `${Math.round(c[0] * 1000)},${Math.round(c[1] * 1000)},` +
+          `${f?.fillColor?.toHex?.() ?? ""},${Math.round((f?.opacity ?? 1) * 1000)},` +
+          `${Math.round((f?.strokeEnd ?? 1) * 1000)}`,
+        );
+      }
+      return `${m?.constructor?.name ?? "m"}:${npts}:${fnv1a(bits.join(";"))}`;
+    }).join(",");
   }
 
   // Schedule an audio clip. Defaults to the current animation time, so calling
@@ -478,21 +508,7 @@ export class Scene {
     // points, so a top-level-only fingerprint hashed every hold over them
     // identically -- later holds replayed the first hold's cached frames
     // within a single render. Include per-leaf position + paint + opacity.
-    const fp = this.mobjects.map((m: any) => {
-      const fam: any[] = typeof m?.getFamily === "function" ? m.getFamily() : [m];
-      let npts = 0;
-      const bits: string[] = [];
-      for (const f of fam) {
-        npts += Array.isArray(f?.points) ? f.points.length : 0;
-        const c = typeof f?.getCenter === "function" && f.points?.length ? f.getCenter() : [0, 0, 0];
-        bits.push(
-          `${Math.round(c[0] * 1000)},${Math.round(c[1] * 1000)},` +
-          `${f?.fillColor?.toHex?.() ?? ""},${Math.round((f?.opacity ?? 1) * 1000)},` +
-          `${Math.round((f?.strokeEnd ?? 1) * 1000)}`,
-        );
-      }
-      return `${m?.constructor?.name ?? "m"}:${npts}:${fnv1a(bits.join(";"))}`;
-    }).join(",");
+    const fp = this._sceneContentFingerprint();
     const hash = this.hashAnimations([{ constructor: { name: "Wait" }, runTime: duration, mobject: { points: [], submobjects: [] } }], `wait:${duration}:${fp}`);
     const directive = this.onSegment?.({ index: playIndex, kind: "wait", hash, startFrame });
     const skip = !!directive?.skip;

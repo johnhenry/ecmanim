@@ -11,14 +11,19 @@ const AXIS_COLOR = "#000000";
 const TICK_LEN = 6;
 
 export interface AxisOptions {
-  /** d3 tickFormat-style formatter. */
+  /** d3 tickFormat-style formatter. Return "" to draw the tick mark but
+   *  skip its label (d3's sparse log-axis labeling). */
   format?: (v: any) => string;
   tickCount?: number;
   /** Extend gridlines across the plot area (x1 to x2 SVG px). */
   gridX?: [number, number];
+  /** axisBottom: extend vertical gridlines across the plot (y1 to y2 SVG px). */
+  gridY?: [number, number];
   label?: string;
   fontSize?: number;
   color?: string;
+  /** axisBottom: hide the domain line (d3's `.select(".domain").remove()`). */
+  noDomain?: boolean;
 }
 
 /** axisLeft(scale) at SVG x position `x0`. Works with any scale exposing
@@ -38,10 +43,13 @@ export function axisLeft(scale: any, x0: number, f: SvgFrame, opts: AxisOptions 
         strokeColor: color, strokeWidth: f.sw(0.5), strokeOpacity: 0.12,
       }));
     }
-    const label = new Text(fmt(t), { fontSize, color });
-    label.moveTo(f.pt(x0 - TICK_LEN - 4, y));
-    label.shift([-label.getWidth() / 2, 0, 0]);
-    g.add(label);
+    const text = fmt(t);
+    if (text !== "") {
+      const label = new Text(text, { fontSize, color });
+      label.moveTo(f.pt(x0 - TICK_LEN - 4, y));
+      label.shift([-label.getWidth() / 2, 0, 0]);
+      g.add(label);
+    }
   }
   if (opts.label) {
     // Top-left corner, clear of the plot area (d3 convention).
@@ -64,14 +72,32 @@ export function axisBottom(scale: any, y0: number, f: SvgFrame, opts: AxisOption
   const isBand = typeof scale.bandwidth === "function";
   const ticks: any[] = scale.ticks ? scale.ticks(opts.tickCount ?? 10) : scale.domain();
   const [r0, r1] = typeof scale.range === "function" ? scale.range() : [0, 0];
-  g.add(new Line({ start: f.pt(r0, y0), end: f.pt(r1, y0), strokeColor: color, strokeWidth: f.sw(1) }));
+  if (!opts.noDomain) {
+    g.add(new Line({ start: f.pt(r0, y0), end: f.pt(r1, y0), strokeColor: color, strokeWidth: f.sw(1) }));
+  }
   for (const t of ticks) {
     const x = scale(t) + (isBand ? scale.bandwidth() / 2 : 0);
     if (Number.isNaN(x)) continue;
     g.add(new Line({ start: f.pt(x, y0), end: f.pt(x, y0 + TICK_LEN), strokeColor: color, strokeWidth: f.sw(1) }));
-    const label = new Text(fmt(t), { fontSize, color });
-    label.moveTo(f.pt(x, y0 + TICK_LEN + 10));
-    g.add(label);
+    if (opts.gridY) {
+      g.add(new Line({
+        start: f.pt(x, opts.gridY[0]), end: f.pt(x, opts.gridY[1]),
+        strokeColor: color, strokeWidth: f.sw(0.5), strokeOpacity: 0.12,
+      }));
+    }
+    const text = fmt(t);
+    if (text !== "") {
+      const label = new Text(text, { fontSize, color });
+      label.moveTo(f.pt(x, y0 + TICK_LEN + 10));
+      g.add(label);
+    }
+  }
+  if (opts.label) {
+    // Right-aligned under the axis' right end (d3 convention for x labels).
+    const lab = new Text(opts.label, { fontSize, color });
+    lab.moveTo(f.pt(Math.max(r0, r1), y0 + TICK_LEN + 22));
+    lab.shift([-lab.getWidth() / 2, 0, 0]);
+    g.add(lab);
   }
   return g;
 }

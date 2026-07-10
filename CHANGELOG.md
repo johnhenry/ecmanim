@@ -27,10 +27,32 @@
   `interpolateFrames`/`rankFrame`; `CameraFrameTween` gains the van
   Wijk/interpolateZoom `path: "zoom"` option. 123 new tests.
 
+- **D3-parity suite** (`examples/d3-parity/`): 26 gallery refs ported into
+  25 rendered, frame-verified videos — bar-chart-race on keyed dataJoin,
+  streamgraph, sankey, chord, edge bundling, the full 3,142-county
+  choropleth, volcano isobands, van Wijk circle-packing dive, live force
+  settling, and more. README scorecard + PORTING.md conventions; d3-smoke
+  CI job (treemap / force / race); `npm run demos:d3`.
+
 ### Fixed
 - `Graph`'s random/spring layouts had `Math.random` determinism leaks
   (random initial positions + coincident-node jitter) — now seeded
   (cache-safe reproducible renders).
+- GeoJSON polygon rings were pushed as raw bezier points, rendering
+  polygons as rounded "petals" with gaps — now emitted as straight-edge
+  cubic chains (found by the choropleth port).
+- `format(".0s")` threw and SI output could emit exponent notation
+  ("4e+2"); precision now clamps ≥ 1 and output stays plain.
+- `scaleBand.padding()` (and friends) called as GETTERS corrupted the
+  scale to NaN — d3's getter/setter overloads implemented.
+- Partial-movie cache: `AnimationGroup` now recurses `_hashExtra` into its
+  children, and geometry-less animations (`tween(cb)`, `tweenSignal`) fold
+  the scene-content fingerprint into their segment hash — same-shaped
+  groups and byte-identical closures in DIFFERENT scenes collided.
+- `FadeOut` now restores the family's opacities after removal (manim
+  parity) — a later `FadeIn` of the same mobject used to capture 0 as its
+  target and animate to invisible.
+- `CameraFrameTween` exported from the barrel.
 
 
 ## 0.3.0 — 2026-07-10

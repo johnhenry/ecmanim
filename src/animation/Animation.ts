@@ -410,6 +410,19 @@ export class FadeOut extends Animation {
 
   finish(): this {
     this.interpolateMobject(1);
+    // manim parity: restore the family's opacities (and geometry) AFTER the
+    // removal state is reached — the mobject has left the scene, so this is
+    // invisible, but a later FadeIn re-showing the same mobject would
+    // otherwise capture opacity 0 as its target and animate to invisible
+    // (found by the D3 circle-packing port's zoom-out label restore).
+    const fam = this.mobject.getFamily();
+    fam.forEach((m: any, i: number) => {
+      const s = this.startOpacities[i];
+      m.fillOpacity = s.fill;
+      m.strokeOpacity = s.stroke;
+      const start = this.startPoints[i];
+      for (let j = 0; j < m.points.length; j++) m.points[j] = [...start[j]];
+    });
     this.finished = true;
     return this;
   }

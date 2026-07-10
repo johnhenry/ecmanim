@@ -66,7 +66,9 @@ test("a real second Animation (not config) is never misidentified as config", as
   scene.add(a, b);
   await scene.play(new FadeIn(a), new FadeOut(b));
   assert.ok(a.strokeOpacity > 0.9);
-  assert.ok(b.strokeOpacity < 0.1);
+  // FadeOut restores opacities after removal (manim parity), so the proof
+  // the second Animation RAN (wasn't parsed as config) is scene membership.
+  assert.ok(!scene.mobjects.includes(b), "b was faded out and removed");
 });
 
 test("a trailing .animate builder is never misidentified as config", async () => {

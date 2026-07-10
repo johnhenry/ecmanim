@@ -90,6 +90,16 @@ export class AnimationGroup extends Animation {
   getMobjectsToRemove(): Mobject[] {
     return this.animations.flatMap((a) => a.getMobjectsToRemove());
   }
+
+  /** Partial-movie-cache content fingerprint: recurse into children so two
+   *  same-shaped groups with different tween targets/closures hash apart
+   *  (found by the D3 ports: grouped transitions silently replayed each
+   *  other's cached clips). */
+  _hashExtra(): string {
+    return this.animations
+      .map((a: any, i: number) => `${i}:${a?.constructor?.name}:${typeof a?._hashExtra === "function" ? a._hashExtra() : ""}`)
+      .join(";");
+  }
 }
 
 export class LaggedStart extends AnimationGroup {

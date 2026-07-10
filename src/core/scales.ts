@@ -303,10 +303,15 @@ export interface ScaleBand {
   range(r: [number, number]): ScaleBand;
   bandwidth(): number;
   step(): number;
+  padding(): number;
   padding(p: number): ScaleBand;
+  paddingInner(): number;
   paddingInner(p: number): ScaleBand;
+  paddingOuter(): number;
   paddingOuter(p: number): ScaleBand;
+  align(): number;
   align(a: number): ScaleBand;
+  round(): boolean;
   round(r: boolean): ScaleBand;
   copy(): ScaleBand;
 }
@@ -355,11 +360,29 @@ export function scaleBand(domain?: Iterable<any>, range?: [number, number]): Sca
   }) as ScaleBand["range"];
   scale.bandwidth = () => Math.abs(bandwidth);
   scale.step = () => Math.abs(step);
-  scale.padding = (p: number) => { padInner = Math.min(1, p); padOuter = p; rescale(); return scale; };
-  scale.paddingInner = (p: number) => { padInner = Math.min(1, p); rescale(); return scale; };
-  scale.paddingOuter = (p: number) => { padOuter = p; rescale(); return scale; };
-  scale.align = (a: number) => { align = Math.max(0, Math.min(1, a)); rescale(); return scale; };
-  scale.round = (r: boolean) => { round = r; rescale(); return scale; };
+  // d3 getter/setter pairs: the no-arg GETTER form must not corrupt state
+  // (padding() once set padInner = min(1, undefined) = NaN and every
+  // subsequent scale(v) returned NaN — found by the bar-chart-race port).
+  scale.padding = ((p?: number) => {
+    if (p === undefined) return padInner;
+    padInner = Math.min(1, p); padOuter = p; rescale(); return scale;
+  }) as ScaleBand["padding"];
+  scale.paddingInner = ((p?: number) => {
+    if (p === undefined) return padInner;
+    padInner = Math.min(1, p); rescale(); return scale;
+  }) as ScaleBand["paddingInner"];
+  scale.paddingOuter = ((p?: number) => {
+    if (p === undefined) return padOuter;
+    padOuter = p; rescale(); return scale;
+  }) as ScaleBand["paddingOuter"];
+  scale.align = ((a?: number) => {
+    if (a === undefined) return align;
+    align = Math.max(0, Math.min(1, a)); rescale(); return scale;
+  }) as ScaleBand["align"];
+  scale.round = ((r?: boolean) => {
+    if (r === undefined) return round;
+    round = r; rescale(); return scale;
+  }) as ScaleBand["round"];
   scale.copy = () => {
     const c = scaleBand(dom, [r0, r1]).paddingInner(padInner).paddingOuter(padOuter).align(align).round(round);
     return c;
@@ -374,9 +397,10 @@ export function scaleBand(domain?: Iterable<any>, range?: [number, number]): Sca
 export function scalePoint(domain?: Iterable<any>, range?: [number, number]): ScaleBand {
   const s = scaleBand(domain, range);
   s.paddingInner(1);
-  const origPadding = s.padding;
-  s.padding = (p: number) => { s.paddingOuter(p); return s; };
-  void origPadding;
+  s.padding = ((p?: number) => {
+    if (p === undefined) return s.paddingOuter() as unknown as number;
+    s.paddingOuter(p); return s;
+  }) as ScaleBand["padding"];
   return s;
 }
 

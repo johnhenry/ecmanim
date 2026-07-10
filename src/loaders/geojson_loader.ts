@@ -208,8 +208,23 @@ export function loadGeoJSON(textOrObject: string | object, options: GeoJSONOptio
         // Normalize winding for nonzero fills: exterior CCW, holes CW.
         const ccw = signedArea(ring) > 0;
         if ((ringIdx === 0) !== ccw) ring.reverse();
+        // VMobject.points is a CUBIC BEZIER chain (anchor, handle, handle,
+        // anchor, ...) — pushing raw ring vertices made every 3rd vertex a
+        // curve HANDLE, so polygons rendered as rounded petals with gaps
+        // (found by the D3 choropleth port). Emit straight-line curves:
+        // each edge as anchor + two collinear handles + anchor.
         mob.subpathStarts.push(mob.points.length);
-        for (const [x, y] of ring) mob.points.push([x, y, 0]);
+        const closed = [...ring, ring[0]];
+        for (let i = 0; i + 1 < closed.length; i++) {
+          const [ax, ay] = closed[i];
+          const [bx, by] = closed[i + 1];
+          const a: number[] = [ax, ay, 0];
+          const b: number[] = [bx, by, 0];
+          const h1: number[] = [ax + (bx - ax) / 3, ay + (by - ay) / 3, 0];
+          const h2: number[] = [ax + (2 * (bx - ax)) / 3, ay + (2 * (by - ay)) / 3, 0];
+          if (i === 0) mob.points.push(a);
+          mob.points.push(h1, h2, b);
+        }
       });
       if (!mob.points.length) continue;
       mob._straightPath = true;
