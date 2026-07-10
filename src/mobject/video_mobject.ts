@@ -110,6 +110,15 @@ export class VideoMobject extends ImageMobject {
   play(): this { this.paused = false; return this; }
   pause(): this { this.paused = true; return this; }
 
+  /** Jump playback to `t` seconds into the clip (clip-relative, before
+   *  start/end trimming is applied) and show that frame immediately. */
+  seek(t: number): this {
+    this._elapsed = t;
+    const frame = this.provider.frameAt(this.sourceTime());
+    if (frame) this.setImage(frame);
+    return this;
+  }
+
   /** Total playing duration of the selected span at the current rate (seconds). */
   get playDuration(): number {
     return Math.max(0, (this.end - this.start)) / (this.playbackRate || 1);

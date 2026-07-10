@@ -12,6 +12,7 @@
 //   - Tex                 : text mode (upright prose wrapped in \text{...}).
 
 import { VMobject, VGroup } from "./VMobject.ts";
+import { TransformMatchingTex } from "../animation/transform_matching.ts";
 import { Color, WHITE } from "../core/color.ts";
 import { parsePathToSubpaths } from "./svg_path.ts";
 import type { ColorLike } from "../core/types.ts";
@@ -818,4 +819,61 @@ function toTextMode(tex: string): string {
   }
   if (buf.length) out.push(inMath ? buf : wrapProse(buf));
   return out.join("");
+}
+
+// ---------------------------------------------------------------------------
+// matchTex — Motion Canvas parity (MC6): MC's `Latex.tex(newStr, duration)`
+// animates a LaTeX string in place, treating `{{...}}` as match groups. Here
+// the `{{...}}` groups become substringsToIsolate on a fresh MathTex and the
+// morph is a TransformMatchingTex. Play the returned animation, then keep
+// using `anim.target` (the old mobject is replaced on screen by the match).
+// ---------------------------------------------------------------------------
+
+/** Parse MC-style `{{group}}` markers: returns the tex with markers stripped
+ *  plus the list of isolated group strings. */
+export function parseTexGroups(tex: string): { tex: string; isolate: string[] } {
+  const isolate: string[] = [];
+  const stripped = tex.replace(/\{\{(.*?)\}\}/g, (_m, inner: string) => {
+    const t = inner.trim();
+    if (t.length) isolate.push(t);
+    return inner;
+  });
+  return { tex: stripped, isolate };
+}
+
+export interface MatchTexResult {
+  animation: TransformMatchingTex;
+  target: MathTex;
+}
+
+/**
+ * Build the target MathTex for `newTexString` (with `{{...}}` groups
+ * isolated, MC-style) and a TransformMatchingTex morphing `old` into it.
+ * Extra isolate keys and the old mobject's isolate list are honored so
+ * shared substrings pair up. Usage:
+ *
+ * ```ts
+ * const { animation, target } = matchTex(eq, "{{a^2}} + {{b^2}} = c^2");
+ * await scene.play(animation);   // `target` is now on screen
+ * ```
+ */
+export function matchTex(
+  old: MathTex,
+  newTexString: string,
+  config: MathTexConfig & { keyMap?: Record<string, string>; runTime?: number } = {},
+): MatchTexResult {
+  const { keyMap, runTime, ...texConfig } = config as any;
+  const parsed = parseTexGroups(newTexString);
+  const target = new MathTex(parsed.tex, {
+    ...texConfig,
+    substringsToIsolate: [
+      ...parsed.isolate,
+      ...(texConfig.substringsToIsolate ?? []),
+      ...old.substringsToIsolate,
+    ],
+  });
+  // Keep the new expression where the old one sits (MC edits in place).
+  target.moveTo(old.getCenter());
+  const animation = new TransformMatchingTex(old, target, { keyMap, runTime });
+  return { animation, target };
 }

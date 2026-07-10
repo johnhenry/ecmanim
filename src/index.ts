@@ -64,7 +64,10 @@ export {
 } from "./mobject/text_shaping.ts";
 export type { TextShapingBackend, GlyphRunEntry, GlyphRunResult, BuildGlyphRunOptions } from "./mobject/text_shaping.ts";
 export { parsePathToSubpaths, subpathsToVMobject } from "./mobject/svg_path.ts";
-export { MathTex, Tex, SingleStringMathTex, texToVGroup, initMathTex, texToSVG, glyphsFromDomSvg } from "./mobject/mathtex.ts";
+export { MathTex, Tex, SingleStringMathTex, texToVGroup, initMathTex, texToSVG, glyphsFromDomSvg, matchTex, parseTexGroups } from "./mobject/mathtex.ts";
+export type { MatchTexResult } from "./mobject/mathtex.ts";
+export { CubicBezier, QuadBezier, Spline, Path, PolyLine } from "./mobject/curves.ts";
+export type { CubicBezierConfig, QuadBezierConfig, SplineConfig, SplinePoint, PathConfig, PolyLineConfig } from "./mobject/curves.ts";
 export { MathTexImage, mathTexImage } from "./mobject/mathtex_image.ts";
 export { ImageMobject } from "./mobject/image_mobject.ts";
 export { VideoMobject } from "./mobject/video_mobject.ts";

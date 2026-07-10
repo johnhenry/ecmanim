@@ -577,6 +577,32 @@ export class VMobject extends Mobject {
     return bezier(a, b, c, d, t);
   }
 
+  /**
+   * Unit tangent of the outline at proportion `alpha` (Motion Canvas's
+   * `getPointAtPercentage().tangent`): the exact cubic-bezier derivative
+   * B'(t) = 3(1-t)^2(b-a) + 6(1-t)t(c-b) + 3t^2(d-c), normalized.
+   */
+  tangentAtProportion(alpha: number): number[] {
+    const curves: number[][][] = [];
+    for (const sp of this.getSubpaths()) {
+      const nc = Math.floor((sp.length - 1) / 3);
+      for (let i = 0; i < nc; i++) curves.push([sp[3 * i], sp[3 * i + 1], sp[3 * i + 2], sp[3 * i + 3]]);
+    }
+    if (curves.length === 0) return [1, 0, 0];
+    const scaled = Math.max(0, Math.min(1, alpha)) * curves.length;
+    const idx = Math.min(curves.length - 1, Math.floor(scaled));
+    const t = Math.max(1e-6, Math.min(1 - 1e-6, scaled - idx));
+    const [a, b, c, d] = curves[idx];
+    const u = 1 - t;
+    const deriv = [0, 1, 2].map((k) =>
+      3 * u * u * ((b[k] ?? 0) - (a[k] ?? 0)) +
+      6 * u * t * ((c[k] ?? 0) - (b[k] ?? 0)) +
+      3 * t * t * ((d[k] ?? 0) - (c[k] ?? 0)),
+    );
+    const len = Math.hypot(deriv[0], deriv[1], deriv[2]);
+    return len < 1e-12 ? [1, 0, 0] : [deriv[0] / len, deriv[1] / len, deriv[2] / len];
+  }
+
   // --- style --------------------------------------------------------------
   // `opacity`/`width` also accept a trailing options object (in addition to
   // the plain-positional form), matching the config-object convention the

@@ -163,6 +163,12 @@ export class Mobject {
     });
   }
 
+  /** Motion-Canvas parity (findAll): every descendant (including self)
+   *  matching the predicate — e.g. `findAll(view, (m) => m instanceof Text)`. */
+  findAll<T extends Mobject = Mobject>(predicate: (m: Mobject) => boolean): T[] {
+    return this.getFamily().filter(predicate) as T[];
+  }
+
   /** manim parity (replace): move onto `other` and match its size along
    *  `dimToMatch` (0=width, 1=height); `stretch` matches BOTH dimensions. */
   replace(other: Mobject, { dimToMatch = 0, stretch = false }: { dimToMatch?: number; stretch?: boolean } = {}): this {

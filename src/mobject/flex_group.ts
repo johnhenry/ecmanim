@@ -28,6 +28,8 @@ export interface FlexGroupConfig {
    *  (its children's pre-layout extent) when omitted. */
   width?: number;
   height?: number;
+  /** Inner padding on all edges (Motion Canvas Layout `padding`). */
+  padding?: number;
 }
 
 export interface FlexChildConfig {
@@ -119,6 +121,7 @@ export class FlexGroup extends Group {
     if (this.flexConfig.justifyContent) root.setJustifyContent(Yoga[JUSTIFY_KEY[this.flexConfig.justifyContent]]);
     if (this.flexConfig.alignItems) root.setAlignItems(Yoga[ALIGN_KEY[this.flexConfig.alignItems]]);
     if (this.flexConfig.gap != null) root.setGap(Yoga.GUTTER_ALL, this.flexConfig.gap);
+    if (this.flexConfig.padding != null) root.setPadding(Yoga.EDGE_ALL, this.flexConfig.padding);
 
     const nodes = children.map((child) => {
       const node = Yoga.Node.create();

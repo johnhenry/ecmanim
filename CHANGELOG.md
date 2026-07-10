@@ -13,6 +13,17 @@
   `useRandom(seed)` (nextInt/nextFloat/intArray/floatArray/gauss over
   mulberry32), `Scene.nextFrame()` single-frame step, and
   `Scene.logger` (debug/info/warn/error → onLog).
+- **Curve & layout nodes (MC6)**: `CubicBezier({p0..p3})` /
+  `QuadBezier({p0..p2})` single-segment nodes, `Spline({points,
+  smoothness, closed})` with Motion-Canvas-Knot-style per-point explicit
+  handles (`{position, startHandle, endHandle}`, handles relative),
+  `Path({data})` SVG d-string node, and `PolyLine({points, radius,
+  closed})` — a multi-point line with quadratic-fillet rounded corners.
+  Plus `VMobject.tangentAtProportion(alpha)` (exact bezier-derivative
+  unit tangent), FlexGroup container `padding`, `VideoMobject.seek(t)`,
+  `Mobject.findAll(predicate)`, and `matchTex(old, "{{a^2}} + {{b^2}} =
+  c^2")` — MC's `Latex.tex()` in-place morphing where `{{...}}` groups
+  become isolated substrings driving a TransformMatchingTex.
 
 ## 0.2.0 — 2026-07-10
 
