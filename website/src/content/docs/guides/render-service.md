@@ -29,6 +29,12 @@ Docker (coordinator + 2 workers):
 PROJECT_DIR=./my-scenes docker compose up --scale worker=4
 ```
 
+Scene modules in a Dockerized project resolve their imports from the
+PROJECT's own `node_modules` (ESM has no NODE_PATH escape hatch) — so either
+deploy the project with its `node_modules` installed (`ecmanim` as a
+dependency), or keep scenes dependency-free / relative-import only. The
+repo's own scenes work because the repo IS the project.
+
 ## Job JSON
 
 `POST /api/v1/jobs` (bearer `ECMANIM_API_TOKEN`):
