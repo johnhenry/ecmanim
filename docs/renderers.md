@@ -208,3 +208,41 @@ headless/software backend) — not an inherent limitation of live capture, and
 not an ffmpeg/transcode issue. It has since been fixed; if you see it again,
 check that `record()`'s frame handler still throttles to `fps` before
 capturing the next frame.
+
+## Visual effects support matrix
+
+Per-mobject effects (`mob.blur(4)`, `.glow()`, `.dropShadow()`,
+`.colorAdjust()`, `.noise()` — see `src/core/effects.ts`) and camera-level
+frame grading (`new Camera({ frameEffects: [...] })`, adding `vignette`)
+render differently per backend:
+
+| Effect | CanvasRenderer 2D | CanvasRenderer 3D | SVGRenderer | ThreeRenderer |
+|---|---|---|---|---|
+| blur (per-mobject) | ✅ offscreen + `ctx.filter` | overlay text/images and fixed-in-frame only¹ | ✅ `feGaussianBlur` | ❌² |
+| glow | ✅ chained `drop-shadow()` filters³ | overlay/fixed only¹ | ✅ chained `feDropShadow` | ❌² (use bloom) |
+| shadow | ✅ `drop-shadow()` filter³ | overlay/fixed only¹ | ✅ `feDropShadow` | ❌² |
+| colorAdjust | ✅ `ctx.filter` | overlay/fixed only¹ | ✅ `feColorMatrix`/`feComponentTransfer` | ❌² (use LUT) |
+| noise (per-mobject) | ✅ seeded tile, alpha-clipped | overlay/fixed only¹ | best-effort `feTurbulence`⁴ | ❌² (use film pass) |
+| frameEffects grading | ✅ full-frame offscreen composite | ✅ post-blit composite | ✅ body-level `<g filter>` | ❌² (use post-processing) |
+| vignette (frame) | ✅ radial gradient | ✅ | ✅ radial-gradient rect | ❌² |
+| grain (frame noise) | ✅ tiled overlay | ✅ | best-effort⁴ | ❌² (use film pass) |
+
+1. In a 3D scene, z-buffered solid geometry writes raw RGBA with no
+   per-mobject compositing surface — effects on those mobjects are silently
+   skipped (same convention as the Mesh3D skip). Frame-level grading covers
+   the whole 3D frame instead.
+2. ThreeRenderer ignores per-mobject effects entirely — its equivalents are
+   the GPU post-processing pipeline (bloom / LUT color grading / film grain /
+   custom shader passes; see the post-processing section).
+3. Glow and drop shadow deliberately ride CSS `filter: drop-shadow(...)`
+   rather than the `shadowBlur`/`shadowColor` context properties:
+   `@napi-rs/canvas` (Skia) ignores the shadow properties on `drawImage`
+   entirely, while filter `drop-shadow()` behaves identically in Skia and
+   browsers.
+4. SVG noise uses `feTurbulence`, whose fractal character differs from the
+   canvas path's uniform seeded tile — visually similar, not byte-comparable.
+
+Determinism: seeded noise (and every other effect) is a pure function of its
+parameters, so the content-hash partial-movie render cache stays sound.
+Prefer `frameEffects` for scene-wide looks — per-mobject effects cost one
+offscreen composite per affected leaf per frame.

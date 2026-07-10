@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### Added
+- **Visual effects pipeline** (`src/core/effects.ts` + renderer support):
+  per-mobject `blur` / `glow` / `dropShadow` / `colorAdjust`
+  (brightness/contrast/saturate/hueRotate) / seeded `noise`, via a fluent
+  Mobject API (`mob.blur(4).glow(8, "#58C4DD")`), plus camera-level
+  full-frame grading (`new Camera({ frameEffects: [...] })`) adding
+  `vignette` and grain. Support per backend (full matrix in
+  `docs/renderers.md`):
+  - **CanvasRenderer 2D**: offscreen composite with `ctx.filter` -- glow and
+    drop shadow deliberately ride chained CSS `drop-shadow()` filter entries
+    rather than the `shadowBlur`/`shadowColor` context properties, because
+    `@napi-rs/canvas` (Skia) ignores the shadow properties on `drawImage`
+    entirely (verified empirically) while filter `drop-shadow()` behaves
+    identically in Skia and browsers. Noise is a deterministic seeded tile,
+    alpha-clipped -- byte-identical across runs so the content-hash
+    partial-movie cache stays sound.
+  - **CanvasRenderer 3D**: frame grading composites post-blit (sidestepping
+    `putImageData` ignoring `ctx.filter`); per-mobject effects apply to
+    overlay text/images and fixed-in-frame draws (z-buffered solid geometry
+    is documented as skipped).
+  - **SVGRenderer**: native `<filter>` defs (`feGaussianBlur`,
+    `feDropShadow`, `feColorMatrix`/`feComponentTransfer` from shared
+    CSS-spec matrices, chained glow, best-effort `feTurbulence` noise),
+    mirroring the existing gradient-defs pattern;
+    `color-interpolation-filters="sRGB"` keeps results matching canvas.
+  - Effects deep-copy through `copy()`, propagate from groups to leaves
+    (like zIndex), interpolate through `Transform` for same-shape stacks,
+    and animate live via updaters. Node renders get an injectable
+    `createCanvas` factory (also making `cacheStatic()` work under Node,
+    previously a silent no-op there).
+
 ### Fixed
 - **`Circle`/`Arc` silently ignored a `point` config key** (issue #37) --
   only `Dot` respected it, while the correct key, `arcCenter`, wasn't

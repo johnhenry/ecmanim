@@ -58,6 +58,9 @@ export class SVGRenderer {
   // bounding-box + sheenDirection approach, emitted as real SVG markup.
   private _gradientDefs: string[] = [];
   private _gradientCounter = 0;
+  // Per-renderToString-call effect <filter> defs, same lifecycle as gradients.
+  private _filterDefs: string[] = [];
+  private _filterCounter = 0;
 
   constructor(camera: Camera, opts: SVGRenderOptions = {}) {
     this.camera = camera;
@@ -118,6 +121,8 @@ export class SVGRenderer {
 
     this._gradientDefs = [];
     this._gradientCounter = 0;
+    this._filterDefs = [];
+    this._filterCounter = 0;
 
     const body: string[] = [];
     if (this.background != null) {
@@ -155,17 +160,116 @@ export class SVGRenderer {
         // Never throw on a single mobject — skip it and continue.
         el = null;
       }
+      // Per-mobject effects: wrap the element (which may be several paths,
+      // e.g. fill + partial stroke) in one filtered <g> -- native SVG
+      // filters are the idiomatic route, mirroring the gradient-defs pattern.
+      if (el && mob.effects?.length) {
+        const ref = this.filterRef(mob.effects, mob);
+        if (ref) el = `<g filter="${ref}">${el}</g>`;
+      }
       if (el) body.push(el);
     }
 
-    const defs = this._gradientDefs.length ? `<defs>${this._gradientDefs.join("")}</defs>` : "";
+    // Camera-level frame grading: one filtered <g> around the whole body
+    // (background included), then vignette as a trailing radial-gradient rect.
+    let bodyStr = body.join("");
+    const frameFx = (camera as any).frameEffects as any[] | undefined;
+    if (frameFx?.length) {
+      const gradable = frameFx.filter((e) => e.type !== "vignette");
+      const ref = gradable.length ? this.filterRef(gradable, {}) : null;
+      if (ref) bodyStr = `<g filter="${ref}">${bodyStr}</g>`;
+      for (const e of frameFx) {
+        if (e.type === "vignette" && e.strength > 0) {
+          const col = Color.parse(e.color ?? "#000000");
+          const id = `fxvig${this._filterCounter++}`;
+          this._filterDefs.push(
+            `<radialGradient id="${id}" cx="0.5" cy="0.5" r="0.72">` +
+            `<stop offset="45%" stop-color="${col.toHex()}" stop-opacity="0"/>` +
+            `<stop offset="100%" stop-color="${col.toHex()}" stop-opacity="${this.n(Math.max(0, Math.min(1, e.strength)))}"/>` +
+            `</radialGradient>`,
+          );
+          bodyStr += `<rect x="0" y="0" width="${this.n(W)}" height="${this.n(H)}" fill="url(#${id})"/>`;
+        }
+      }
+    }
+
+    const allDefs = [...this._gradientDefs, ...this._filterDefs];
+    const defs = allDefs.length ? `<defs>${allDefs.join("")}</defs>` : "";
     return (
       `<svg xmlns="http://www.w3.org/2000/svg" width="${this.n(W)}" height="${this.n(H)}" ` +
       `viewBox="0 0 ${this.n(W)} ${this.n(H)}">` +
       defs +
-      body.join("") +
+      bodyStr +
       `</svg>`
     );
+  }
+
+  // Build (and register in <defs>) a native SVG <filter> for an effect list,
+  // returning the url(#id) reference. Mirrors gradientFillRef's side-effect
+  // pattern. color-interpolation-filters="sRGB" keeps results matching the
+  // canvas path, which filters in sRGB. Filter region is generous (-40%/180%)
+  // so blur/glow spill isn't clipped for typical radii.
+  private filterRef(effects: any[], mob: any): string | null {
+    const scale = this.camera.strokeScale();
+    const prims: string[] = [];
+    for (const e of effects) {
+      if (e.type === "blur" && e.radius > 0) {
+        prims.push(`<feGaussianBlur stdDeviation="${this.n(e.radius * scale)}"/>`);
+      } else if (e.type === "shadow") {
+        const col = Color.parse(e.color ?? "#000000");
+        prims.push(
+          `<feDropShadow dx="${this.n((e.offsetX ?? 0) * scale)}" dy="${this.n((e.offsetY ?? 0) * scale)}" ` +
+          `stdDeviation="${this.n(e.blur * scale)}" flood-color="${col.toHex()}" flood-opacity="${this.n(col.a ?? 1)}"/>`,
+        );
+      } else if (e.type === "glow") {
+        const strength = Math.max(1, Math.min(4, Math.round(e.strength ?? 2)));
+        const col = Color.parse(e.color ?? mob.strokeColor ?? mob.fillColor ?? "#ffffff");
+        for (let i = 0; i < strength; i++) {
+          prims.push(
+            `<feDropShadow dx="0" dy="0" stdDeviation="${this.n(e.radius * scale)}" ` +
+            `flood-color="${col.toHex()}" flood-opacity="1"/>`,
+          );
+        }
+      } else if (e.type === "colorAdjust") {
+        if (e.saturate != null && e.saturate !== 1) {
+          prims.push(`<feColorMatrix type="saturate" values="${this.n(e.saturate)}"/>`);
+        }
+        if (e.hueRotate != null && e.hueRotate !== 0) {
+          prims.push(`<feColorMatrix type="hueRotate" values="${this.n(e.hueRotate)}"/>`);
+        }
+        if ((e.brightness != null && e.brightness !== 1) || (e.contrast != null && e.contrast !== 1)) {
+          // CSS-filter-spec linear transfer: brightness = slope b; contrast =
+          // slope c with intercept (1-c)/2. Composed: slope b*c, intercept
+          // applied after brightness.
+          const b = e.brightness ?? 1;
+          const c = e.contrast ?? 1;
+          const slope = b * c;
+          const intercept = (1 - c) / 2;
+          const fn = `<feFuncR type="linear" slope="${this.n(slope)}" intercept="${this.n(intercept)}"/>` +
+            `<feFuncG type="linear" slope="${this.n(slope)}" intercept="${this.n(intercept)}"/>` +
+            `<feFuncB type="linear" slope="${this.n(slope)}" intercept="${this.n(intercept)}"/>`;
+          prims.push(`<feComponentTransfer>${fn}</feComponentTransfer>`);
+        }
+      } else if (e.type === "noise" && e.amount > 0) {
+        // Best-effort: feTurbulence's fractal character differs from the
+        // canvas path's uniform tile -- acceptable variance, documented.
+        prims.push(
+          `<feTurbulence type="fractalNoise" baseFrequency="0.9" seed="${this.n(e.seed ?? 0)}" result="fxnoise"/>` +
+          `<feComposite operator="in" in="fxnoise" in2="SourceGraphic" result="fxnoiseclip"/>` +
+          `<feComponentTransfer in="fxnoiseclip" result="fxnoisefade">` +
+          `<feFuncA type="linear" slope="${this.n(Math.max(0, Math.min(1, e.amount)))}"/>` +
+          `</feComponentTransfer>` +
+          `<feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="fxnoisefade"/></feMerge>`,
+        );
+      }
+    }
+    if (!prims.length) return null;
+    const id = `fx${this._filterCounter++}`;
+    this._filterDefs.push(
+      `<filter id="${id}" x="-40%" y="-40%" width="180%" height="180%" ` +
+      `color-interpolation-filters="sRGB">${prims.join("")}</filter>`,
+    );
+    return `url(#${id})`;
   }
 
   /** SceneRenderer-shaped alias for renderToString(), satisfying the shared

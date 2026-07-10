@@ -141,3 +141,16 @@ test("cacheStatic works through the injected factory (was a Node no-op before)",
   assert.equal(created.length, 1, "second render must reuse the cached offscreen");
   assert.equal(ctx.calls.filter((s: string) => s === "drawImage").length, 2, "both renders composite via drawImage");
 });
+
+test("updater-driven effect mutation changes the emitted filter string across frames", () => {
+  const { ctx, renderer } = makeRenderer();
+  const c = new Circle({ radius: 1 }).blur(2);
+  // Simulate two animation frames with an updater growing the blur.
+  renderer.renderScene([c]);
+  (c.effects![0] as any).radius = 9;
+  renderer.renderScene([c]);
+  const filters = ctx.calls.filter((s: string) => s.startsWith("set:filter=blur("));
+  assert.equal(filters.length, 2);
+  assert.notEqual(filters[0], filters[1], "second frame must reflect the mutated radius");
+  assert.ok(filters[1].includes("blur(9px)") || /blur\([\d.]+px\)/.test(filters[1]));
+});

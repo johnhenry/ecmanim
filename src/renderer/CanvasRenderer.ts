@@ -6,6 +6,7 @@ import { partialBezier, bezier } from "../core/math/bezier.ts";
 import { ZBuffer } from "./zbuffer.ts";
 import { Color } from "../core/color.ts";
 import { splitEffects, effectsToCanvasFilter, effectPad, makeNoiseBytes } from "../core/effects.ts";
+import type { FrameEffect } from "../core/effects.ts";
 import type { Vec3, Ctx2D, ColorLike } from "../core/types.ts";
 import type { Mobject } from "../mobject/Mobject.ts";
 
@@ -97,6 +98,14 @@ export class Camera {
   // Mirrors ThreeDCamera.zoom (src/scene/three_d.ts), giving both renderer
   // paths one shared zoom mechanism for pointer-driven camera control.
   declare zoom?: number;
+  // Camera-level full-frame grading (src/core/effects.ts FrameEffect):
+  // blur/colorAdjust/glow/shadow applied to the whole composed frame, plus
+  // vignette and grain (noise). Applied by CanvasRenderer at the end of both
+  // the 2D and 3D paths -- one grade per frame, far cheaper than per-mobject
+  // effects for scene-wide looks. The Camera is the seam because it's the
+  // one object already threaded through every backend (node, browser,
+  // player, studio) without touching Scene.
+  declare frameEffects?: FrameEffect[];
 
   constructor(config: CameraConfig = {}) {
     this.pixelWidth = config.pixelWidth ?? 1920;
@@ -107,6 +116,7 @@ export class Camera {
     this.background = config.background ?? "#000000";
     if (config.zoom != null) this.zoom = config.zoom;
     if (config.superSample != null) this.superSample = config.superSample;
+    if (config.frameEffects != null) this.frameEffects = config.frameEffects;
   }
 
   // World coordinates -> pixel coordinates (y is flipped: world y-up).
@@ -190,8 +200,80 @@ export class CanvasRenderer {
       this.renderScene3D(mobjects);
       return;
     }
+    const frameFx = this.camera.frameEffects;
+    if (frameFx?.length) {
+      // Full-frame grading: compose the whole 2D scene into an offscreen,
+      // then one filtered drawImage + vignette/grain to the main ctx.
+      const off = this._makeOffscreen(this.camera.pixelWidth, this.camera.pixelHeight);
+      if (off) {
+        const savedCtx = this.ctx;
+        this.ctx = off.getContext("2d");
+        try {
+          this.clear();
+          this.renderMobjects(mobjects);
+        } finally {
+          this.ctx = savedCtx;
+        }
+        this._compositeFrame(off, frameFx);
+        return;
+      }
+      // No offscreen backend: draw direct; only the overlay-style frame
+      // effects (vignette/grain) still apply, filter grading is skipped.
+      this.clear();
+      this.renderMobjects(mobjects);
+      this._drawFrameOverlays(frameFx);
+      return;
+    }
     this.clear();
     this.renderMobjects(mobjects);
+  }
+
+  // Composite a fully-drawn frame back to the main ctx with the camera's
+  // frame effects: one filtered drawImage (blur/colorAdjust/glow/shadow),
+  // then vignette and grain drawn on top.
+  private _compositeFrame(sourceCanvas: any, frameFx: any[]): void {
+    const { ctx } = this;
+    const effects = frameFx.filter((e) => e.type !== "vignette");
+    const plan = splitEffects(effects);
+    // Frame-level noise is handled as an overlay (the frame is opaque --
+    // no alpha clipping needed), not via the per-mobject noise pass.
+    const filterStr = this._buildEffectFilter({}, { ...plan, noise: undefined }, this.camera.strokeScale());
+    ctx.save();
+    if (filterStr) (ctx as any).filter = filterStr;
+    ctx.drawImage(sourceCanvas, 0, 0);
+    ctx.restore();
+    this._drawFrameOverlays(frameFx);
+  }
+
+  // Vignette + grain: direct draws over the composed frame -- these need no
+  // offscreen, so they also work on the degraded no-backend path.
+  private _drawFrameOverlays(frameFx: any[]): void {
+    const { ctx, camera } = this;
+    const w = camera.pixelWidth, h = camera.pixelHeight;
+    for (const e of frameFx) {
+      if (e.type === "vignette" && e.strength > 0) {
+        const color = Color.parse(e.color ?? "#000000");
+        const grad = ctx.createRadialGradient(
+          w / 2, h / 2, Math.min(w, h) * 0.35,
+          w / 2, h / 2, Math.hypot(w, h) / 2,
+        );
+        grad.addColorStop(0, color.toRGBAString(0));
+        grad.addColorStop(1, color.toRGBAString(Math.max(0, Math.min(1, e.strength))));
+        ctx.save();
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+      } else if (e.type === "noise" && e.amount > 0) {
+        const tile = this._noiseTile(e.seed ?? 0, e.monochrome ?? true);
+        if (!tile) continue;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, e.amount));
+        for (let ty = 0; ty < h; ty += tile.height) {
+          for (let tx = 0; tx < w; tx += tile.width) ctx.drawImage(tile, tx, ty);
+        }
+        ctx.restore();
+      }
+    }
   }
 
   /** SceneRenderer-shaped alias for renderScene(), satisfying the shared
@@ -236,9 +318,48 @@ export class CanvasRenderer {
     };
     for (const m of mobjects) draw(m, false, false);
 
+    // Per-mobject effects apply only to the 2D-composited layers here
+    // (overlay text/images, fixed-in-frame draws) -- the z-buffered solid
+    // geometry writes raw RGBA with no per-mobject compositing surface, so
+    // effects on those mobjects are silently skipped (documented; same
+    // silent-skip convention as Mesh3D above).
+    const drawOverlays = () => {
+      for (const m of overlay) {
+        if (m.effects?.length) this._drawWithEffects(m);
+        else if (m._isImage) this.drawImage(m);
+        else this.drawText(m);
+      }
+      for (const { mob, fixedInFrame } of fixed) this._drawFixed(mob, fixedInFrame);
+    };
+
+    const frameFx = camera.frameEffects;
+    if (frameFx?.length) {
+      // Full-frame grading: blit the z-buffer into an offscreen, draw the
+      // overlays INTO it (so grading covers them too), then one filtered
+      // composite. This also sidesteps the spec quirk that putImageData
+      // ignores ctx.filter -- the filter rides the final drawImage instead.
+      const off = this._makeOffscreen(camera.pixelWidth, camera.pixelHeight);
+      if (off) {
+        const offCtx = off.getContext("2d");
+        this._zb.blitTo(offCtx);
+        const savedCtx = this.ctx;
+        this.ctx = offCtx;
+        try {
+          drawOverlays();
+        } finally {
+          this.ctx = savedCtx;
+        }
+        this._compositeFrame(off, frameFx);
+        return;
+      }
+      this._zb.blitTo(ctx);
+      drawOverlays();
+      this._drawFrameOverlays(frameFx);
+      return;
+    }
+
     this._zb.blitTo(ctx);
-    for (const m of overlay) m._isImage ? this.drawImage(m) : this.drawText(m);
-    for (const { mob, fixedInFrame } of fixed) this._drawFixed(mob, fixedInFrame);
+    drawOverlays();
   }
 
   // Draw a mobject that ignores (fixed-in-frame) or partially ignores
