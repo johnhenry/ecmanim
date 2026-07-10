@@ -65,6 +65,42 @@
   the outgoing mobjects leave the scene when the transition ends.
   `Direction` const (Left/Right/Top/Bottom = the edge incoming enters
   from) and a no-op `finishScene()` marker so MC ports read line-for-line.
+- **Motion-Canvas parity suite** (`examples/motion-canvas-parity/`): all 40
+  reference scenes from the MC docs + examples repo (committed in `ref/`)
+  ported line-for-line into 25 rendered demos — including the animated MC
+  LOGO (CompositeGroup mask stack) and the SIGNALS network showcase — with
+  a PORTING.md convention map (px()/pxLen() coordinate bridge, JSX →
+  constructors, generators → async construct).
+- CSS named colors in `Color.parse` ("lightseagreen" used to silently
+  parse as BLACK); checked after the plugin registry so registered palette
+  names keep winning.
+
+### Fixed (found by the MC port wave — demos-as-test-harness)
+- **Partial-movie cache collisions within a single render**: play-segment
+  hashes now fingerprint tween CONTENT (`TweenChain` props+targets,
+  `tween(cb)` closure source, family paint) and wait-segment hashes are
+  FAMILY-DEEP (per-leaf position/fill/opacity/strokeEnd) — containers used
+  to hash as `Group:0`, so equal-length holds replayed each other's frames.
+- `tweenSignal(sig, 1, 2).to(0, 2)` — raw (non-object) `.to()` values now
+  tween the signal instead of silently holding.
+- `fill`/`stroke` tweens walk the whole family (vector Text/Code glyphs
+  live in submobjects; tweening only the container changed nothing).
+- Tween `rotation`/`scale` tracking persists on the mobject across chains
+  (loops re-creating chains used to accumulate drift).
+- `rotateCamera`/`resetCamera` interpolate the frame PARAMETRICALLY
+  (center/size/roll via `CameraFrameTween`) — the old point-lerp collapsed
+  the viewport through its center on a 180° roll.
+- `matchTex`/`code.edit` animations now fulfil their replace contract:
+  after the morph the old mobject and loose FadeIn parts leave the scene
+  and the real target is added (no more stale glyph pile-ups when
+  chaining).
+- FlexGroup disables Yoga's integer "pixel" rounding (pointScaleFactor 0):
+  world-unit layouts (~0.1–10) used to quantize to a 0.5-unit grid.
+
+### Known limitations (documented, not fixed)
+- `ImageMobject` rotation: the canvas renderer draws images into the
+  axis-aligned bounding box of their points, so a rotated image renders as
+  a stretch, not a turn.
 
 ## 0.2.0 — 2026-07-10
 

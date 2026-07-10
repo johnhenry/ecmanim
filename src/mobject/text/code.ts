@@ -440,6 +440,13 @@ export class Code extends VGroup {
       target.shift(V.sub(myUL, itsUL));
       const animation = this.diffTo(target);
       animation.runTime = duration;
+      // Same scene-cleanup contract as matchTex: after the morph, remove
+      // this Code and the loose target tokens the child FadeIns introduced,
+      // and add the real `target` (geometries coincide at alpha 1).
+      const introduced = animation.getMobjectsToIntroduce();
+      const self = this;
+      (animation as any).getMobjectsToRemove = () => [...introduced, self];
+      (animation as any).introduced = target;
       return { animation, target, before } as CodeEditResult & { before: string };
     };
   }

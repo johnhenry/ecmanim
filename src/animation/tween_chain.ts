@@ -78,8 +78,23 @@ function mobjectAdapter(mob: any): TweenAdapter {
     y: (v) => mob.setY(v),
     position: (v) => mob.moveTo(v),
     opacity: (v) => (typeof mob.setOpacity === "function" ? mob.setOpacity(v) : (mob.opacity = v)),
-    fill: (v) => (typeof mob.setFill === "function" ? mob.setFill(v, mob.fillOpacity ?? 1) : (mob.fillColor = Color.parse(v))),
-    stroke: (v) => (typeof mob.setStroke === "function" ? mob.setStroke(v) : (mob.strokeColor = Color.parse(v))),
+    // Color writers walk the WHOLE family: vector Text/Code/VGroup keep
+    // their drawable glyphs in submobjects, and the renderer paints leaves
+    // -- setting only the container's fillColor tweens nothing visible.
+    fill: (v) => {
+      const fam = typeof mob.getFamily === "function" ? mob.getFamily() : [mob];
+      for (const m of fam) {
+        if (typeof m.setFill === "function") m.setFill(v, m.fillOpacity ?? 1);
+        else m.fillColor = Color.parse(v);
+      }
+    },
+    stroke: (v) => {
+      const fam = typeof mob.getFamily === "function" ? mob.getFamily() : [mob];
+      for (const m of fam) {
+        if (typeof m.setStroke === "function") m.setStroke(v);
+        else m.strokeColor = Color.parse(v);
+      }
+    },
     fillOpacity: (v) => (mob.fillOpacity = v),
     strokeWidth: (v) => (mob.strokeWidth = v),
     width: (v) => { const w = mob.getWidth(); if (w > 1e-12) mob.stretch(v / w, 0); },
@@ -137,10 +152,15 @@ export class TweenChain extends Animation {
     this.adapter = adapter;
   }
 
-  /** Append a tween segment toward `target` over `duration` seconds. */
-  to(target: State, duration: number, ease: Ease = smooth): this {
-    for (const k of Object.keys(target)) this.props.add(k);
-    this.segments.push({ target, duration, ease });
+  /** Append a tween segment toward `target` over `duration` seconds. A raw
+   *  (non-object) target is sugar for `{ value }` — the signal-adapter prop
+   *  — so `tweenSignal(sig, 1, 2).to(0, 2)` works like MC's signal chains. */
+  to(target: State | number | string, duration: number, ease: Ease = smooth): this {
+    const t: State = (target !== null && typeof target === "object")
+      ? target as State
+      : { value: target };
+    for (const k of Object.keys(t)) this.props.add(k);
+    this.segments.push({ target: t, duration, ease });
     this.runTime = this.totalDuration();
     return this;
   }
@@ -161,6 +181,17 @@ export class TweenChain extends Animation {
 
   private totalDuration(): number {
     return this.segments.reduce((s, seg) => s + seg.duration, 0) || 1e-6;
+  }
+
+  /** Content fingerprint for Scene.hashAnimations: two chains over the same
+   *  mobject with the same runTime but different props/targets must hash
+   *  differently (an `end` tween is not a `fillOpacity` tween). */
+  _hashExtra(): string {
+    return this.segments.map((seg) => {
+      const t = seg.target === null ? "hold" : seg.target === "BACK" ? "back"
+        : Object.entries(seg.target).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(",");
+      return `${t}@${seg.duration}`;
+    }).join("|");
   }
 
   setup(): void {
@@ -231,6 +262,12 @@ export function tween(duration: number, cb: (t: number) => void, ease: Ease = li
   const anim = new (class extends Animation {
     interpolateMobject(alpha: number): void {
       cb(alpha);
+    }
+    /** Closure-driven: the callback SOURCE is the only stable content
+     *  identity the partial-movie cache can use (deterministic across
+     *  re-runs, distinguishes different callbacks of equal duration). */
+    _hashExtra(): string {
+      return String(cb);
     }
   })(placeholder, { runTime: duration, rateFunc: ease });
   return anim;

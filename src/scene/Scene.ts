@@ -266,7 +266,16 @@ export class Scene {
       const geom = firstPt && lastPt
         ? `${firstPt.map(r).join(",")}~${lastPt.map(r).join(",")}`
         : "";
-      parts.push(`${cls}:${npts}:${fam.length}:${geom}:${a?.runTime ?? ""}`);
+      // Content the geometry can't see: tween targets, closure sources, and
+      // paint. Two equal-duration chains over the same mobject differ only
+      // here (an `end` tween vs a `fillOpacity` tween; two different
+      // tween(cb) closures) -- without this they collided and the cache
+      // replayed the wrong segment WITHIN a single fresh render.
+      const extra = typeof a?._hashExtra === "function" ? a._hashExtra() : "";
+      const paint = fam.length
+        ? `${fam[0]?.fillColor?.toHex?.() ?? ""}${fam[fam.length - 1]?.fillColor?.toHex?.() ?? ""}`
+        : "";
+      parts.push(`${cls}:${npts}:${fam.length}:${geom}:${paint}:${extra}:${a?.runTime ?? ""}`);
     }
     return fnv1a(parts.join("|"));
   }
@@ -463,10 +472,27 @@ export class Scene {
 
     const playIndex = this.playCount++;
     const startFrame = this.frameCount;
-    // A wait's content depends on the visible mobjects + duration; include a
-    // point-count fingerprint so a changed scene invalidates the cached hold.
-    const fp = this.mobjects.map((m: any) =>
-      `${m?.constructor?.name ?? "m"}:${Array.isArray(m?.points) ? m.points.length : 0}`).join(",");
+    // A wait's content depends on the visible mobjects + duration. The
+    // fingerprint must be FAMILY-DEEP: containers (Group/VGroup/Code/
+    // MathTex) hold all drawable state in submobjects and have no own
+    // points, so a top-level-only fingerprint hashed every hold over them
+    // identically -- later holds replayed the first hold's cached frames
+    // within a single render. Include per-leaf position + paint + opacity.
+    const fp = this.mobjects.map((m: any) => {
+      const fam: any[] = typeof m?.getFamily === "function" ? m.getFamily() : [m];
+      let npts = 0;
+      const bits: string[] = [];
+      for (const f of fam) {
+        npts += Array.isArray(f?.points) ? f.points.length : 0;
+        const c = typeof f?.getCenter === "function" && f.points?.length ? f.getCenter() : [0, 0, 0];
+        bits.push(
+          `${Math.round(c[0] * 1000)},${Math.round(c[1] * 1000)},` +
+          `${f?.fillColor?.toHex?.() ?? ""},${Math.round((f?.opacity ?? 1) * 1000)},` +
+          `${Math.round((f?.strokeEnd ?? 1) * 1000)}`,
+        );
+      }
+      return `${m?.constructor?.name ?? "m"}:${npts}:${fnv1a(bits.join(";"))}`;
+    }).join(",");
     const hash = this.hashAnimations([{ constructor: { name: "Wait" }, runTime: duration, mobject: { points: [], submobjects: [] } }], `wait:${duration}:${fp}`);
     const directive = this.onSegment?.({ index: playIndex, kind: "wait", hash, startFrame });
     const skip = !!directive?.skip;

@@ -875,5 +875,15 @@ export function matchTex(
   // Keep the new expression where the old one sits (MC edits in place).
   target.moveTo(old.getCenter());
   const animation = new TransformMatchingTex(old, target, { keyMap, runTime });
+  // Fulfill the "old is replaced by target" contract for real: after the
+  // morph, drop the old mobject AND the loose target parts the child
+  // FadeIns introduced, and put the actual `target` on the scene (their
+  // geometries coincide at alpha 1, so the swap is invisible). Without
+  // this, chaining morphs animated an off-screen mobject while stale
+  // glyphs piled up -- the cleanup gotcha diffTo()'s doc comment warns
+  // about, now handled inside the wrapper.
+  const introduced = animation.getMobjectsToIntroduce();
+  (animation as any).getMobjectsToRemove = () => [...introduced, old];
+  (animation as any).introduced = target;
   return { animation, target };
 }

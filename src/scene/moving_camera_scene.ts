@@ -10,7 +10,7 @@ import { Rectangle } from "../mobject/geometry.ts";
 import type { Camera } from "../renderer/CanvasRenderer.ts";
 import type { Mobject } from "../mobject/Mobject.ts";
 import * as V from "../core/math/vector.ts";
-import { ApplyMethod } from "../animation/Animation.ts";
+import { ApplyMethod, Animation } from "../animation/Animation.ts";
 import type { AnimationConfig } from "../animation/Animation.ts";
 
 /**
@@ -59,6 +59,73 @@ export class ScreenRectangle extends Rectangle {
 export class FullScreenRectangle extends ScreenRectangle {
   constructor(config: { [key: string]: any } = {}) {
     super({ height: 8, width: 14.222222222222221, ...config });
+  }
+}
+
+// Camera-viewport params derivable from (and rebuildable into) the frame
+// Rectangle's corner geometry.
+interface FrameParams {
+  center: number[];
+  width: number;
+  height: number;
+  roll: number;
+}
+
+// Read the current viewport params off the frame rect's corners (the same
+// derivation the renderer's preRender() uses).
+function readFrameParams(frame: Rectangle): FrameParams {
+  const sp = frame.getSubpaths()[0] ?? [];
+  const center = frame.getCenter();
+  if (sp.length < 13) {
+    return { center, width: frame.getWidth(), height: frame.getHeight(), roll: 0 };
+  }
+  const c0 = sp[0], c1 = sp[3], c2 = sp[6];
+  let roll = Math.atan2(c1[1] - c0[1], c1[0] - c0[0]) - Math.PI;
+  roll = ((roll % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  if (roll > Math.PI) roll -= 2 * Math.PI;
+  return {
+    center,
+    width: Math.hypot(c1[0] - c0[0], c1[1] - c0[1]),
+    height: Math.hypot(c2[0] - c1[0], c2[1] - c1[1]),
+    roll,
+  };
+}
+
+/**
+ * Tween the camera frame PARAMETRICALLY (center/width/height/roll) instead
+ * of point-lerping it: a straight lerp between two rotations collapses the
+ * rect through its center midway (a 180-degree roll momentarily has
+ * frameWidth 0 and the view degenerates). Each tick rebuilds the rect from
+ * the interpolated params, so the viewport stays a proper rectangle all
+ * the way through.
+ */
+export class CameraFrameTween extends Animation {
+  private target: Partial<FrameParams>;
+  private from!: FrameParams;
+
+  constructor(frame: Rectangle, target: Partial<FrameParams>, config: AnimationConfig = {}) {
+    super(frame, config);
+    this.target = target;
+  }
+
+  begin(): this {
+    this.from = readFrameParams(this.mobject);
+    return super.begin();
+  }
+
+  interpolateMobject(alpha: number): void {
+    const f = this.from;
+    const t = { ...f, ...this.target };
+    const lerp = (a: number, b: number) => a + (b - a) * alpha;
+    const w = lerp(f.width, t.width);
+    const h = lerp(f.height, t.height);
+    const roll = lerp(f.roll, t.roll);
+    const cx = lerp(f.center[0], t.center[0]);
+    const cy = lerp(f.center[1], t.center[1]);
+    const rect = new Rectangle({ width: w, height: h, strokeWidth: 0, fillOpacity: 0 });
+    if (roll !== 0) rect.rotate(roll);
+    rect.moveTo([cx, cy, f.center[2] ?? 0]);
+    this.mobject.points = rect.points;
   }
 }
 
@@ -126,9 +193,8 @@ export class MovingCameraScene extends Scene {
    */
   async rotateCamera(angle: number, config: AnimationConfig = {}): Promise<this> {
     const frame = this.getFrame();
-    const anim = new ApplyMethod(frame, function (this: any): void {
-      this.rotate(angle);
-    });
+    const roll = readFrameParams(frame).roll + angle;
+    const anim = new CameraFrameTween(frame, { roll });
     if (config.runTime != null) anim.runTime = config.runTime;
     if (config.rateFunc != null) anim.rateFunc = config.rateFunc;
     await this.play(anim);
@@ -144,20 +210,8 @@ export class MovingCameraScene extends Scene {
     const init = this._initialFrameState;
     const frame = this.getFrame();
     if (!init) return this;
-    // Current roll, derived the same way the renderer does (first-edge angle
-    // vs the Rectangle's rest -x direction) so the un-rotation is exact.
-    const sp = frame.getSubpaths()[0];
-    let roll = sp && sp.length >= 4
-      ? Math.atan2(sp[3][1] - sp[0][1], sp[3][0] - sp[0][0]) - Math.PI
-      : 0;
-    // Same (-pi, pi] normalization the renderer's preRender() applies.
-    roll = ((roll % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-    if (roll > Math.PI) roll -= 2 * Math.PI;
-    const anim = new ApplyMethod(frame, function (this: any): void {
-      if (roll !== 0) this.rotate(-roll);
-      this.setWidth(init.width, true);
-      this.setHeight(init.height, true);
-      this.moveTo(init.center);
+    const anim = new CameraFrameTween(frame, {
+      center: [...init.center], width: init.width, height: init.height, roll: 0,
     });
     if (config.runTime != null) anim.runTime = config.runTime;
     if (config.rateFunc != null) anim.rateFunc = config.rateFunc;

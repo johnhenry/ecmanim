@@ -69,6 +69,8 @@ export function isYogaLoaded(): boolean {
   return _yoga != null;
 }
 
+let _yogaConfig: any = null;
+
 async function loadYogaOnce(): Promise<any> {
   if (_yoga) return _yoga;
   // yoga-layout resolves its own WASM at import time (top-level await inside
@@ -76,7 +78,21 @@ async function loadYogaOnce(): Promise<any> {
   // graceful-degrade pattern elsewhere in this codebase.
   const mod = await import("yoga-layout");
   _yoga = mod.default;
+  // Yoga rounds computed layout to whole "pixels" by default
+  // (pointScaleFactor 1) -- catastrophic for WORLD-unit inputs (~0.1-10):
+  // children snapped to 0.5-unit grid spacing and gaps vanished. Disable
+  // rounding; ecmanim's coordinates are continuous.
+  try {
+    _yogaConfig = _yoga.Config.create();
+    _yogaConfig.setPointScaleFactor(0);
+  } catch {
+    _yogaConfig = null; // older yoga-layout: fall back to default rounding
+  }
   return _yoga;
+}
+
+function makeNode(Yoga: any): any {
+  return _yogaConfig ? Yoga.Node.create(_yogaConfig) : Yoga.Node.create();
 }
 
 export class FlexGroup extends Group {
@@ -114,7 +130,7 @@ export class FlexGroup extends Group {
     const originX = center[0] - width / 2;
     const originY = center[1] + height / 2;
 
-    const root = Yoga.Node.create();
+    const root = makeNode(Yoga);
     root.setWidth(width);
     root.setHeight(height);
     root.setFlexDirection(Yoga[DIRECTION_KEY[this.flexConfig.direction ?? "row"]]);
@@ -124,7 +140,7 @@ export class FlexGroup extends Group {
     if (this.flexConfig.padding != null) root.setPadding(Yoga.EDGE_ALL, this.flexConfig.padding);
 
     const nodes = children.map((child) => {
-      const node = Yoga.Node.create();
+      const node = makeNode(Yoga);
       const cfg = this._childConfig.get(child) ?? {};
       node.setWidth(cfg.flexBasis ?? child.getWidth());
       node.setHeight(child.getHeight());
