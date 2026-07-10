@@ -238,6 +238,10 @@ export { NeuralNetworkMobject } from "./mobject/neural_network.ts";
 // --- Mermaid campaign (v0.6.0) -------------------------------------------------
 export { loadMermaid, renderMermaidSvg, DiagramMobject } from "./loaders/mermaid_loader.ts";
 export type { MermaidLoadConfig, MermaidRenderConfig, MermaidDiagramType } from "./loaders/mermaid_loader.ts";
+export { revealDiagram, DiagramReveal, parseEdgeEndpoints } from "./animation/diagram_reveal.ts";
+export type { DiagramRevealConfig } from "./animation/diagram_reveal.ts";
+export { diffDiagrams, DiagramDiff } from "./animation/diagram_diff.ts";
+export type { DiagramDiffConfig } from "./animation/diagram_diff.ts";
 export type { NeuralNetworkConfig, ForwardPassConfig } from "./mobject/neural_network.ts";
 export type { DataJoinConfig, DataJoinResult } from "./animation/data_join.ts";
 export type { FbmOptions } from "./core/noise.ts";
