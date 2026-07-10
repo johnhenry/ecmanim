@@ -103,8 +103,11 @@ export function vmobjectToLottieJSON(mob: VMobject | VGroup, opts: LottieExportO
   };
 }
 
-/** Import a Lottie animation's first shape layer into a VMobject. */
-export function loadLottie(json: any, scale = 100): VMobject {
+/** Import a Lottie animation's shape layers as STATIC VMobjects (no
+ *  animation — first-frame geometry only). For the real player, use
+ *  `loadLottie` from src/mobject/lottie_mobject.ts, which supersedes the
+ *  old `loadLottie` name this function carried before v0.7.0. */
+export function loadLottieShapes(json: any, scale = 100): VMobject {
   const layers = json?.layers ?? [];
   const group = new VGroup();
   for (const layer of layers) {

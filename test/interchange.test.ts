@@ -5,7 +5,7 @@ import {
   rationalTime, rtSeconds, sceneToOtio, toOtioJSON, fromOtioJSON, sceneToOtioString,
 } from "../src/interchange/otio.ts";
 import {
-  vmobjectToLottieShapes, lottieShapesToVMobject, vmobjectToLottieJSON, loadLottie,
+  vmobjectToLottieShapes, lottieShapesToVMobject, vmobjectToLottieJSON, loadLottieShapes,
 } from "../src/interchange/lottie.ts";
 import { Square, RegularPolygon } from "../src/mobject/geometry.ts";
 
@@ -80,7 +80,7 @@ test("VMobject → Lottie shapes → VMobject round-trips anchor geometry", () =
   void origAnchors;
 });
 
-test("vmobjectToLottieJSON produces a valid-looking Lottie doc; loadLottie imports it", () => {
+test("vmobjectToLottieJSON produces a valid-looking Lottie doc; loadLottieShapes imports it", () => {
   const poly = new RegularPolygon(6, { radius: 1.5 });
   const doc = vmobjectToLottieJSON(poly, { width: 400, height: 400, fps: 30 });
   assert.equal(doc.v, "5.7.0");
@@ -89,7 +89,7 @@ test("vmobjectToLottieJSON produces a valid-looking Lottie doc; loadLottie impor
   assert.equal(doc.layers[0].ty, 4);
   assert.ok(doc.layers[0].shapes.some((s: any) => s.ty === "sh"));
   assert.doesNotThrow(() => JSON.parse(JSON.stringify(doc)));
-  const mob: any = loadLottie(doc, 100);
+  const mob: any = loadLottieShapes(doc, 100);
   assert.ok((mob.points?.length ?? 0) > 0 || mob.submobjects?.length > 0);
 });
 

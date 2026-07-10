@@ -242,6 +242,10 @@ export { revealDiagram, DiagramReveal, parseEdgeEndpoints } from "./animation/di
 export type { DiagramRevealConfig } from "./animation/diagram_reveal.ts";
 export { diffDiagrams, DiagramDiff } from "./animation/diagram_diff.ts";
 export type { DiagramDiffConfig } from "./animation/diagram_diff.ts";
+
+// --- Lottie campaign (v0.7.0) ---------------------------------------------------
+export { loadLottie, LottieMobject } from "./mobject/lottie_mobject.ts";
+export { parseLottie, cubicBezierEase, evalProperty } from "./loaders/lottie_loader.ts";
 export type { NeuralNetworkConfig, ForwardPassConfig } from "./mobject/neural_network.ts";
 export type { DataJoinConfig, DataJoinResult } from "./animation/data_join.ts";
 export type { FbmOptions } from "./core/noise.ts";
@@ -301,7 +305,7 @@ export {
 } from "./interchange/otio.ts";
 export type { RationalTime, TimeRange, OtioClip, OtioTrack, OtioTimeline } from "./interchange/otio.ts";
 export {
-  vmobjectToLottieShapes, lottieShapeToPoints, lottieShapesToVMobject, vmobjectToLottieJSON, loadLottie,
+  vmobjectToLottieShapes, lottieShapeToPoints, lottieShapesToVMobject, vmobjectToLottieJSON, loadLottieShapes,
 } from "./interchange/lottie.ts";
 export type { LottieShape, LottieExportOptions } from "./interchange/lottie.ts";
 
