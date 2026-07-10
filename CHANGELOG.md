@@ -3,6 +3,36 @@
 ## Unreleased
 
 ### Added
+- **Render service** (`ecmanim/service` + CLI `serve`/`worker`/`submit`/
+  `jobs`): a coordinator (node:http control plane over a SQLite job queue
+  with atomic claims, lease-based liveness, attempt-capped retries, SSE
+  events, artifact storage) and pull-model workers (long-poll claim →
+  render → streamed upload → complete, heartbeats throughout). Jobs
+  reference scene files inside the deployed `--project` directory ONLY
+  (validated at submit and re-verified with realpath at both ends —
+  a render service executes construct(), so code-over-HTTP is rejected by
+  design); per-job variation goes through schema-validated `params`.
+  Render options are an allowlist. Signed webhooks (Stripe-scheme
+  `X-Ecmanim-Signature`, durable deliveries, 0s/10s/60s/5m/30m backoff);
+  bearer-token auth; workers keep a stable per-scene cache so identical
+  resubmits reuse content-addressed partials (`progress.reusedPartials`).
+  Ships with a Dockerfile + docker-compose (coordinator + scalable
+  workers), a ghcr publish workflow, optional S3 artifact storage
+  (`createS3Storage`, lazy AWS SDK, presigned-GET redirects), and a
+  full-stack E2E test (real render → ffprobe-verified mp4 → exactly-once
+  verified webhook). `parallelism.mode: "segments"` (cross-machine
+  single-job fan-out) is reserved in the protocol for v2. Guide:
+  `website/src/content/docs/guides/render-service.md`.
+
+- **Scene params reach construct()** (and a found cache bug fixed):
+  `render()`'s schema-validated `params` now actually flow into the scene
+  (`scene.params`, or the 2nd argument of a bare construct function) —
+  previously they only influenced metadata. `renderParallel()` gains
+  `params` too (it silently ignored them), and BOTH paths salt the
+  partial-movie cache key with a stable params hash — two personalized
+  renders sharing an output directory can no longer collide on cached
+  partials. Both renderers also gain `onProgress` callbacks, and the CLI
+  gains `render --workers N`.
 - **SVGMobject id preservation**: elements keep their SVG `id` (children of a
   `<g id>` inherit it), addressable via `svg.byId("sun")` (returns a live
   `VGroup` of the rendered mobjects — style/transform mutations apply in

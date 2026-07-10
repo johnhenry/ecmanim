@@ -1,0 +1,38 @@
+# ecmanim render service: one coordinator + two workers sharing the deployed
+# project (read-only). Scale workers with:
+#   docker compose up --scale worker=4
+#
+# Set the tokens in the environment (or a .env file beside this compose file):
+#   ECMANIM_API_TOKEN=...     # clients (submit/list/download)
+#   ECMANIM_WORKER_TOKEN=...  # workers
+# Point PROJECT_DIR at your scene project (default ./examples).
+
+services:
+  coordinator:
+    build: .
+    command: ["serve", "--project", "/project", "--host", "0.0.0.0", "--data", "/data"]
+    ports:
+      - "5990:5990"
+    environment:
+      ECMANIM_API_TOKEN: ${ECMANIM_API_TOKEN:-}
+      ECMANIM_WORKER_TOKEN: ${ECMANIM_WORKER_TOKEN:-}
+    volumes:
+      - ${PROJECT_DIR:-./examples}:/project:ro
+      - service-data:/data
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["worker", "--coordinator", "http://coordinator:5990", "--project", "/project"]
+    environment:
+      ECMANIM_WORKER_TOKEN: ${ECMANIM_WORKER_TOKEN:-}
+    volumes:
+      - ${PROJECT_DIR:-./examples}:/project:ro
+    depends_on:
+      - coordinator
+    deploy:
+      replicas: 2
+    restart: unless-stopped
+
+volumes:
+  service-data:

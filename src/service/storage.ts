@@ -14,7 +14,7 @@ export interface StorageDriver {
   getStream(key: string): Readable;
   /** Byte size of a stored artifact. */
   size(key: string): number;
-  exists(key: string): boolean;
+  exists(key: string): boolean | Promise<boolean>;
   /** Local filesystem path when the driver has one (FsStorage); S3-style
    *  drivers return null and the coordinator redirects instead. */
   localPath(key: string): string | null;

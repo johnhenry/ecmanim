@@ -1,0 +1,17 @@
+node_modules
+dist
+media
+out
+.git
+.github
+website
+docs
+test
+examples/**/out
+examples/**/media
+**/*.mp4
+**/*.webm
+**/*.mov
+**/partial
+.ecmanim-service
+*.log

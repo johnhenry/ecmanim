@@ -201,7 +201,7 @@ export async function startCoordinator(options: CoordinatorOptions): Promise<Coo
           if (action === "complete" && req.method === "POST") {
             const body = await readJsonBody(req);
             const key = body?.artifactKey;
-            if (typeof key !== "string" || !storage.exists(key)) return sendJson(res, 400, { error: "artifactKey missing or not uploaded" });
+            if (typeof key !== "string" || !(await Promise.resolve(storage.exists(key)))) return sendJson(res, 400, { error: "artifactKey missing or not uploaded" });
             if (!store.completeJob(jobId, workerId, key)) return sendJson(res, 409, { error: "claim not held" });
             onTerminal(store.getJob(jobId)!);
             return sendJson(res, 200, { ok: true });
@@ -263,6 +263,12 @@ export async function startCoordinator(options: CoordinatorOptions): Promise<Coo
           if (!job) return sendJson(res, 404, { error: "no such job" });
           if (jm[2]) {
             if (job.state !== "done" || !job.artifactKey) return sendJson(res, 409, { error: `job is ${job.state}` });
+            // Presigning drivers (S3) redirect instead of proxying bytes.
+            if (typeof (storage as any).presignGetUrl === "function") {
+              const url = await (storage as any).presignGetUrl(job.artifactKey);
+              res.writeHead(302, { location: url });
+              return res.end();
+            }
             const local = storage.localPath(job.artifactKey);
             if (local == null) return sendJson(res, 404, { error: "artifact not locally available" });
             const ext = artifactExtension(job.spec);

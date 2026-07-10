@@ -23,6 +23,7 @@ const NODE_ONLY_ALLOWLIST = new Set([
   "service/coordinator.ts",
   "service/queue.ts",
   "service/storage.ts",
+  "service/storage-s3.ts",
   "service/webhooks.ts",
   "service/worker.ts",
 ]);

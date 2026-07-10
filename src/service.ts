@@ -13,5 +13,7 @@ export { SqliteJobStore, MemoryJobStore, DEFAULT_MAX_ATTEMPTS } from "./service/
 export type { JobStore, WebhookDelivery } from "./service/queue.ts";
 export { FsStorage } from "./service/storage.ts";
 export type { StorageDriver } from "./service/storage.ts";
+export { createS3Storage } from "./service/storage-s3.ts";
+export type { S3StorageOptions, S3StorageDriver } from "./service/storage-s3.ts";
 export { signWebhook, verifyWebhook, WebhookScheduler, SIGNATURE_HEADER, WEBHOOK_BACKOFF_MS } from "./service/webhooks.ts";
 export type { WebhookTransport, WebhookSchedulerOptions } from "./service/webhooks.ts";
