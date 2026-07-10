@@ -31,7 +31,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import os from "node:os";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { Camera, CanvasRenderer } from "./renderer/CanvasRenderer.ts";
-import { Scene, computeRenderConfigHash } from "./scene/Scene.ts";
+import { Scene, computeRenderConfigHash, computeParamsHash } from "./scene/Scene.ts";
 import { QUALITIES } from "./index.ts";
 import { QUALITY_PRESETS, config as manimConfig } from "./_config.ts";
 import { discoverSegments, partitionSegments } from "./scene/render_frame.ts";
@@ -54,7 +54,24 @@ export interface RenderParallelOptions {
   verbose?: boolean;
   disableCaching?: boolean;
   camera?: any;
+  /** Scene params, validated by the scene's static `schema` (same contract
+   *  as node.ts render()). Salted into the partial cache key — personalized
+   *  renders never collide on cached partials. */
+  params?: Record<string, any>;
+  /** Progress at worker-completion granularity (segmentsTotal known upfront
+   *  from the discovery manifest). */
+  onProgress?: (p: { segmentsDone: number; segmentsTotal: number }) => void;
   [k: string]: any;
+}
+
+// Resolve schema-validated params (undefined when the caller didn't opt in).
+// Deterministic: workers and the concat step must derive the SAME resolved
+// params (and thus the same cache salt) independently.
+async function resolveParams(target: any, params: Record<string, any> | undefined): Promise<Record<string, any> | undefined> {
+  if (params === undefined) return undefined;
+  const { resolveSceneMetadata } = await import("./scene/scene_params.ts");
+  const resolved = await resolveSceneMetadata(target, params);
+  return resolved.params;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,24 +154,26 @@ async function loadCanvasMod(): Promise<any> {
 // Build a Scene instance from a loaded target, wiring the CanvasRenderer, and
 // returning both the scene and a function that runs its construct(). Shared by
 // discovery (via render_frame) and the worker render path.
-function buildScene(target: any, opts: { fps: number; camera: Camera }): { scene: Scene; run: () => Promise<void> } {
-  const { fps, camera } = opts;
+function buildScene(target: any, opts: { fps: number; camera: Camera; params?: Record<string, any> }): { scene: Scene; run: () => Promise<void> } {
+  const { fps, camera, params } = opts;
   if (target instanceof Scene) {
     const scene = target;
     (scene as any).fps = fps;
     (scene as any).camera = camera;
+    if (params !== undefined) scene.params = params;
     return { scene, run: async () => { await scene.render(); } };
   }
   if (typeof target === "function" && target.prototype instanceof Scene) {
-    const scene = new target({ fps, camera });
+    const scene = new target({ fps, camera, ...(params !== undefined ? { params } : {}) });
     return { scene, run: async () => { await scene.render(); } };
   }
   if (typeof target === "function") {
-    // Plain construct(scene) function.
-    const scene = new Scene({ fps, camera });
-    return { scene, run: async () => { await target(scene); scene.finalizeSections(); } };
+    // Plain construct(scene) function; params ride as the 2nd argument
+    // (same contract as orchestrate.ts's runConstruct props).
+    const scene = new Scene({ fps, camera, ...(params !== undefined ? { params } : {}) });
+    return { scene, run: async () => { await target(scene, params); scene.finalizeSections(); } };
   }
-  const scene = new Scene({ fps, camera });
+  const scene = new Scene({ fps, camera, ...(params !== undefined ? { params } : {}) });
   return { scene, run: async () => { await scene.render(); } };
 }
 
@@ -194,15 +213,16 @@ export async function renderSegmentRange(
   // concat step below) so partials stay byte-compatible/shareable between them
   // -- this file has no `transparent` option (not supported here), so it's
   // always false, matching node.ts's default when unset.
+  const target = await loadSceneTarget(sceneModulePath, sceneExportName);
+  const params = await resolveParams(target, options.params);
   const cacheConfigHash = computeRenderConfigHash({
     pixelWidth: r.pixelWidth, pixelHeight: r.pixelHeight, background: r.background, fps: r.fps, camera,
-  });
+  }) + (params !== undefined ? `-p${computeParamsHash(params)}` : "");
   const keyed = (h: string) => `${h}-${cacheConfigHash}`;
 
   mkdirSync(r.cacheDir, { recursive: true });
 
-  const target = await loadSceneTarget(sceneModulePath, sceneExportName);
-  const { scene, run } = buildScene(target, { fps: r.fps, camera });
+  const { scene, run } = buildScene(target, { fps: r.fps, camera, ...(params !== undefined ? { params } : {}) });
 
   // Per-segment PNG buffers for assigned segments only. Segments NOT assigned to
   // this worker are skipped (frames not emitted) but time still advances — so the
@@ -278,17 +298,19 @@ export async function renderParallel(
   const concatCamera = options.camera instanceof Camera
     ? options.camera
     : new Camera({ pixelWidth: r.pixelWidth, pixelHeight: r.pixelHeight, background: r.background, ...options.camera });
+  // 1. Discover the segment manifest cheaply (no PNG encoding). Params must
+  //    participate in discovery too — they can change the segment structure.
+  const target = await loadSceneTarget(sceneModulePath, sceneExportName);
+  const params = await resolveParams(target, options.params);
   const cacheConfigHash = computeRenderConfigHash({
     pixelWidth: r.pixelWidth, pixelHeight: r.pixelHeight, background: r.background, fps: r.fps, camera: concatCamera,
-  });
+  }) + (params !== undefined ? `-p${computeParamsHash(params)}` : "");
   const keyed = (h: string) => `${h}-${cacheConfigHash}`;
 
-  // 1. Discover the segment manifest cheaply (no PNG encoding).
-  const target = await loadSceneTarget(sceneModulePath, sceneExportName);
   const manifest: SegmentRecord[] = await discoverSegments(
     () => target,
     undefined,
-    { fps: r.fps, camera: options.camera },
+    { fps: r.fps, camera: options.camera, ...(params !== undefined ? { params } : {}) },
   );
   const segmentCount = manifest.length;
 
@@ -312,6 +334,8 @@ export async function renderParallel(
       verbose: options.verbose,
       vectorFont: options.vectorFont,
       fonts: options.fonts,
+      params: options.params,
+      onProgress: options.onProgress,
     });
     return {
       outPath: res.output ?? r.outPath,
@@ -330,6 +354,9 @@ export async function renderParallel(
   const thisFileUrl = new URL(import.meta.url);
   const workerOpts: RenderParallelOptions = {
     ...options,
+    // Functions can't structured-clone into workerData; progress is reported
+    // from the main thread as workers finish.
+    onProgress: undefined,
     outPath: r.outPath,
     // Force these into the worker so its resolveRender matches ours exactly.
     fps: r.fps,
@@ -347,6 +374,8 @@ export async function renderParallel(
     .filter((j) => j.indices.length > 0);
 
   let totalReused = 0;
+  let segmentsDone = 0;
+  options.onProgress?.({ segmentsDone: 0, segmentsTotal: segmentCount });
   const results = await Promise.all(jobs.map(({ indices }) =>
     new Promise<{ encoded: number; reused: number }>((res, rej) => {
       const w = new Worker(thisFileUrl, {
@@ -359,8 +388,11 @@ export async function renderParallel(
         },
       });
       w.once("message", (m: any) => {
-        if (m && m.ok) res({ encoded: m.encoded ?? 0, reused: m.reused ?? 0 });
-        else rej(new Error(m?.error ?? "worker failed"));
+        if (m && m.ok) {
+          segmentsDone += indices.length;
+          options.onProgress?.({ segmentsDone, segmentsTotal: segmentCount });
+          res({ encoded: m.encoded ?? 0, reused: m.reused ?? 0 });
+        } else rej(new Error(m?.error ?? "worker failed"));
       });
       w.once("error", rej);
       w.once("exit", (code) => { if (code !== 0) rej(new Error(`worker exited ${code}`)); });

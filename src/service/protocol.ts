@@ -65,8 +65,11 @@ export interface JobSpec {
 }
 
 export interface JobProgress {
-  segmentsDone: number;
-  segmentsTotal: number;
+  segmentsDone?: number;
+  /** -1 when unknown (sequential renders discover segments as they go). */
+  segmentsTotal?: number;
+  /** Partial-movie segments reused from the content-addressed cache. */
+  reusedPartials?: number;
 }
 
 export interface JobRecord {

@@ -8,7 +8,7 @@ import { dirname, resolve, join, basename } from "node:path";
 import { Camera, CanvasRenderer } from "./renderer/CanvasRenderer.ts";
 import { autoRegisterFonts, loadVectorFont, loadVectorFontSync, resolveFontPath } from "./renderer/fonts-node.ts";
 import { registerNodeFontAutoLoader } from "./mobject/vectorized_text.ts";
-import { Scene, computeRenderConfigHash } from "./scene/Scene.ts";
+import { Scene, computeRenderConfigHash, computeParamsHash } from "./scene/Scene.ts";
 import { makeScene, runConstruct } from "./scene/orchestrate.ts";
 import { QUALITIES } from "./index.ts";
 import { config as manimConfig, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
@@ -82,6 +82,10 @@ export interface RenderOptions {
   saveSections?: boolean;             // write per-section videos + JSON index
   // Remotion-style additions:
   params?: Record<string, any>;       // scene params validated by a static `schema`
+  /** Coarse render progress: fires at each play()/wait segment boundary.
+   *  segmentsTotal is -1 on this sequential path (segments are discovered
+   *  during construct); renderParallel reports a real total. */
+  onProgress?: (p: { segmentsDone: number; segmentsTotal: number }) => void;
   // Phase 1 additions:
   style?: string;                     // named STYLE_PRESET (e.g. "3b1b-dark")
   aspectRatio?: string;               // named ASPECT_RATIO_PRESET (e.g. "9:16") or "W:H"
@@ -126,10 +130,12 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   // static/instance `calculateMetadata` computing fps/width/height. Its result
   // is a fallback layer below explicit options.
   let sceneMeta: any = {};
+  let resolvedParams: Record<string, any> | undefined;
   try {
     const { resolveSceneMetadata } = await import("./scene/scene_params.ts");
     const resolved = await resolveSceneMetadata(sceneOrConstruct, options.params);
     sceneMeta = resolved.metadata ?? {};
+    if (options.params !== undefined) resolvedParams = resolved.params;
   } catch (e) {
     if (options.params !== undefined) throw e; // opted in -> surface schema errors
   }
@@ -215,12 +221,16 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   // cache key needs this salt, or a render-config change (background,
   // resolution, 3D camera settings) can silently reuse a stale cached
   // segment from a run with different config.
-  const cacheConfigHash = computeRenderConfigHash({ pixelWidth, pixelHeight, background, fps, transparent, camera });
+  // Params-salted: two personalized renders sharing an output directory must
+  // never collide on cached partials (see computeParamsHash's doc comment).
+  const cacheConfigHash =
+    computeRenderConfigHash({ pixelWidth, pixelHeight, background, fps, transparent, camera }) +
+    (resolvedParams !== undefined ? `-p${computeParamsHash(resolvedParams)}` : "");
 
   const outPath = resolve(output);
   mkdirSync(dirname(outPath), { recursive: true });
 
-  const scene = makeScene(sceneOrConstruct, { fps, camera });
+  const scene = makeScene(sceneOrConstruct, { fps, camera, ...(resolvedParams !== undefined ? { params: resolvedParams } : {}) });
 
   // Range filtering (from/upto animation number). When active we mark segments
   // outside the range as skipped so their frames are not emitted, but time still
@@ -244,7 +254,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
         captured = canvas.toBuffer("image/png");
       }
     };
-    await runConstruct(sceneOrConstruct, scene);
+    await runConstruct(sceneOrConstruct, scene, resolvedParams);
     if (captured == null) { renderer.renderScene(scene.mobjects); captured = canvas.toBuffer("image/png"); }
     writeFileSync(pngPath, captured);
     if (verbose) console.log(`✓ Saved still frame ${target} -> ${pngPath}`);
@@ -261,7 +271,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       const svgPath = outPath.replace(/\.[^.]+$/, "") + ".svg";
       let last = "";
       scene.frameHandler = async (mobjects: any[]) => { last = svg.renderToString(mobjects); };
-      await runConstruct(sceneOrConstruct, scene);
+      await runConstruct(sceneOrConstruct, scene, resolvedParams);
       if (!last) last = svg.renderToString(scene.mobjects);
       writeFileSync(svgPath, last);
       if (verbose) console.log(`✓ Saved SVG -> ${svgPath}`);
@@ -274,7 +284,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       emitted++;
       writeFileSync(`${frameDir}/frame_${String(frameIndex++).padStart(6, "0")}.svg`, svg.renderToString(mobjects));
     };
-    await runConstruct(sceneOrConstruct, scene);
+    await runConstruct(sceneOrConstruct, scene, resolvedParams);
     if (verbose) console.log(`✓ Wrote ${emitted} SVG frames -> ${frameDir}`);
     return { output: frameDir, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections };
   }
@@ -288,7 +298,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       renderer.renderScene(mobjects);
       lastBuf = canvas.toBuffer("image/png");
     };
-    await runConstruct(sceneOrConstruct, scene);
+    await runConstruct(sceneOrConstruct, scene, resolvedParams);
     if (!lastBuf) { renderer.renderScene(scene.mobjects); lastBuf = canvas.toBuffer("image/png"); }
     writeFileSync(pngPath, lastBuf);
     if (verbose) console.log(`✓ Saved last frame -> ${pngPath}`);
@@ -306,7 +316,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       emitted++;
       writeFileSync(`${frameDir}/frame_${String(frameIndex++).padStart(6, "0")}.png`, canvas.toBuffer("image/png"));
     };
-    await runConstruct(sceneOrConstruct, scene);
+    await runConstruct(sceneOrConstruct, scene, resolvedParams);
     if (emitted === 0) await scene.emitFrame();
     if (verbose) console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${frameDir}`);
     return { output: frameDir, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections };
@@ -337,6 +347,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     scene.onSegment = (rec: { index: number; kind: string; hash: string; startFrame: number }) => {
       activeSeg = rec.index;
       segHashes.set(rec.index, rec.hash);
+      options.onProgress?.({ segmentsDone: rec.index, segmentsTotal: -1 });
       const partialPath = join(cacheDir, `${keyed(rec.hash)}.${partialExt}`);
       const reuse = existsSync(partialPath);
       if (reuse) reusedPartials++;
@@ -350,7 +361,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       segMap.get(activeSeg)!.push(buf);
     };
 
-    await runConstruct(sceneOrConstruct, scene);
+    await runConstruct(sceneOrConstruct, scene, resolvedParams);
     if (emitted === 0 && segMap.size === 0) { await scene.emitFrame(); }
 
     // Encode any freshly-rendered segments to their partial files.
@@ -406,7 +417,7 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     await writeToStream(ffmpeg.stdin, buf);
   };
 
-  await runConstruct(sceneOrConstruct, scene);
+  await runConstruct(sceneOrConstruct, scene, resolvedParams);
   if (emitted === 0) await scene.emitFrame();
 
   ffmpeg.stdin.end();

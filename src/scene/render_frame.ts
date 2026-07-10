@@ -41,9 +41,9 @@ export interface SegmentRecord {
 export async function discoverSegments(
   makeScene: () => any,
   sceneInput: any,
-  opts: { fps: number; camera?: any },
+  opts: { fps: number; camera?: any; params?: Record<string, any> },
 ): Promise<SegmentRecord[]> {
-  const { fps, camera } = opts;
+  const { fps, camera, params } = opts;
   const target = makeScene();
 
   // Build the Scene instance. We support three shapes, matching node.ts's
@@ -57,16 +57,17 @@ export async function discoverSegments(
     // Re-apply fps/camera in case the caller built it without them.
     if (typeof fps === "number") (scene as any).fps = fps;
     if (camera) (scene as any).camera = camera;
+    if (params !== undefined) scene.params = params;
   } else if (typeof target === "function" && !(target.prototype instanceof Scene)) {
     // Plain construct function.
-    scene = new Scene({ fps, camera: camera ?? null });
+    scene = new Scene({ fps, camera: camera ?? null, ...(params !== undefined ? { params } : {}) });
     plainConstruct = target as (s: Scene) => any;
   } else if (typeof target === "function" && target.prototype instanceof Scene) {
     // A Scene subclass constructor.
-    scene = new (target as any)({ fps, camera: camera ?? null });
+    scene = new (target as any)({ fps, camera: camera ?? null, ...(params !== undefined ? { params } : {}) });
   } else {
     // Fallback: treat as an object we can't construct — wrap in a bare Scene.
-    scene = new Scene({ fps, camera: camera ?? null });
+    scene = new Scene({ fps, camera: camera ?? null, ...(params !== undefined ? { params } : {}) });
   }
 
   // Skip every segment (no frames emitted) and make frame emission a no-op. The
@@ -76,7 +77,7 @@ export async function discoverSegments(
   scene.onSegment = () => ({ skip: true });
 
   if (plainConstruct) {
-    await plainConstruct(scene);
+    await (plainConstruct as any)(scene, params);
     scene.finalizeSections();
   } else {
     await scene.render();

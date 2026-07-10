@@ -58,6 +58,8 @@ export interface SceneConfig {
   fps?: number;
   camera?: Camera | null;
   frameHandler?: FrameHandler;
+  /** Schema-validated scene params (Remotion-style) — see scene_params.ts. */
+  params?: Record<string, any>;
   [key: string]: any;
 }
 
@@ -65,6 +67,10 @@ export class Scene {
   mobjects: Mobject[];
   fps: number;
   camera: Camera | null;
+  /** Schema-validated params this render was invoked with (default {}).
+   *  Scene subclasses read them in construct() via `this.params`; bare
+   *  construct functions receive them as a 2nd argument instead. */
+  params: Record<string, any>;
   frameHandler: FrameHandler;
   time: number;
   frameCount: number;
@@ -101,6 +107,7 @@ export class Scene {
     this.mobjects = [];
     this.fps = config.fps ?? 30;
     this.camera = config.camera ?? null;
+    this.params = config.params ?? {};
     this.frameHandler = config.frameHandler ?? (async () => {});
     this.time = 0;
     this.frameCount = 0;
@@ -457,4 +464,25 @@ export function computeRenderConfigHash(config: {
     );
   }
   return fnv1a(parts.join("|"));
+}
+
+// JSON.stringify with recursively-sorted object keys, so two params objects
+// with the same contents in different insertion order hash identically.
+function stableStringify(value: any): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",")}}`;
+}
+
+/**
+ * Fingerprint a render's scene params for the partial-segment cache key.
+ * Params change what construct() builds, but hashAnimations() can miss that
+ * (e.g. a param used only in a raster label) — and two personalized renders
+ * writing to the same output directory MUST NOT collide on cached partials.
+ * Shared by node.ts and node-parallel.ts the same way computeRenderConfigHash
+ * is, so parallel and sequential partials stay interchangeable.
+ */
+export function computeParamsHash(params: Record<string, any>): string {
+  return fnv1a(stableStringify(params));
 }

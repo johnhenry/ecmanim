@@ -10,7 +10,8 @@
 // else render(). The render implementation is injectable so the HTTP
 // round-trip tests don't need ffmpeg.
 
-import { createReadStream, mkdtempSync, rmSync, existsSync, realpathSync, statSync } from "node:fs";
+import { createReadStream, mkdirSync, rmSync, existsSync, realpathSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir, hostname } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -25,7 +26,7 @@ export interface RenderContext {
   onProgress(progress: JobProgress): void;
 }
 
-export type RenderImpl = (job: JobRecord, ctx: RenderContext) => Promise<void>;
+export type RenderImpl = (job: JobRecord, ctx: RenderContext) => Promise<void | { reusedPartials?: number }>;
 
 export interface WorkerOptions {
   coordinatorUrl: string;
@@ -38,6 +39,10 @@ export interface WorkerOptions {
   heartbeatMs?: number;
   /** Process one job (or one empty poll) then return — for tests/cron. */
   once?: boolean;
+  /** Stable per-worker render cache root (default: <tmpdir>/ecmanim-worker-
+   *  cache). Jobs for the same scene share it, so an identical resubmit
+   *  reuses content-addressed partial movies instead of re-encoding. */
+  cacheDir?: string;
   renderImpl?: RenderImpl;
   verbose?: boolean;
 }
@@ -47,16 +52,16 @@ const defaultRenderImpl: RenderImpl = async (job, ctx) => {
   const renderOpts: Record<string, any> = { ...(spec.render ?? {}), output: ctx.outputPath, verbose: false };
   const workers = spec.parallelism?.workers ?? spec.render?.workers;
   delete renderOpts.workers;
-  if (spec.parallelism?.mode === "workers" && !spec.params) {
-    // TODO(S4): renderParallel gains `params` support; until then params jobs
-    // take the sequential path below.
+  if (spec.parallelism?.mode === "workers") {
     const { renderParallel } = await import("../node-parallel.ts");
-    await renderParallel(ctx.scenePath, spec.exportName ?? "default", {
+    const res = await renderParallel(ctx.scenePath, spec.exportName ?? "default", {
       ...renderOpts,
       outPath: ctx.outputPath,
       ...(workers ? { workers } : {}),
+      ...(spec.params ? { params: spec.params } : {}),
+      onProgress: (p: any) => ctx.onProgress(p),
     });
-    return;
+    return { reusedPartials: res.reused };
   }
   const { render } = await import("../node.ts");
   const { pathToFileURL } = await import("node:url");
@@ -64,7 +69,12 @@ const defaultRenderImpl: RenderImpl = async (job, ctx) => {
   const exportName = spec.exportName ?? "default";
   const target = mod[exportName] ?? (exportName === "default" ? mod.default : undefined);
   if (target == null) throw new Error(`scene export "${exportName}" not found in ${spec.scene}`);
-  await render(target, { ...renderOpts, ...(spec.params ? { params: spec.params } : {}) });
+  const res: any = await render(target, {
+    ...renderOpts,
+    ...(spec.params ? { params: spec.params } : {}),
+    onProgress: (p: any) => ctx.onProgress(p),
+  });
+  return { reusedPartials: res?.reusedPartials ?? 0 };
 };
 
 export class ServiceWorker {
@@ -116,13 +126,21 @@ export class ServiceWorker {
     }, heartbeatMs);
     beat.unref?.();
 
-    const workDir = mkdtempSync(join(tmpdir(), "ecmanim-job-"));
+    // STABLE per-scene work dir (not a per-job temp dir): render()'s
+    // content-addressed partial cache lives beside the output, so identical
+    // resubmits — or param variants sharing unchanged segments — reuse
+    // partials instead of re-encoding. Param differences can't collide:
+    // partial keys are params-salted (computeParamsHash).
+    const cacheRoot = this.opts.cacheDir ?? join(tmpdir(), "ecmanim-worker-cache");
+    const sceneKey = createHash("sha256").update(`${job.spec.scene}\n${job.spec.exportName ?? "default"}`).digest("hex").slice(0, 16);
+    const workDir = join(cacheRoot, sceneKey);
+    mkdirSync(workDir, { recursive: true });
     try {
       const scenePath = this.scenePath(job);
-      const outputPath = join(workDir, `out.${artifactExtension(job.spec)}`);
+      const outputPath = join(workDir, `out-${job.id}.${artifactExtension(job.spec)}`);
       if (verbose) console.log(`[worker ${this.workerId}] rendering job ${job.id}: ${job.spec.scene}`);
       const renderImpl = this.opts.renderImpl ?? defaultRenderImpl;
-      await renderImpl(job, {
+      const stats = await renderImpl(job, {
         scenePath,
         outputPath,
         onProgress: (progress) => {
@@ -135,6 +153,14 @@ export class ServiceWorker {
         },
       });
       if (!existsSync(outputPath)) throw new Error("render produced no output file");
+      if (stats && typeof stats === "object") {
+        lastProgress = { ...(lastProgress ?? {}), ...stats };
+        await this.api(`/api/v1/worker/jobs/${job.id}/progress`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ progress: lastProgress }),
+        }).catch(() => {});
+      }
 
       // Upload, then complete.
       const filename = `out.${artifactExtension(job.spec)}`;
@@ -161,7 +187,9 @@ export class ServiceWorker {
       }).catch(() => {});
     } finally {
       clearInterval(beat);
-      rmSync(workDir, { recursive: true, force: true });
+      // Keep workDir (it IS the partial cache); drop only this job's output.
+      const out = join(workDir, `out-${job.id}.${artifactExtension(job.spec)}`);
+      rmSync(out, { force: true });
     }
   }
 
