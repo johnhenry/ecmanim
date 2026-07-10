@@ -234,6 +234,10 @@ export { hilbertCurve, lsystem } from "./layout/hilbert.ts";
 export { FourierPath, dftOfPath, samplePath } from "./mobject/fourier_path.ts";
 export type { FourierCoefficient, FourierPathConfig } from "./mobject/fourier_path.ts";
 export { NeuralNetworkMobject } from "./mobject/neural_network.ts";
+
+// --- Mermaid campaign (v0.6.0) -------------------------------------------------
+export { loadMermaid, renderMermaidSvg, DiagramMobject } from "./loaders/mermaid_loader.ts";
+export type { MermaidLoadConfig, MermaidRenderConfig, MermaidDiagramType } from "./loaders/mermaid_loader.ts";
 export type { NeuralNetworkConfig, ForwardPassConfig } from "./mobject/neural_network.ts";
 export type { DataJoinConfig, DataJoinResult } from "./animation/data_join.ts";
 export type { FbmOptions } from "./core/noise.ts";
