@@ -134,6 +134,8 @@ export { SVGRenderer, mobjectsToSVG } from "./renderer/SVGRenderer.ts";
 export type { SVGRenderOptions } from "./renderer/SVGRenderer.ts";
 export { Scene } from "./scene/Scene.ts";
 export type { TaskHandle } from "./scene/Scene.ts";
+export { Direction, slideTransition, fadeTransition, zoomInTransition, finishScene } from "./scene/scene_transitions.ts";
+export type { IncomingContent, ZoomArea } from "./scene/scene_transitions.ts";
 export { isSceneLike, makeScene, runConstruct, sampleSceneAt } from "./scene/orchestrate.ts";
 
 export {

@@ -57,6 +57,14 @@
   dispatches to manim's replace-onto-mobject for Mobject args),
   `code.prepend()`, `code.append()` — identity-preserving in-place
   rebuilds, top-left anchored.
+- **Scene transitions (MC4)**: `slideTransition(scene, Direction.Left,
+  incoming)`, `fadeTransition(scene, incoming)`, `zoomInTransition(scene,
+  {center, width, height}, incoming)` — MC's scene-to-scene transitions in
+  ecmanim's single-scene model: current content is the outgoing "scene",
+  the mobjects you pass (or add in a callback) are the incoming one, and
+  the outgoing mobjects leave the scene when the transition ends.
+  `Direction` const (Left/Right/Top/Bottom = the edge incoming enters
+  from) and a no-op `finishScene()` marker so MC ports read line-for-line.
 
 ## 0.2.0 — 2026-07-10
 
