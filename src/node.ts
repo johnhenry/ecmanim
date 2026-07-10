@@ -532,6 +532,22 @@ export async function imageMobject(src: any, config: any = {}) {
   return new ImageMobject(await loadImage(src), config);
 }
 
+// manim parity: `ImageMobject(np.uint8([[...]]))` — build a drawable bitmap
+// from a raw pixel array (2D grayscale or 3D RGB/RGBA). Returns a canvas
+// usable anywhere a loaded image is (e.g. `new ImageMobject(await
+// imageFromArray(arr))`).
+export async function imageFromArray(array: any): Promise<any> {
+  const { normalizePixelArray } = await import("./core/pixel_array.ts");
+  const { width, height, data } = normalizePixelArray(array);
+  const { createCanvas } = await loadCanvas();
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  const imageData = ctx.createImageData(width, height);
+  imageData.data.set(data);
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
 // Load an SVG file into an SVGMobject (Node: read from disk).
 export async function loadSVG(path: string, config: any = {}) {
   const { readFileSync } = await import("node:fs");

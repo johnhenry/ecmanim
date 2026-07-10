@@ -200,6 +200,42 @@ export class Surface extends VGroup {
     return this;
   }
 
+  /** manim parity (set_style): restyle every face post-construction. */
+  setStyle(style: { fillOpacity?: number; fillColor?: any; strokeColor?: any; strokeWidth?: number; strokeOpacity?: number } = {}): this {
+    for (const f of this.submobjects as Face[]) {
+      if (style.fillOpacity != null) f.fillOpacity = style.fillOpacity;
+      if (style.fillColor != null) f.setFill(style.fillColor);
+      if (style.strokeColor != null) f.setStroke(style.strokeColor);
+      if (style.strokeWidth != null) f.strokeWidth = style.strokeWidth;
+      if (style.strokeOpacity != null) f.strokeOpacity = style.strokeOpacity;
+    }
+    if (style.fillOpacity != null) this.fillOpacity = style.fillOpacity;
+    return this;
+  }
+
+  /** manim parity (set_fill_by_checkerboard): recolor faces in a 2-color
+   *  checker pattern AFTER construction, then re-shade. */
+  setFillByCheckerboard(colorA: any, colorB: any, opts: { opacity?: number } = {}): this {
+    this.checkerboard = [colorA, colorB];
+    // Faces were built i-major over a [nu, nv] grid (see _build) -- recover
+    // (i, j) from the index and repaint each face's shading BASE color.
+    const [, nv] = this.resolution;
+    (this.submobjects as Face[]).forEach((f: Face, idx: number) => {
+      const i = Math.floor(idx / nv);
+      const j = idx % nv;
+      const color = (i + j) % 2 === 0 ? colorA : colorB;
+      f.baseColor = Color.parse(color);
+      f.fillColor = Color.parse(color);
+      if (opts.opacity != null) f.fillOpacity = opts.opacity;
+    });
+    if (opts.opacity != null) this.fillOpacity = opts.opacity;
+    if (this.shade) {
+      this.applyShading(this.lightDirection);
+      if (this.smooth) this.applySmoothShading(this.lightDirection);
+    }
+    return this;
+  }
+
   // Recolor each face by the value of a chosen coordinate (manim's
   // Surface.set_fill_by_value). `colorscale` is a list of colors, or a list of
   // [color, pivotValue] pairs. When pivots are omitted they are spread evenly

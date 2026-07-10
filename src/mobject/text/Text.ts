@@ -97,6 +97,16 @@ function wrapPlainText(text: string, width: number, measure: (line: string) => n
 }
 
 /**
+ * manim parity helper: convert a manim `font_size` (points; manim's default
+ * Text size is 48) to ecmanim world units (default Text fontSize 0.7). So
+ * `fontSizePt(48) === 0.7`, and a port of `Text("hi", font_size=96)` is
+ * `new Text("hi", { fontSize: fontSizePt(96) })`.
+ */
+export function fontSizePt(points: number): number {
+  return points * (0.7 / 48);
+}
+
+/**
  * Estimate a text block's rendered width/height without constructing a
  * mobject — the same formula `RasterText`/`Text` use internally to size
  * themselves before real glyph layout is available. A fast approximation,

@@ -39,6 +39,11 @@ export class ValueTracker extends Mobject {
     return this;
   }
 
+  /** manim parity alias (increment_value). */
+  incrementValue(dv: number): this {
+    return this.increment(dv);
+  }
+
   interpolate(start: ValueTracker, target: ValueTracker, alpha: number): this {
     const a = start.points[0][0];
     const b = target.points[0][0];

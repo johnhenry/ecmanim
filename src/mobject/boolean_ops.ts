@@ -133,10 +133,32 @@ export class _BooleanOps extends VMobject {
   }
 }
 
+
+// manim parity: boolean ops accept a trailing style config
+// (`Intersection(a, b, { color: GREEN, fillOpacity: 0.5 })`). Split it off
+// the varargs (a plain object that isn't a VMobject) and apply after build.
+function splitStyleArg(args: any[]): { mobs: VMobject[]; style: Record<string, any> | null } {
+  if (args.length && args[args.length - 1] && typeof args[args.length - 1] === "object" && !(args[args.length - 1] instanceof VMobject)) {
+    return { mobs: args.slice(0, -1), style: args[args.length - 1] };
+  }
+  return { mobs: args as VMobject[], style: null };
+}
+
+function applyStyleConfig(target: VMobject, style: Record<string, any> | null): void {
+  if (!style) return;
+  if (style.color != null) target.setColor(style.color);
+  if (style.fillColor != null) target.setFill(style.fillColor);
+  if (style.fillOpacity != null) target.fillOpacity = style.fillOpacity;
+  if (style.strokeColor != null) target.setStroke(style.strokeColor);
+  if (style.strokeWidth != null) target.strokeWidth = style.strokeWidth;
+  if (style.strokeOpacity != null) target.strokeOpacity = style.strokeOpacity;
+}
+
 // Union of all input VMobjects (their combined filled area).
 export class Union extends _BooleanOps {
-  constructor(...vmobjects: VMobject[]) {
+  constructor(...args: any[]) {
     super();
+    const { mobs: vmobjects, style } = splitStyleArg(args);
     if (vmobjects.length < 2) {
       throw new Error("At least 2 mobjects are needed for a Union.");
     }
@@ -145,13 +167,15 @@ export class Union extends _BooleanOps {
     const result = requirePC().union(first, ...rest) as MultiPolygon2D;
     this._applyResult(result);
     copyStyle(this, vmobjects[0]);
+    applyStyleConfig(this, style);
   }
 }
 
 // Intersection of all input VMobjects (area common to every input).
 export class Intersection extends _BooleanOps {
-  constructor(...vmobjects: VMobject[]) {
+  constructor(...args: any[]) {
     super();
+    const { mobs: vmobjects, style } = splitStyleArg(args);
     if (vmobjects.length < 2) {
       throw new Error("At least 2 mobjects are needed for an Intersection.");
     }
@@ -160,28 +184,32 @@ export class Intersection extends _BooleanOps {
     const result = requirePC().intersection(first, ...rest) as MultiPolygon2D;
     this._applyResult(result);
     copyStyle(this, vmobjects[0]);
+    applyStyleConfig(this, style);
   }
 }
 
 // Difference: the subject minus each of the clip VMobjects.
 export class Difference extends _BooleanOps {
-  constructor(subject: VMobject, ...clips: VMobject[]) {
+  constructor(subject: VMobject, ...args: any[]) {
     super();
+    const { mobs: clips, style } = splitStyleArg(args);
     if (clips.length < 1) {
       throw new Error("At least 2 mobjects are needed for a Difference.");
     }
     const subjectPoly = this._convertVmobjectToPolygon(subject);
-    const clipPolys = clips.map((v) => this._convertVmobjectToPolygon(v));
+    const clipPolys = clips.map((v: VMobject) => this._convertVmobjectToPolygon(v));
     const result = requirePC().difference(subjectPoly, ...clipPolys) as MultiPolygon2D;
     this._applyResult(result);
     copyStyle(this, subject);
+    applyStyleConfig(this, style);
   }
 }
 
 // Exclusion (symmetric difference / XOR): area in an odd number of inputs.
 export class Exclusion extends _BooleanOps {
-  constructor(...vmobjects: VMobject[]) {
+  constructor(...args: any[]) {
     super();
+    const { mobs: vmobjects, style } = splitStyleArg(args);
     if (vmobjects.length < 2) {
       throw new Error("At least 2 mobjects are needed for an Exclusion.");
     }
@@ -190,5 +218,6 @@ export class Exclusion extends _BooleanOps {
     const result = requirePC().xor(first, ...rest) as MultiPolygon2D;
     this._applyResult(result);
     copyStyle(this, vmobjects[0]);
+    applyStyleConfig(this, style);
   }
 }

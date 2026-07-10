@@ -312,6 +312,16 @@ export class ThreeDScene extends Scene {
   moveLight(pos: number[]): this {
     return this.setCameraLight(pos);
   }
+
+  /** manim parity: `self.renderer.camera.light_source.move_to(p)` — a
+   *  mobject-shaped proxy over setCameraLight, so ports keep their shape:
+   *  `scene.lightSource.moveTo([0, 0, -3])`. */
+  get lightSource(): { moveTo: (pos: number[]) => void; getCenter: () => number[] } {
+    return {
+      moveTo: (pos: number[]) => { this.setCameraLight(pos); },
+      getCenter: () => [...(this.camera.lightSource ?? [0, 0, 5])],
+    };
+  }
   setCameraLight(pos: number[]): this {
     this.camera.lightSource = [pos[0], pos[1], pos[2]];
     const dir = this.camera.getLightDirection();

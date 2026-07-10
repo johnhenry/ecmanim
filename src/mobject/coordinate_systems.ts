@@ -10,6 +10,7 @@ import { MathTex } from "./mathtex.ts";
 import { LinearBase } from "./graphing_scale.ts";
 import type { _ScaleBase } from "./graphing_scale.ts";
 import type { Vec3, ColorLike } from "../core/types.ts";
+import { Color } from "../core/color.ts";
 
 /** A "graph" is a VMobject that carries the function that generated it. */
 type Graphish = VMobject & { underlyingFunction?: (x: number) => number };
@@ -22,6 +23,10 @@ export interface NumberLineConfig {
   color?: ColorLike;
   tickSize?: number;
   includeNumbers?: boolean;
+  /** Show numbers ONLY at these values (implies includeNumbers). */
+  numbersToInclude?: number[];
+  /** Draw these values' ticks twice as long (manim parity). */
+  numbersWithElongatedTicks?: number[];
   includeTip?: boolean;
   fontSize?: number;
   scaling?: _ScaleBase;
@@ -52,6 +57,8 @@ export interface PlotConfig {
 export interface NumberPlaneConfig extends AxesConfig {
   backgroundLineStyle?: {
     color?: ColorLike;
+    /** manim spelling (stroke_color); same as `color`. */
+    strokeColor?: ColorLike;
     strokeWidth?: number;
     strokeOpacity?: number;
     [key: string]: any;
@@ -77,6 +84,10 @@ export class NumberLine extends VGroup {
   includeNumbers: boolean;
   includeTip: boolean;
   fontSize: number;
+  /** manim parity: show numbers ONLY at these values (implies numbers on). */
+  numbersToInclude: number[] | null;
+  /** manim parity: draw these values' ticks 2x long. */
+  numbersWithElongatedTicks: number[] | null;
   unit: number;
   _leftX: number;
   scaling: _ScaleBase;
@@ -101,7 +112,10 @@ export class NumberLine extends VGroup {
     this.length = config.length ?? (this._sMax - this._sMin);
     this.color = (config.color ?? "#FFFFFF") as any;
     this.tickSize = config.tickSize ?? 0.1;
-    this.includeNumbers = config.includeNumbers ?? false;
+    this.numbersToInclude = config.numbersToInclude ?? null;
+    this.numbersWithElongatedTicks = config.numbersWithElongatedTicks ?? null;
+    // numbersToInclude implies numbers on (manim behavior).
+    this.includeNumbers = config.includeNumbers ?? (this.numbersToInclude != null);
     this.includeTip = config.includeTip ?? false;
     this.fontSize = config.fontSize ?? 0.35;
 
@@ -121,13 +135,22 @@ export class NumberLine extends VGroup {
       : new Line(start, end, { color: this.color, strokeColor: this.color });
     this.add(this.axisLine);
 
-    // Tick marks.
+    // Tick marks. Values listed in numbersWithElongatedTicks (and any
+    // extra values from numbersToInclude that fall off the tick grid) get
+    // their own, longer ticks -- manim's x_axis_config parity.
     this.ticks = new VGroup();
-    for (const x of this.getTickRange()) {
+    const eps = 1e-6 * Math.max(1, Math.abs(this.xStep));
+    const elongated = this.numbersWithElongatedTicks ?? [];
+    const tickValues = [...this.getTickRange()];
+    for (const x of elongated) {
+      if (!tickValues.some((t) => Math.abs(t - x) < eps)) tickValues.push(x);
+    }
+    for (const x of tickValues) {
       const p = this.numberToPoint(x);
+      const size = elongated.some((e) => Math.abs(e - x) < eps) ? this.tickSize * 2 : this.tickSize;
       const tick = new Line(
-        [p[0], p[1] - this.tickSize, 0],
-        [p[0], p[1] + this.tickSize, 0],
+        [p[0], p[1] - size, 0],
+        [p[0], p[1] + size, 0],
         { color: this.color, strokeColor: this.color }
       );
       this.ticks.add(tick);
@@ -139,7 +162,8 @@ export class NumberLine extends VGroup {
 
   _addNumbers() {
     this.numbers = new VGroup();
-    for (const x of this.getTickRange()) {
+    const values = this.numbersToInclude ?? this.getTickRange();
+    for (const x of values) {
       const p = this.numberToPoint(x);
       const label = new Text(this._formatNumber(x), {
         fontSize: this.fontSize,
@@ -206,12 +230,15 @@ export class Axes extends VGroup {
     this.yLength = config.yLength ?? (this.yRange[1] - this.yRange[0]);
     this.color = (config.color ?? "#FFFFFF") as any;
     const axisConfig = config.axisConfig ?? {};
+    // manim parity: a top-level `tips` flag toggles arrow tips on both axes
+    // (axis_config.include_tip still wins when explicitly set).
+    const tip = axisConfig.includeTip ?? config.tips ?? false;
 
     this.xAxis = new NumberLine({
       xRange: this.xRange,
       length: this.xLength,
       color: this.color,
-      includeTip: axisConfig.includeTip ?? false,
+      includeTip: tip,
       ...axisConfig,
       ...(config.xAxisConfig ?? {}),
     });
@@ -219,7 +246,7 @@ export class Axes extends VGroup {
       xRange: this.yRange,
       length: this.yLength,
       color: this.color,
-      includeTip: axisConfig.includeTip ?? false,
+      includeTip: tip,
       ...axisConfig,
       ...(config.yAxisConfig ?? {}),
     });
@@ -289,7 +316,11 @@ export class Axes extends VGroup {
     const color = config.color ?? "#FFFF00";
     const start = range[0];
     const stop = range[1];
-    const step = range[2] ?? (stop - start) / 200;
+    // Sampling density: an EXPLICIT step in config.xRange wins; otherwise
+    // sample densely (manim samples per-pixel-ish and smooths). The axis's
+    // own xRange step is a TICK step, not a sampling step -- using it made
+    // plot(sin) a jagged 1-unit polyline (found porting SinAndCosFunctionPlot).
+    const step = config.xRange?.[2] ?? (stop - start) / 200;
     const corners: number[][] = [];
     const domainSamples: Array<[number, number]> = [];
     const eps = 1e-6 * Math.abs(step || 1);
@@ -304,6 +335,12 @@ export class Axes extends VGroup {
     graph.setPointsAsCorners(corners);
     graph.fillOpacity = 0;
     (graph as any).underlyingFunction = fn;
+    // manim parity: plots carry their domain bounds (FollowingGraphCamera
+    // does `axes.i2gp(graph.t_min, graph)`).
+    (graph as any).tMin = start;
+    (graph as any).tMax = stop;
+    (graph as any).t_min = start;
+    (graph as any).t_max = stop;
     // Hidden tag (mirrors the matchId/autoId convention elsewhere) recording
     // the domain-space samples that produced this curve, so
     // reprojectCurve(curve, targetSystem) can rebuild it against a different
@@ -324,12 +361,26 @@ export class Axes extends VGroup {
   }
 
   // Vertical segment from the x-axis up to the graph at data-x.
-  getVerticalLine(x: number, graphOrY: number | ((x: number) => number) | any, config: PlotConfig = {}): Line {
+  getVerticalLine(xOrPoint: number | number[], graphOrY?: number | ((x: number) => number) | any, config: PlotConfig = {}): Line {
+    // manim's primary form is a world POINT (usually from i2gp/c2p):
+    // `ax.get_vertical_line(ax.i2gp(2, curve), color=YELLOW)`. The (x, graph)
+    // form is kept as the ecmanim-native overload.
+    if (Array.isArray(xOrPoint)) {
+      const point = xOrPoint;
+      const cfg = (graphOrY != null && typeof graphOrY === "object" && !(graphOrY as any).underlyingFunction ? graphOrY : config) as PlotConfig;
+      const [xd] = this.pointToCoords(point);
+      const base = this.coordsToPoint(xd, 0);
+      const color = cfg.color ?? this.color;
+      const LineCtor: any = (cfg as any).lineFunc ?? Line;
+      return new LineCtor(base, point, { color, strokeColor: color, ...((cfg as any).lineConfig ?? {}) });
+    }
+    const x = xOrPoint;
     const y = typeof graphOrY === "function"
       ? graphOrY(x)
-      : (graphOrY?.underlyingFunction ? graphOrY.underlyingFunction(x) : graphOrY);
+      : ((graphOrY as any)?.underlyingFunction ? (graphOrY as any).underlyingFunction(x) : graphOrY);
     const color = config.color ?? this.color;
-    return new Line(this.coordsToPoint(x, 0), this.coordsToPoint(x, y), {
+    const LineCtor: any = (config as any).lineFunc ?? Line;
+    return new LineCtor(this.coordsToPoint(x, 0), this.coordsToPoint(x, y as number), {
       color,
       strokeColor: color,
     });
@@ -399,12 +450,12 @@ export class Axes extends VGroup {
   getGraphLabel(
     graph: any,
     label: any,
-    opts: { x?: number; direction?: number[]; buff?: number; color?: ColorLike; dotColor?: ColorLike } = {}
+    opts: { x?: number; xVal?: number; direction?: number[]; buff?: number; color?: ColorLike; dotColor?: ColorLike } = {}
   ): VMobject {
     const lbl = this._mkLabel(label, opts.color);
     const direction = opts.direction ?? V.RIGHT;
     const buff = opts.buff ?? 0.25;
-    let x = opts.x;
+    let x = opts.x ?? opts.xVal; // manim spells it x_val
     if (x == null) {
       // Default near the right end of the graph's x-range.
       x = this.xRange[1] - 0.1 * (this.xRange[1] - this.xRange[0]);
@@ -462,7 +513,7 @@ export class Axes extends VGroup {
   // --- Area under a graph --------------------------------------------------
   getArea(
     graph: any,
-    opts: { xRange?: number[]; color?: ColorLike; opacity?: number; boundedGraph?: any } = {}
+    opts: { xRange?: number[]; color?: ColorLike | ColorLike[]; opacity?: number; boundedGraph?: any } = {}
   ): Polygon {
     const f = this._funcOf(graph);
     const xr = opts.xRange ?? [this.xRange[0], this.xRange[1]];
@@ -477,8 +528,17 @@ export class Axes extends VGroup {
       bottom.push(this.coordsToPoint(x, g ? g(x) : 0));
     }
     const verts = [...top, ...bottom.reverse()];
-    const color = opts.color ?? "#58C4DD";
+    // manim parity: color may be a GRADIENT tuple `(BLUE, GREEN)` -- rendered
+    // via the sheen/gradient fields the renderers already support.
+    // (ColorLike itself admits arrays, so an explicit cast keeps TS honest:
+    // a top-level array here is always a list of color stops.)
+    const colors = Array.isArray(opts.color) ? (opts.color as ColorLike[]) : null;
+    const color = ((colors ? colors[0] : opts.color) ?? "#58C4DD") as ColorLike;
     const poly = new Polygon(verts, { color, fillColor: color, strokeWidth: 0 });
+    if (colors && colors.length > 1) {
+      (poly as any).gradientColors = colors.map((c) => Color.parse(c));
+      (poly as any).sheenDirection = V.RIGHT;
+    }
     poly.fillOpacity = opts.opacity ?? 0.75;
     return poly;
   }
@@ -726,7 +786,8 @@ export class NumberPlane extends Axes {
   constructor(config: NumberPlaneConfig = {}) {
     super(config);
     const bg = config.backgroundLineStyle ?? {};
-    this.bgColor = bg.color ?? "#29ABCA";
+    // manim's key is stroke_color; accept both spellings.
+    this.bgColor = bg.strokeColor ?? bg.color ?? "#29ABCA";
     this.bgStrokeWidth = bg.strokeWidth ?? 1;
     this.bgStrokeOpacity = bg.strokeOpacity ?? 0.3;
 

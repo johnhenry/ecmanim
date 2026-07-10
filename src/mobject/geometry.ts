@@ -124,6 +124,10 @@ export class Line extends VMobject {
   getEnd() { return this.points[this.points.length - 1]; }
   getLength() { return V.distance(this.getStart(), this.getEnd()); }
   getAngle() { return V.angleOf(V.sub(this.getEnd(), this.getStart())); }
+  /** manim parity (get_unit_vector): normalized direction start -> end. */
+  getUnitVector(): number[] {
+    return V.normalize(V.sub(this.getEnd(), this.getStart()));
+  }
 
   putStartAndEndOn(start: number[], end: number[]): this {
     this.setPointsAsCorners([start, end]);

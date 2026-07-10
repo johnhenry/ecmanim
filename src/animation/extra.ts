@@ -249,6 +249,8 @@ export class Rotating extends Animation {
       rateFunc: config.rateFunc ?? rf.linear,
       ...config,
     });
+    // manim parity: Rotating accepts `angle` as well as `radians`.
+    if (config.angle != null && config.radians == null) (config as any).radians = config.angle;
     this.radians = config.radians ?? V.TAU;
     this.axis = config.axis ?? V.OUT;
     this.aboutPoint = config.aboutPoint ?? null;

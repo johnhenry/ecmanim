@@ -101,6 +101,22 @@ export class VMobject extends Mobject {
     return this.addCubicBezier(c1, c2, point);
   }
 
+  /** manim parity (add_points_as_corners): APPEND straight segments through
+   *  `corners` to the existing path — the primitive behind incrementally
+   *  growing traces (PointWithTrace). Starts a path if none exists. */
+  addPointsAsCorners(corners: number[][]): this {
+    if (corners.length === 0) return this;
+    let i = 0;
+    if (this.points.length === 0) {
+      this.subpathStarts = [0];
+      this.points.push(V.clone(corners[0]));
+      this._straightPath = true;
+      i = 1;
+    }
+    for (; i < corners.length; i++) this.addLineTo(corners[i]);
+    return this;
+  }
+
   // Build an open/closed path through a list of corner points using straight
   // bezier segments. This is how Line / Polygon / Rectangle are defined.
   setPointsAsCorners(corners: number[][]): this {
@@ -436,6 +452,27 @@ export class VMobject extends Mobject {
     });
     vm.pointwiseBecomePartial(this, a, b);
     return vm;
+  }
+
+  /**
+   * manim parity (prepare_for_nonlinear_transform): subdivide every curve in
+   * the family so applyFunction() can BEND paths instead of just moving
+   * their endpoints -- a 2-anchor Line stays straight under a nonlinear map
+   * until it has interior anchors to displace. Call before
+   * `mob.animate.applyFunction(...)` on grids/lines (OpeningManim's warped
+   * NumberPlane is the canonical use).
+   */
+  prepareForNonlinearTransform(nCurves = 50): this {
+    for (const mob of this.getFamily()) {
+      const vm = mob as any;
+      if (typeof vm.insertNCurves === "function" && vm.points?.length) {
+        const current = vm.getNumCurves();
+        if (current > 0 && current < nCurves) vm.insertNCurves(nCurves - current);
+        // Subdivided paths are no longer straight-segment-only.
+        vm._straightPath = false;
+      }
+    }
+    return this;
   }
 
   // --- curve insertion ----------------------------------------------------

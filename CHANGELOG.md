@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Manim-gallery parity APIs (M1-M4)** — everything needed to port the 27
+  examples on docs.manim.community 1:1: `NumberLine`
+  `numbersToInclude`/`numbersWithElongatedTicks` (threaded through Axes
+  x/yAxisConfig), Axes-level `tips`, dense default `plot()` sampling (the
+  axis TICK step is no longer used as the sampling step — `plot(sin)` was a
+  jagged 1-unit polyline; graph golden updated) with `tMin`/`tMax` recorded
+  on graphs, `getVerticalLine(worldPoint)` manim overload + `lineFunc`,
+  `getArea` gradient color tuples, `getGraphLabel` `xVal`,
+  `VMobject.addPointsAsCorners`, `VMobject.prepareForNonlinearTransform`
+  (subdivide so `applyFunction` BENDS paths — OpeningManim's warped grid),
+  `Mobject.rotateAboutOrigin`, vector `scale([x, y, z])`,
+  `ValueTracker.incrementValue`, `Line.getUnitVector`, `Rotating` `angle`
+  alias, boolean ops accepting a trailing style config,
+  NumberPlane `backgroundLineStyle.strokeColor`, `imageFromArray` (Node:
+  pixel arrays → drawable canvas for ImageMobject), `fontSizePt` (manim
+  points → world units), `ThreeDScene.lightSource.moveTo` proxy,
+  `Surface.setStyle` + `setFillByCheckerboard`.
+
+### Fixed
+- **Tex crashed on control sequences in text mode** (`Tex("This is some
+  \\LaTeX")`): MathJax's liteAdaptor throws on text nodes, and macros
+  inside `\text{}` don't expand — the glyph walker is now text-node-safe
+  and prose wrapping hoists control sequences out of `\text{}`.
+
 ## 0.1.0 — 2026-07-10
 
 ### Added

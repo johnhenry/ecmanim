@@ -138,8 +138,19 @@ export class Mobject {
     return this.shift(V.sub(target, ref));
   }
 
-  scale(factor: number, { aboutPoint }: { aboutPoint?: number[] } = {}): this {
+  scale(factor: number | number[], { aboutPoint }: { aboutPoint?: number[] } = {}): this {
     const center = aboutPoint ?? this.getCenter();
+    // manim parity: a VECTOR factor scales each axis independently by its
+    // literal component (`frame.animate.scale([0.5, 1.5, 0])` — a 0 flattens
+    // that axis, exactly as manim does).
+    if (Array.isArray(factor)) {
+      const f = factor;
+      return this.applyToPoints((p) => [
+        center[0] + (p[0] - center[0]) * (f[0] ?? 1),
+        center[1] + (p[1] - center[1]) * (f[1] ?? 1),
+        center[2] + (p[2] - center[2]) * (f[2] ?? 1),
+      ]);
+    }
     return this.applyToPoints((p) => V.add(center, V.scale(V.sub(p, center), factor)));
   }
 
@@ -150,6 +161,11 @@ export class Mobject {
       q[dim] = center[dim] + (q[dim] - center[dim]) * factor;
       return q;
     });
+  }
+
+  /** manim parity: rotate about the world origin (not the mobject center). */
+  rotateAboutOrigin(angle: number, axis: number[] = V.OUT): this {
+    return this.rotate(angle, { axis, aboutPoint: V.ORIGIN });
   }
 
   rotate(angle: number, { axis = V.OUT, aboutPoint }: { axis?: number[]; aboutPoint?: number[] } = {}): this {
