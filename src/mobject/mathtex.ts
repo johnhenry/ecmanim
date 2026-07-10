@@ -832,13 +832,38 @@ function toTextMode(tex: string): string {
 /** Parse MC-style `{{group}}` markers: returns the tex with markers stripped
  *  plus the list of isolated group strings. */
 export function parseTexGroups(tex: string): { tex: string; isolate: string[] } {
+  // Balanced-brace scan, NOT a non-greedy regex: `{{\frac{1}{2}}}` must
+  // capture the whole fraction — /\{\{(.*?)\}\}/ stopped at the first `}}`
+  // inside it, producing unbalanced isolate keys that corrupted the tex
+  // (found by the 3b1b Taylor-series recreation).
   const isolate: string[] = [];
-  const stripped = tex.replace(/\{\{(.*?)\}\}/g, (_m, inner: string) => {
-    const t = inner.trim();
-    if (t.length) isolate.push(t);
-    return inner;
-  });
-  return { tex: stripped, isolate };
+  let out = "";
+  let i = 0;
+  while (i < tex.length) {
+    if (tex[i] === "{" && tex[i + 1] === "{") {
+      // Find the matching `}}` tracking brace depth from AFTER the marker.
+      let depth = 0;
+      let j = i + 2;
+      for (; j < tex.length; j++) {
+        if (tex[j] === "{") depth++;
+        else if (tex[j] === "}") {
+          if (depth === 0 && tex[j + 1] === "}") break;
+          depth--;
+        }
+      }
+      if (j < tex.length) {
+        const inner = tex.slice(i + 2, j);
+        const t = inner.trim();
+        if (t.length) isolate.push(t);
+        out += inner;
+        i = j + 2;
+        continue;
+      }
+    }
+    out += tex[i];
+    i++;
+  }
+  return { tex: out, isolate };
 }
 
 export interface MatchTexResult {

@@ -174,9 +174,30 @@ export class Transform extends Animation {
       this.startCopy = this.startState.copy();
       this.startCopy.alignPointsWith(this.targetCopy);
       this.targetCopy.alignPointsWith(this.startCopy);
-      // Reset the live mobject to the aligned start geometry.
-      this.mobject.points = this.startCopy.points.map((p: number[]) => [...p]);
-      this.mobject.subpathStarts = [...(this.startCopy.subpathStarts ?? [])];
+      // FAMILY members must align too: interpolate() walks the families in
+      // parallel and truncates each pair to min(points.length), so a VGroup
+      // whose children had mismatched counts kept only the leading fraction
+      // of each child's target (curves dissolved into dashes — found by the
+      // 3b1b Hilbert-morph recreation). Align positionally paired children.
+      const startFam = this.startCopy.getFamily?.() ?? [];
+      const targetFam = this.targetCopy.getFamily?.() ?? [];
+      const n = Math.min(startFam.length, targetFam.length);
+      for (let i = 0; i < n; i++) {
+        const a = startFam[i], b = targetFam[i];
+        if (a === this.startCopy || b === this.targetCopy) continue;
+        if (a.alignPointsWith && b.alignPointsWith && a.points.length !== b.points.length) {
+          a.alignPointsWith(b);
+          b.alignPointsWith(a);
+        }
+      }
+      // Reset the live mobject to the aligned start geometry (family-deep).
+      const liveFam = this.mobject.getFamily?.() ?? [this.mobject];
+      const alignedFam = this.startCopy.getFamily?.() ?? [this.startCopy];
+      const m = Math.min(liveFam.length, alignedFam.length);
+      for (let i = 0; i < m; i++) {
+        liveFam[i].points = alignedFam[i].points.map((p: number[]) => [...p]);
+        if (alignedFam[i].subpathStarts) liveFam[i].subpathStarts = [...alignedFam[i].subpathStarts];
+      }
       this.startState = this.startCopy;
     } else {
       this.targetCopy = this.target.copy();

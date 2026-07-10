@@ -232,6 +232,18 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
 
   const scene = makeScene(sceneOrConstruct, { fps, camera, ...(resolvedParams !== undefined ? { params: resolvedParams } : {}) });
 
+  // A Scene subclass may UPGRADE its camera in its constructor (ThreeDScene
+  // swaps in a ThreeDCamera) — the renderer was bound to the camera built
+  // above, so without re-binding, 3D scenes silently rendered with no
+  // projection (found by the 3b1b sphere-unwrap recreation). Re-point the
+  // renderer and carry the resolution/background onto the upgraded camera.
+  if (scene.camera && scene.camera !== camera) {
+    scene.camera.pixelWidth = pixelWidth;
+    scene.camera.pixelHeight = pixelHeight;
+    if (!scene.camera.background) scene.camera.background = background;
+    (renderer as any).camera = scene.camera;
+  }
+
   // Range filtering (from/upto animation number). When active we mark segments
   // outside the range as skipped so their frames are not emitted, but time still
   // advances so downstream mobject state is correct.

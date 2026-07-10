@@ -80,3 +80,44 @@ test("Surface.setFunc reparameterizes in place (identity preserved)", () => {
   const bentZ = Math.max(...surf.submobjects.flatMap((f: any) => f.points.map((p: number[]) => p[2])));
   assert.ok(bentZ > 0.5, `rebuilt with the new function (max z ${bentZ})`);
 });
+
+// --- fixes surfaced by the recreation wave ------------------------------------
+
+test("parseTexGroups handles nested braces in {{...}} groups", async () => {
+  const { parseTexGroups } = await import("../src/mobject/mathtex.ts");
+  const r = parseTexGroups("{{\\frac{x^3}{3!}}} + {{x^{11}}}");
+  assert.deepEqual(r.isolate, ["\\frac{x^3}{3!}", "x^{11}"]);
+  assert.equal(r.tex, "\\frac{x^3}{3!} + x^{11}", "markers stripped, braces intact");
+  const simple = parseTexGroups("{{a^2}} + b");
+  assert.deepEqual(simple.isolate, ["a^2"]);
+});
+
+test("Transform aligns FAMILY point counts (VGroup children don't truncate)", async () => {
+  const { VGroup } = await import("../src/mobject/VMobject.ts");
+  const { Circle, RegularPolygon } = await import("../src/mobject/geometry.ts");
+  const { Transform } = await import("../src/animation/Animation.ts");
+  const { Scene } = await import("../src/scene/Scene.ts");
+  const a = new VGroup(new Circle({ radius: 1 }), new Circle({ radius: 0.5 }));
+  const b = new VGroup(
+    new RegularPolygon(7, { radius: 1 }),
+    new RegularPolygon(5, { radius: 0.5 }),
+  );
+  const scene = new Scene({ fps: 20, frameHandler: async () => {} });
+  scene.add(a);
+  const t = new Transform(a, b);
+  t.runTime = 0.2;
+  await scene.play(t);
+  // Each child must land on its full target geometry, not a truncated slice.
+  const kids = a.submobjects as any[];
+  const targets = b.submobjects as any[];
+  for (let i = 0; i < 2; i++) {
+    const got = kids[i].getWidth();
+    const want = targets[i].getWidth();
+    assert.ok(Math.abs(got - want) < 0.05, `child ${i} reaches target width (${got} vs ${want})`);
+    // The tell-tale of the truncation bug: child keeps only a fraction of
+    // its target's curves -> visibly shorter outline.
+    const gotCurves = Math.floor((kids[i].getSubpaths()[0].length - 1) / 3);
+    const wantCurves = Math.floor((targets[i].getSubpaths()[0].length - 1) / 3);
+    assert.ok(gotCurves >= wantCurves, `child ${i} carries all target curves (${gotCurves} >= ${wantCurves})`);
+  }
+});
