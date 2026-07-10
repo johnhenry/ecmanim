@@ -50,10 +50,13 @@ const lerpValue = (a: any, b: any, t: number): any => {
 
 // Mobject props: how to read the current value and write an absolute one.
 // rotation/scale have no retained state on world-space mobjects, so the
-// adapter tracks the last APPLIED value and applies deltas.
+// adapter tracks the last APPLIED value ON THE MOBJECT (persisting across
+// chains -- Motion Canvas scale/rotation are absolute node properties, so
+// `tweenTo(m, {scale: 1.5})` in one chain and `{scale: 1}` in a later one
+// must agree about what 1 means) and applies deltas.
 function mobjectAdapter(mob: any): TweenAdapter {
-  let appliedRotation = 0;
-  let appliedScale = 1;
+  const getRotation = () => (mob.__tweenRotation ?? 0) as number;
+  const getScale = () => (mob.__tweenScale ?? 1) as number;
   const readers: Record<string, () => any> = {
     x: () => mob.getCenter()[0],
     y: () => mob.getCenter()[1],
@@ -65,8 +68,8 @@ function mobjectAdapter(mob: any): TweenAdapter {
     strokeWidth: () => mob.strokeWidth ?? 0,
     width: () => mob.getWidth(),
     height: () => mob.getHeight(),
-    rotation: () => appliedRotation,
-    scale: () => appliedScale,
+    rotation: () => getRotation(),
+    scale: () => getScale(),
     end: () => mob.strokeEnd ?? 1,
     start: () => mob.strokeStart ?? 0,
   };
@@ -81,8 +84,8 @@ function mobjectAdapter(mob: any): TweenAdapter {
     strokeWidth: (v) => (mob.strokeWidth = v),
     width: (v) => { const w = mob.getWidth(); if (w > 1e-12) mob.stretch(v / w, 0); },
     height: (v) => { const h = mob.getHeight(); if (h > 1e-12) mob.stretch(v / h, 1); },
-    rotation: (v) => { mob.rotate(v - appliedRotation); appliedRotation = v; },
-    scale: (v) => { if (appliedScale > 1e-12) mob.scale(v / appliedScale); appliedScale = v; },
+    rotation: (v) => { mob.rotate(v - getRotation()); mob.__tweenRotation = v; },
+    scale: (v) => { const cur = getScale(); if (cur > 1e-12) mob.scale(v / cur); mob.__tweenScale = v; },
     end: (v) => (mob.strokeEnd = v),
     start: (v) => (mob.strokeStart = v),
   };
