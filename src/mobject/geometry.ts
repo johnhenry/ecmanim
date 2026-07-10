@@ -14,6 +14,12 @@ export interface ArcConfig extends VMobjectConfig {
   startAngle?: number;
   angle?: number;
   arcCenter?: number[];
+  /** Alias for `arcCenter` (issue #37): every other point-like mobject
+   *  (Dot, Text, ...) positions via a `point` config key, so Arc/Circle
+   *  accepting-but-silently-discarding it was a recurring trap --
+   *  MobjectConfig's index signature means TypeScript can't catch the
+   *  mismatch either. `arcCenter` wins when both are given. */
+  point?: number[];
 }
 
 export class Arc extends VMobject {
@@ -27,7 +33,7 @@ export class Arc extends VMobject {
     this.radius = config.radius ?? 1;
     this.startAngle = config.startAngle ?? 0;
     this.angle = config.angle ?? Math.PI / 2;
-    this.arcCenter = config.arcCenter ?? V.ORIGIN;
+    this.arcCenter = config.arcCenter ?? config.point ?? V.ORIGIN;
     const pts = arcBezierPoints(this.radius, this.startAngle, this.angle, this.arcCenter);
     this.appendBezierPoints(pts);
   }

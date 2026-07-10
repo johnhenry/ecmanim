@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Fixed
+- **`Circle`/`Arc` silently ignored a `point` config key** (issue #37) --
+  only `Dot` respected it, while the correct key, `arcCenter`, wasn't
+  discoverable, and `MobjectConfig`'s `[key: string]: any` index signature
+  means TypeScript never flags the wrong key on any config object. `point`
+  is now a real, documented alias for `arcCenter` on the whole `Arc`
+  hierarchy (`arcCenter` wins when both are given); `Dot`'s own existing
+  `point` handling is unaffected (its post-construction `moveTo` is
+  absolute, so the value applying at the Arc level too is idempotent, not
+  compounded). The issue's broader suggestion -- narrowing the index
+  signature so wrong-key config bugs fail at compile time library-wide --
+  is a separate, larger typing change deliberately not attempted here.
 - **`ThreeDAxes`' x/y/z axis segments rendered disconnected whenever a
   range didn't include 0** (issue #31), e.g. a log-scale axis over values
   that never reach 0 (`log10(bits)` for a 16-2048 bit range). The

@@ -133,3 +133,24 @@ test("AnnotationDot is a bold blue dot with white stroke", () => {
   assert.equal(dot.strokeWidth, 5, "thick stroke");
   assert.equal(dot.fillOpacity, 1, "filled");
 });
+
+// Issue #37: Circle/Arc silently ignored a `point` config key -- only Dot
+// respected it -- while the correct key, `arcCenter`, wasn't discoverable
+// (and MobjectConfig's index signature means TypeScript never flags the
+// wrong key). `point` is now a real alias for `arcCenter` on the whole Arc
+// hierarchy.
+test("Circle accepts `point` as an alias for arcCenter (issue #37)", () => {
+  const c = new Circle({ point: [4, 1, 0], radius: 0.6 });
+  assert.ok(V.equals(c.getCenter(), [4, 1, 0], 1e-6), `expected center [4,1,0], got ${c.getCenter()}`);
+});
+
+test("arcCenter wins when both arcCenter and point are given", () => {
+  const c = new Circle({ arcCenter: [2, 2, 0], point: [9, 9, 0], radius: 1 });
+  assert.ok(V.equals(c.getCenter(), [2, 2, 0], 1e-6));
+});
+
+test("Dot's own point handling is unaffected by the Arc-level alias (applies once, not compounded)", async () => {
+  const { Dot } = await import("../src/mobject/geometry.ts");
+  const d = new Dot({ point: [3, -2, 0] });
+  assert.ok(V.equals(d.getCenter(), [3, -2, 0], 1e-6), `expected center [3,-2,0], got ${d.getCenter()}`);
+});
