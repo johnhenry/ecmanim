@@ -14,7 +14,7 @@
 
 import type { ColorLike } from "./types.ts";
 import { Color } from "./color.ts";
-import { mulberry32 } from "../animation/expressions.ts";
+import { mulberry32 } from "./noise.ts";
 
 export type Effect =
   | { type: "blur"; radius: number }

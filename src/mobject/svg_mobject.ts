@@ -454,6 +454,11 @@ function applyClipPath(
 // ---------------------------------------------------------------------------
 export class SVGMobject extends VGroup {
   config: SVGMobjectConfig;
+  /** Drawable mobjects keyed by their SVG element id (or nearest ancestor
+   *  <g id>). One id can map to several mobjects (a <g id> containing many
+   *  drawables). Ids inside <defs>/<clipPath>/... never appear here -- those
+   *  are consumed for url(#id) resolution, not rendered content. */
+  readonly ids = new Map<string, VMobject[]>();
 
   // new SVGMobject(svgString, { height, width, point, fillColor, strokeColor, color })
   constructor(svgString = "", config: SVGMobjectConfig = {}) {
@@ -467,14 +472,16 @@ export class SVGMobject extends VGroup {
 
     const mobs: VMobject[] = [];
 
-    // Depth-first walk accumulating transform (parent->child) and style.
-    const walk = (node: XmlNode, transform: Affine, parentStyle: Record<string, string>) => {
+    // Depth-first walk accumulating transform (parent->child), style, and the
+    // nearest id (an element's own id wins over an inherited <g id>).
+    const walk = (node: XmlNode, transform: Affine, parentStyle: Record<string, string>, inheritedId: string | null) => {
       // Definition-only containers (<defs>, <clipPath>, <linearGradient>,
       // ...): their contents are referenced by id elsewhere, not rendered
       // in place -- don't descend into them at all.
       if (NON_RENDERING_CONTAINERS.has(node.tag)) return;
 
       const attrs = node.attrs || {};
+      const effectiveId = attrs.id || inheritedId;
       // Accumulate this node's own transform (present on <g> and any element).
       let m = transform;
       if (attrs.transform) m = compose(m, parseTransform(attrs.transform));
@@ -512,16 +519,24 @@ export class SVGMobject extends VGroup {
             mob.sheenDirection = gradient.direction;
           }
           if (attrs["clip-path"]) mob = applyClipPath(mob, attrs["clip-path"], defs, m);
-          if (mob.points.length) mobs.push(mob);
+          if (mob.points.length) {
+            mobs.push(mob);
+            // Record on the FINAL mob (applyClipPath may have replaced it).
+            if (effectiveId) {
+              const list = this.ids.get(effectiveId) ?? [];
+              list.push(mob);
+              this.ids.set(effectiveId, list);
+            }
+          }
         }
       }
 
-      for (const child of node.children || []) walk(child, m, style);
+      for (const child of node.children || []) walk(child, m, style, effectiveId);
     };
 
     // Root style seeds the SVG defaults (fill black, no stroke) plus any style
     // declared on the <svg> element itself.
-    walk(tree, IDENTITY.slice() as Affine, readStyleProps(tree.attrs || {}));
+    walk(tree, IDENTITY.slice() as Affine, readStyleProps(tree.attrs || {}), null);
 
     this.add(...mobs);
 
@@ -540,6 +555,23 @@ export class SVGMobject extends VGroup {
 
     if (config.point) this.moveTo(config.point);
     else this.center();
+  }
+
+  hasId(id: string): boolean {
+    return this.ids.has(id);
+  }
+
+  /** The mobjects for an SVG element id (or nearest <g id>), wrapped in a
+   *  VGroup so `svg.byId("sun").setColor(...)` / `.animate` compose
+   *  naturally. The children are the SAME instances already in this
+   *  SVGMobject's tree -- style/transform mutations show up in place. */
+  byId(id: string): VGroup {
+    const list = this.ids.get(id);
+    if (!list) {
+      const available = [...this.ids.keys()].join(", ") || "(none)";
+      throw new Error(`SVGMobject.byId: no drawable element with id "${id}". Available ids: ${available}`);
+    }
+    return new VGroup(...list);
   }
 }
 

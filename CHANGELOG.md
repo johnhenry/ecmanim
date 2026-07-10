@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Added
+- **SVGMobject id preservation**: elements keep their SVG `id` (children of a
+  `<g id>` inherit it), addressable via `svg.byId("sun")` (returns a live
+  `VGroup` of the rendered mobjects — style/transform mutations apply in
+  place), `svg.hasId(id)`, and the `svg.ids` map. Ids inside
+  `<defs>`/`<clipPath>`/gradients are consumed for `url(#id)` resolution and
+  never appear. `byId` on an unknown id throws listing the available ids.
+
+- **Seeded noise module** (`src/core/noise.ts`): `valueNoise1D(seed)`,
+  `simplex2D(seed)` / `simplex3D(seed)` (per-seed shuffled permutation
+  tables), and `fbm(noise)` / `fbm3(noise)` fractal sums with
+  `octaves`/`lacunarity`/`gain`. All fields are pure functions of
+  (seed, coordinates) — order-independent, scrub-safe, render-cache-safe.
+  `mulberry32` now lives here (still re-exported from its old path);
+  `wiggle()` output is bit-identical to before (pinned by regression
+  vectors).
+
 - **Visual effects pipeline** (`src/core/effects.ts` + renderer support):
   per-mobject `blur` / `glow` / `dropShadow` / `colorAdjust`
   (brightness/contrast/saturate/hueRotate) / seeded `noise`, via a fluent

@@ -7,31 +7,23 @@
 // Date.now / Math.random — the only randomness is the seeded mulberry32 PRNG.
 
 import { smooth } from "./rate_functions.ts";
+import { latticeValue1D, mulberry32 } from "../core/noise.ts";
+
+// mulberry32 has always been exported from here; keep that surface.
+export { mulberry32 };
 
 /** A driver maps a scalar (time) to a value. */
 export type Driver = (t: number) => number;
 
-/** Standard mulberry32 seeded PRNG → a function returning numbers in [0, 1). */
-export function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 // Deterministic per-index value in [-1, 1] for a given seed. Pure of `i` (cached),
-// so wiggle can be sampled at any t in any order.
+// so wiggle can be sampled at any t in any order. The lattice formula lives in
+// core/noise.ts (latticeValue1D) — a bit-compatibility contract for wiggle.
 function seededNoise(seed: number): (i: number) => number {
   const cache = new Map<number, number>();
   return (i: number): number => {
     let v = cache.get(i);
     if (v === undefined) {
-      // Derive a stable value from (seed, i) via mulberry32 seeded on their mix.
-      v = mulberry32((seed * 0x9e3779b1) ^ (i * 0x85ebca77)) () * 2 - 1;
+      v = latticeValue1D(seed, i);
       cache.set(i, v);
     }
     return v;
