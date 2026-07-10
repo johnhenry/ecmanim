@@ -20,8 +20,12 @@ type Position = [number, number, ...number[]];
 type Ring = Position[];
 
 export interface GeoJSONOptions extends VMobjectConfig {
-  /** Projection name or custom function (default "mercator"). */
-  projection?: "mercator" | "equirectangular" | GeoProjection;
+  /** Projection name or custom function (default "mercator"). Use
+   *  "none" (alias "identity") for PRE-PROJECTED planar data — e.g. TopoJSON
+   *  atlases already in y-down pixel space — where coordinates pass through
+   *  as-is except for a y-flip into the loader's y-up space (fit, winding
+   *  normalization, and project() behave as usual). */
+  projection?: "mercator" | "equirectangular" | "none" | "identity" | GeoProjection;
   /** Feature property used as the region key (default "name"). */
   nameProperty?: string;
   /** Target width in world units. If only one of width/height is given the

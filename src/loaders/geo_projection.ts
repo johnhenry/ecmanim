@@ -20,4 +20,16 @@ export const mercator: GeoProjection = (lon, lat) => {
   return [lon * RAD, Math.log(Math.tan(Math.PI / 4 + phi / 2))];
 };
 
-export const PROJECTIONS: Record<string, GeoProjection> = { mercator, equirectangular };
+/** Identity / "none": pass PRE-PROJECTED planar coordinates through instead
+ *  of treating them as lon/lat. For data already projected to pixel space
+ *  (e.g. the US-atlas TopoJSON, Albers-projected with y increasing DOWN),
+ *  y is negated so the map is upright in the loader's y-up planar space —
+ *  the loader's usual fit and winding normalization then apply unchanged. */
+export const identity: GeoProjection = (x, y) => [x, -y];
+
+export const PROJECTIONS: Record<string, GeoProjection> = {
+  mercator,
+  equirectangular,
+  identity,
+  none: identity,
+};

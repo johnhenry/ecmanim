@@ -184,6 +184,49 @@ export { wiggle, remap, ramp, valueAtTime, compose, mulberry32 } from "./animati
 export type { Driver } from "./animation/expressions.ts";
 // Seeded deterministic noise fields (value/simplex/fbm).
 export { valueNoise1D, simplex2D, simplex3D, fbm, fbm3 } from "./core/noise.ts";
+
+// --- D3-parity campaign (v0.4.0): scales, shapes, layouts, joins ------------
+export {
+  scaleLinear, scaleLog, scalePow, scaleSqrt, scaleRadial, scaleUtc, scaleTime,
+  scaleBand, scalePoint, scaleOrdinal, scaleSequential, scaleDiverging, scaleQuantize,
+} from "./core/scales.ts";
+export type { ScaleLinear, ScaleTime, ScaleBand, ScaleOrdinal, ScaleSequential, ScaleQuantize } from "./core/scales.ts";
+export {
+  ascending, descending, extent, max, min, sum, mean, rangeOf, quantile,
+  group, groups, rollup, rollups, groupSort, pairs, ticks, tickStep, tickIncrement, niceExtent,
+} from "./core/array_utils.ts";
+export { format, formatSpecifierAuto, utcFormat, utcDay, utcSunday, utcMonday, utcMonth, utcYear } from "./core/format.ts";
+export type { UtcInterval } from "./core/format.ts";
+export {
+  schemeCategory10, schemeTableau10, schemeObservable10, schemeBlues,
+  makeInterpolator, interpolateBlues, interpolateBuPu, interpolatePiYG, interpolateBrBG,
+  interpolateSpectral, interpolateViridis, interpolateTurbo, interpolateRainbow,
+  interpolateTerrain, interpolateHsvLong, interpolateHcl, hsv,
+} from "./core/color_schemes.ts";
+export {
+  stack, lineGen, areaGen, pieGen, arcShape, radialPoint,
+  linkHorizontalPoints, linkVerticalPoints, linkRadialPoints,
+  basisBeziers, bundleBeziers, bezierChainMobject,
+} from "./mobject/shape_gen.ts";
+export type { StackSeries, StackConfig, PieSlice, ArcGenConfig, CurveKind } from "./mobject/shape_gen.ts";
+export {
+  hierarchy, stratify, treemap, partition, pack, tree, cluster,
+  treemapSquarify, treemapBinary, treemapSlice, treemapDice, treemapSliceDice,
+  packSiblings, packEnclose, HierarchyNode,
+} from "./layout/hierarchy.ts";
+export type { HierarchyLink, TreemapLayout, PartitionLayout, PackLayout, TreeLayout, ClusterLayout } from "./layout/hierarchy.ts";
+export {
+  forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY,
+} from "./layout/force.ts";
+export type { ForceSimulation, SimulationNode, SimulationLink, Force } from "./layout/force.ts";
+export { sankey, sankeyLinkHorizontalPoints } from "./layout/sankey.ts";
+export { chord, ribbonPoints, chordAngleToPoint } from "./layout/chord.ts";
+export { contours, contourThresholds } from "./layout/contours.ts";
+export { hexbin, hexagonPoints } from "./layout/hexbin.ts";
+export { feature, mesh, decodeArc } from "./loaders/topojson.ts";
+export type { Topology } from "./loaders/topojson.ts";
+export { dataJoin, interpolateFrames, rankFrame } from "./animation/data_join.ts";
+export type { DataJoinConfig, DataJoinResult } from "./animation/data_join.ts";
 export type { FbmOptions } from "./core/noise.ts";
 // Scene templates + themes (pure factories; compose with Timeline/transitions).
 export { resolveTheme } from "./templates/theme.ts";

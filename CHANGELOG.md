@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **D3-parity foundation (campaign 2, clusters D1-D6)** — the data-viz
+  layer: `scaleLinear/Log/Pow/Sqrt/Radial/Utc/Band/Point/Ordinal/
+  Sequential/Diverging/Quantize` with d3's exact 1-2-5 tick/nice
+  algorithm; d3-array essentials (extent/group/rollup/groupSort/quantile/
+  ticks); `format()` + `utcFormat()` subsets and UTC intervals
+  (utcDay/Sunday/Monday/Month/Year); scheme data (Tableau10/Observable10/
+  Category10/Blues) + piecewise ramp interpolators (Blues/BuPu/PiYG/BrBG/
+  Spectral/Viridis/Turbo/Rainbow/Terrain), HSV-long and true-LCh
+  `interpolateHcl`. Shape generators: `stack` (incl. streamgraph wiggle +
+  insideOut), `lineGen`/`areaGen` with defined-gaps, `pieGen`/`arcShape`
+  (d3 clockwise-from-12 convention, `radialPoint` bridges to world y-up),
+  bump link curves, basis B-spline + `curveBundle` beta. Layout modules:
+  full d3-hierarchy (`hierarchy`/`stratify`/`treemap` squarify verified
+  against d3's own vectors/`partition`/`pack` bit-identical Welzl/`tree`
+  Buchheim/`cluster`); BYTE-DETERMINISTIC `forceSimulation` (seeded
+  phyllotaxis init, fixed 300 ticks, forceLink/ManyBody/Center/Collide/
+  X/Y); `sankey` (full relaxation, 4 aligns) + `chord`/`ribbonPoints`;
+  `contours` (multi-threshold filled isobands) + `hexbin` (d3-parity
+  binning) + dependency-free TopoJSON `feature`/`mesh` with an identity
+  projection for pre-projected atlases. Keyed `dataJoin` (enter/update/
+  exit against DATA arrays — the bar-chart-race primitive) +
+  `interpolateFrames`/`rankFrame`; `CameraFrameTween` gains the van
+  Wijk/interpolateZoom `path: "zoom"` option. 123 new tests.
+
+### Fixed
+- `Graph`'s random/spring layouts had `Math.random` determinism leaks
+  (random initial positions + coincident-node jitter) — now seeded
+  (cache-safe reproducible renders).
+
+
 ## 0.3.0 — 2026-07-10
 
 ### Added

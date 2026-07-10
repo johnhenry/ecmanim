@@ -10,6 +10,10 @@ import { Dot, Line, Arrow } from "./geometry.ts";
 import { Text } from "./text/Text.ts";
 import { Mobject } from "./Mobject.ts";
 import * as V from "../core/math/vector.ts";
+import { mulberry32 } from "../core/noise.ts";
+
+/** Default PRNG seed for layouts; override via layout_config.seed. */
+const DEFAULT_LAYOUT_SEED = 0x5eed;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,10 +57,16 @@ function circularLayout(vertices: VertexId[]): Record<string, number[]> {
   return out;
 }
 
-function randomLayout(vertices: VertexId[]): Record<string, number[]> {
+function randomLayout(
+  vertices: VertexId[],
+  config: Record<string, any> = {},
+): Record<string, number[]> {
+  // Seeded (mulberry32) so the layout is deterministic; pass
+  // layout_config.seed to vary it.
+  const rand = mulberry32(config.seed ?? DEFAULT_LAYOUT_SEED);
   const out: Record<string, number[]> = {};
   for (const v of vertices) {
-    out[String(v)] = [Math.random() * 2 - 1, Math.random() * 2 - 1, 0];
+    out[String(v)] = [rand() * 2 - 1, rand() * 2 - 1, 0];
   }
   return out;
 }
@@ -75,6 +85,9 @@ function springLayout(
 
   const iterations = config.iterations ?? 50;
   const k = config.k ?? 1 / Math.sqrt(n); // ideal edge length
+  // Seeded (mulberry32) jitter for coincident vertices keeps the whole
+  // layout deterministic; pass config.seed (layout_config.seed) to vary it.
+  const rand = mulberry32(config.seed ?? DEFAULT_LAYOUT_SEED);
   const keys = vertices.map((v) => String(v));
 
   // Seed from the circular layout for determinism.
@@ -96,7 +109,7 @@ function springLayout(
         let delta = V.sub(pos[a], pos[b]);
         let dist = V.length(delta);
         if (dist < 1e-6) {
-          delta = [Math.random() * 1e-3, Math.random() * 1e-3, 0];
+          delta = [rand() * 1e-3, rand() * 1e-3, 0];
           dist = V.length(delta) || 1e-6;
         }
         const rep = (k * k) / dist;
@@ -161,7 +174,7 @@ function computeLayout(
     case "shell":
       return circularLayout(vertices);
     case "random":
-      return randomLayout(vertices);
+      return randomLayout(vertices, layoutConfig);
     case "spring":
     case "planar":
     default:

@@ -102,14 +102,34 @@ function readFrameParams(frame: Rectangle): FrameParams {
 export class CameraFrameTween extends Animation {
   private target: Partial<FrameParams>;
   private from!: FrameParams;
+  /** "linear" (default) lerps params; "zoom" follows the van Wijk-Nuij
+   *  optimal pan-and-zoom path (d3.interpolateZoom): the camera zooms OUT
+   *  over long pans so perceived velocity stays constant — the difference
+   *  is dramatic on deep dives like zoomable circle packing. */
+  private path: "linear" | "zoom";
+  private _zoom?: (alpha: number) => { cx: number; cy: number; w: number };
 
-  constructor(frame: Rectangle, target: Partial<FrameParams>, config: AnimationConfig = {}) {
-    super(frame, config);
+  constructor(
+    frame: Rectangle,
+    target: Partial<FrameParams>,
+    config: AnimationConfig & { path?: "linear" | "zoom" } = {},
+  ) {
+    const { path, ...animConfig } = config;
+    super(frame, animConfig);
     this.target = target;
+    this.path = path ?? "linear";
   }
 
   begin(): this {
     this.from = readFrameParams(this.mobject);
+    if (this.path === "zoom") {
+      const f = this.from;
+      const t = { ...f, ...this.target };
+      this._zoom = vanWijkZoom(
+        [f.center[0], f.center[1], f.width],
+        [t.center[0], t.center[1], t.width],
+      );
+    }
     return super.begin();
   }
 
@@ -117,16 +137,67 @@ export class CameraFrameTween extends Animation {
     const f = this.from;
     const t = { ...f, ...this.target };
     const lerp = (a: number, b: number) => a + (b - a) * alpha;
-    const w = lerp(f.width, t.width);
-    const h = lerp(f.height, t.height);
+    let w: number, cx: number, cy: number, h: number;
+    if (this._zoom) {
+      const z = this._zoom(alpha);
+      w = z.w; cx = z.cx; cy = z.cy;
+      // Preserve the aspect ratio through the zoom path.
+      h = w * (lerp(f.height, t.height) / lerp(f.width, t.width));
+    } else {
+      w = lerp(f.width, t.width);
+      h = lerp(f.height, t.height);
+      cx = lerp(f.center[0], t.center[0]);
+      cy = lerp(f.center[1], t.center[1]);
+    }
     const roll = lerp(f.roll, t.roll);
-    const cx = lerp(f.center[0], t.center[0]);
-    const cy = lerp(f.center[1], t.center[1]);
     const rect = new Rectangle({ width: w, height: h, strokeWidth: 0, fillOpacity: 0 });
     if (roll !== 0) rect.rotate(roll);
     rect.moveTo([cx, cy, f.center[2] ?? 0]);
     this.mobject.points = rect.points;
   }
+}
+
+// van Wijk & Nuij "Smooth and efficient zooming and panning" (the exact
+// math behind d3.interpolateZoom), rho = sqrt(2). Input/output views are
+// [centerX, centerY, width].
+function vanWijkZoom(
+  a: [number, number, number],
+  b: [number, number, number],
+): (t: number) => { cx: number; cy: number; w: number } {
+  const rho = Math.SQRT2;
+  const rho2 = 2, rho4 = 4;
+  const [ux0, uy0, w0] = a;
+  const [ux1, uy1, w1] = b;
+  const dx = ux1 - ux0, dy = uy1 - uy0;
+  const d2 = dx * dx + dy * dy;
+
+  if (d2 < 1e-12) {
+    // Pure zoom: exponential width.
+    const S = Math.abs(Math.log(w1 / w0)) / rho;
+    return (t: number) => ({
+      cx: ux0, cy: uy0,
+      w: w0 * Math.exp(rho * (S === 0 ? 0 : t * S) * Math.sign(Math.log(w1 / w0))),
+    });
+  }
+
+  const d1 = Math.sqrt(d2);
+  const b0 = (w1 * w1 - w0 * w0 + rho4 * d2) / (2 * w0 * rho2 * d1);
+  const b1 = (w1 * w1 - w0 * w0 - rho4 * d2) / (2 * w1 * rho2 * d1);
+  const r0 = Math.log(Math.sqrt(b0 * b0 + 1) - b0);
+  const r1 = Math.log(Math.sqrt(b1 * b1 + 1) - b1);
+  const S = (r1 - r0) / rho;
+
+  return (t: number) => {
+    const s = t * S;
+    const coshr0 = Math.cosh(r0), sinhr0 = Math.sinh(r0), tanhr0 = Math.tanh(r0);
+    const u = (w0 / (rho2 * d1)) * (coshr0 * Math.tanh(rho * s + r0) - sinhr0);
+    return {
+      cx: ux0 + u * dx,
+      cy: uy0 + u * dy,
+      w: (w0 * coshr0) / Math.cosh(rho * s + r0),
+    };
+    void tanhr0;
+  };
 }
 
 /**
