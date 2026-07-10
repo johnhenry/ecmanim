@@ -234,6 +234,10 @@ export class SVGRenderer {
         if (e.saturate != null && e.saturate !== 1) {
           prims.push(`<feColorMatrix type="saturate" values="${this.n(e.saturate)}"/>`);
         }
+        if (e.grayscale != null && e.grayscale !== 0) {
+          // grayscale(g) == saturate(1 - g) per the CSS filter spec.
+          prims.push(`<feColorMatrix type="saturate" values="${this.n(1 - Math.max(0, Math.min(1, e.grayscale)))}"/>`);
+        }
         if (e.hueRotate != null && e.hueRotate !== 0) {
           prims.push(`<feColorMatrix type="hueRotate" values="${this.n(e.hueRotate)}"/>`);
         }
@@ -279,9 +283,10 @@ export class SVGRenderer {
     return this.renderToString(mobjects);
   }
 
-  // Build SVG path data for a VMobject, honoring strokeEnd (proportion) using
-  // partialBezier — mirrors CanvasRenderer.tracePath exactly.
-  private tracePathData(mob: any, proportion = 1): string {
+  // Build SVG path data for a VMobject, honoring strokeEnd (proportion) and
+  // strokeStart (startProportion) using partialBezier — mirrors
+  // CanvasRenderer.tracePath exactly.
+  private tracePathData(mob: any, proportion = 1, startProportion = 0): string {
     const { camera } = this;
     const subpaths: number[][][] = mob.getSubpaths ? mob.getSubpaths() : [];
     const totalCurves = subpaths.reduce(
@@ -289,21 +294,32 @@ export class SVGRenderer {
       0,
     );
     const drawCurves = totalCurves * Math.max(0, Math.min(1, proportion));
+    const skipCurves = totalCurves * Math.max(0, Math.min(1, startProportion));
     let drawn = 0;
+    let penDown = false;
     const out: string[] = [];
 
     for (const sp of subpaths) {
       const nc = Math.floor((sp.length - 1) / 3);
       if (nc < 1) continue;
       if (drawn >= drawCurves) break;
-      const [sx, sy] = camera.toPixel(sp[0]);
-      out.push(`M${this.n(sx)} ${this.n(sy)}`);
+      penDown = false;
       for (let i = 0; i < nc; i++) {
         if (drawn >= drawCurves) break;
+        if (drawn + 1 <= skipCurves) {
+          drawn += 1;
+          continue;
+        }
         let a = sp[3 * i], c1 = sp[3 * i + 1], c2 = sp[3 * i + 2], b = sp[3 * i + 3];
-        const remaining = drawCurves - drawn;
-        if (remaining < 1) {
-          [a, c1, c2, b] = partialBezier(a, c1, c2, b, 0, remaining);
+        const t0 = Math.max(0, skipCurves - drawn);
+        const t1 = Math.min(1, drawCurves - drawn);
+        if (t0 > 0 || t1 < 1) {
+          [a, c1, c2, b] = partialBezier(a, c1, c2, b, t0, t1);
+        }
+        if (!penDown || t0 > 0) {
+          const [sx, sy] = camera.toPixel(a);
+          out.push(`M${this.n(sx)} ${this.n(sy)}`);
+          penDown = true;
         }
         const p1 = camera.toPixel(c1);
         const p2 = camera.toPixel(c2);
@@ -324,6 +340,7 @@ export class SVGRenderer {
     if (!mob.points || mob.points.length === 0) return null;
 
     const proportion = mob.strokeEnd ?? 1;
+    const startProportion = mob.strokeStart ?? 0;
     const opacity = mob.opacity ?? 1;
     const lineJoin = mob.lineJoin ?? "round";
     const lineCap = mob.lineCap ?? "round";
@@ -348,7 +365,7 @@ export class SVGRenderer {
     // computing it here unconditionally and then falling through to the
     // "otherwise" block below (which computes its own fill paint) would
     // register a duplicate, unused gradient def and use the wrong one.
-    if (hasStroke && proportion >= 1) {
+    if (hasStroke && proportion >= 1 && startProportion <= 0) {
       // Single path carries both fill and stroke.
       const attrs: string[] = [];
       if (hasFill) {
@@ -383,7 +400,7 @@ export class SVGRenderer {
       }
     }
     if (hasStroke) {
-      const dStroke = this.tracePathData(mob, proportion);
+      const dStroke = this.tracePathData(mob, proportion, startProportion);
       if (dStroke) {
         parts.push(
           `<path fill="none" ` +

@@ -24,6 +24,19 @@
   `Mobject.findAll(predicate)`, and `matchTex(old, "{{a^2}} + {{b^2}} =
   c^2")` — MC's `Latex.tex()` in-place morphing where `{{...}}` groups
   become isolated substrings driving a TransformMatchingTex.
+- **Camera roll + renderer compositing (MC5)**: `Camera.rotation`
+  (radians, applied in toPixel about frameCenter) — rotate a
+  MovingCameraScene's frame mobject and preRender() derives the roll and
+  TRUE edge lengths from its corners (not the inflated AABB); scene sugar
+  `centerOn(mobOrPoint)`, `rotateCamera(angle)`, `resetCamera()`.
+  `strokeStart` now actually renders (start-side partial draw, exact
+  partialBezier clipping, canvas + SVG — `strokeEnd`'s long-lost twin).
+  Per-mobject `compositeOperation` (canvas blend mode for that draw) and
+  `CompositeGroup` — children composite against SIBLINGS in a scoped
+  offscreen layer (MC's mask/cutout look: a "destination-out" child cuts
+  a hole in the group, not the scene). `colorAdjust` gains `grayscale`
+  (canvas filter + SVG feColorMatrix), and blur/grayscale lerp through
+  lerpEffects so `Transform`/`animate` tween them.
 
 ## 0.2.0 — 2026-07-10
 

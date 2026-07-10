@@ -20,7 +20,7 @@ export type Effect =
   | { type: "blur"; radius: number }
   | { type: "glow"; radius: number; color?: ColorLike; strength?: number }
   | { type: "shadow"; blur: number; color?: ColorLike; offsetX?: number; offsetY?: number }
-  | { type: "colorAdjust"; brightness?: number; contrast?: number; saturate?: number; hueRotate?: number }
+  | { type: "colorAdjust"; brightness?: number; contrast?: number; saturate?: number; hueRotate?: number; grayscale?: number }
   | { type: "noise"; amount: number; monochrome?: boolean; seed?: number };
 
 /** Camera-level full-frame effects: everything a mobject can have, plus
@@ -42,6 +42,7 @@ export function effectsToCanvasFilter(effects: readonly Effect[], scale: number)
       if (e.contrast != null && e.contrast !== 1) parts.push(`contrast(${e.contrast})`);
       if (e.saturate != null && e.saturate !== 1) parts.push(`saturate(${e.saturate})`);
       if (e.hueRotate != null && e.hueRotate !== 0) parts.push(`hue-rotate(${e.hueRotate}deg)`);
+      if (e.grayscale != null && e.grayscale !== 0) parts.push(`grayscale(${e.grayscale})`);
     }
   }
   return parts.join(" ");
@@ -191,6 +192,7 @@ export function lerpEffects(
           contrast: lerpNum(s.contrast, tt.contrast, 1),
           saturate: lerpNum(s.saturate, tt.saturate, 1),
           hueRotate: lerpNum(s.hueRotate, tt.hueRotate, 0),
+          grayscale: lerpNum(s.grayscale, tt.grayscale, 0),
         };
       }
       case "noise": {

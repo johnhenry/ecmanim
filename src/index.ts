@@ -34,7 +34,7 @@ export {
 } from "./core/constants.ts";
 export * as constants from "./core/constants.ts";
 
-export { Mobject, Group } from "./mobject/Mobject.ts";
+export { Mobject, Group, CompositeGroup } from "./mobject/Mobject.ts";
 export { VMobject, VGroup } from "./mobject/VMobject.ts";
 export {
   Arc, Circle, Dot, Ellipse, Annulus, Line, DashedLine, Arrow,

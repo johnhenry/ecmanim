@@ -98,6 +98,12 @@ export class Camera {
   // Mirrors ThreeDCamera.zoom (src/scene/three_d.ts), giving both renderer
   // paths one shared zoom mechanism for pointer-driven camera control.
   declare zoom?: number;
+  // Optional camera roll in radians (Motion Canvas `camera.rotation`):
+  // rotates the view about frameCenter. Unset/0 keeps toPixel on the exact
+  // pre-existing axis-aligned arithmetic. Synced from a rotated frame
+  // mobject in preRender() when one is set (rotate the frame, roll the
+  // camera), or set directly.
+  declare rotation?: number;
   // Camera-level full-frame grading (src/core/effects.ts FrameEffect):
   // blur/colorAdjust/glow/shadow applied to the whole composed frame, plus
   // vignette and grain (noise). Applied by CanvasRenderer at the end of both
@@ -115,6 +121,7 @@ export class Camera {
     this.frameCenter = config.frameCenter ?? [0, 0, 0];
     this.background = config.background ?? "#000000";
     if (config.zoom != null) this.zoom = config.zoom;
+    if (config.rotation != null) this.rotation = config.rotation;
     if (config.superSample != null) this.superSample = config.superSample;
     if (config.frameEffects != null) this.frameEffects = config.frameEffects;
   }
@@ -122,8 +129,16 @@ export class Camera {
   // World coordinates -> pixel coordinates (y is flipped: world y-up).
   toPixel(p: number[]): [number, number] {
     const z = this.zoom ?? 1;
-    const cx = p[0] - this.frameCenter[0];
-    const cy = p[1] - this.frameCenter[1];
+    let cx = p[0] - this.frameCenter[0];
+    let cy = p[1] - this.frameCenter[1];
+    const rot = this.rotation ?? 0;
+    if (rot !== 0) {
+      // A camera rolled by +rot shows the world rotated by -rot.
+      const c = Math.cos(-rot), s = Math.sin(-rot);
+      const rx = cx * c - cy * s;
+      cy = cx * s + cy * c;
+      cx = rx;
+    }
     return [
       (cx / this.frameWidth / z + 0.5) * this.pixelWidth,
       (0.5 - cy / this.frameHeight / z) * this.pixelHeight,
@@ -142,6 +157,25 @@ export class Camera {
     const f = this.frame;
     if (!f) return;
     if (typeof f.getCenter === "function") this.frameCenter = f.getCenter();
+    // A camera-frame Rectangle (marked by MovingCameraScene.setupFrame) may
+    // be ROTATED; its axis-aligned getWidth/getHeight would then report the
+    // inflated bounding box. Derive the true edge lengths and the roll angle
+    // from its corner anchors instead. ecmanim's Rectangle anchors run
+    // UR -> UL -> DL -> DR, so at rest the first edge points along -x.
+    if (f.__isCameraFrameRect && typeof f.getSubpaths === "function") {
+      const sp = f.getSubpaths()[0];
+      if (sp && sp.length >= 13) {
+        const c0 = sp[0], c1 = sp[3], c2 = sp[6];
+        this.frameWidth = Math.hypot(c1[0] - c0[0], c1[1] - c0[1]);
+        this.frameHeight = Math.hypot(c2[0] - c1[0], c2[1] - c1[1]);
+        // Normalize to (-pi, pi] so a wrapped atan2 doesn't report 2pi-off.
+        let roll = Math.atan2(c1[1] - c0[1], c1[0] - c0[0]) - Math.PI;
+        roll = ((roll % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        if (roll > Math.PI) roll -= 2 * Math.PI;
+        this.rotation = roll;
+        return;
+      }
+    }
     if (typeof f.getHeight === "function") this.frameHeight = f.getHeight();
     if (typeof f.getWidth === "function") this.frameWidth = f.getWidth();
   }
@@ -497,6 +531,12 @@ export class CanvasRenderer {
       // effects are applied PER LEAF, one offscreen composite each; subtree-
       // level compositing (blur the whole group as one image) is future work.
       const effects = m.effects?.length ? m.effects : inheritedEffects;
+      // A composite group is dispatched as ONE unit (its children render
+      // into a scoped offscreen layer) -- don't walk them into the flat list.
+      if (m._isCompositeGroup) {
+        if (m.submobjects.length) flat.push({ mob: m, z, depth: 0, seq: seq++, effects });
+        return;
+      }
       // Mesh3D is GPU-only (see renderScene3D()'s equivalent skip above) --
       // its `points` is just a bounding-box proxy, not real geometry.
       if (!m._isMesh3D && m.points && m.points.length) {
@@ -512,13 +552,53 @@ export class CanvasRenderer {
     // Ascending depth = far -> near (nearer draws last, on top).
     flat.sort((a, b) => (a.z - b.z) || (a.depth - b.depth) || (a.seq - b.seq));
     for (const { mob, effects } of flat) {
-      if (effects?.length) this._drawWithEffects(mob, effects);
-      else if (mob._isZoomedDisplay) this.drawZoomedDisplay(mob);
-      else if (mob._isText) this.drawText(mob);
-      else if (mob._isImage) this.drawImage(mob);
-      else if (mob._isParticles) this.drawParticles(mob);
-      else if (mob._cacheStatic) this._drawCachedVMobject(mob);
-      else this.drawVMobject(mob);
+      const op = mob.compositeOperation;
+      const savedOp = op ? this.ctx.globalCompositeOperation : undefined;
+      if (op) this.ctx.globalCompositeOperation = op;
+      try {
+        if (mob._isCompositeGroup) this.drawCompositeGroup(mob);
+        else if (effects?.length) this._drawWithEffects(mob, effects);
+        else if (mob._isZoomedDisplay) this.drawZoomedDisplay(mob);
+        else if (mob._isText) this.drawText(mob);
+        else if (mob._isImage) this.drawImage(mob);
+        else if (mob._isParticles) this.drawParticles(mob);
+        else if (mob._cacheStatic) this._drawCachedVMobject(mob);
+        else this.drawVMobject(mob);
+      } finally {
+        if (op) this.ctx.globalCompositeOperation = savedOp!;
+      }
+    }
+  }
+
+  // Render a CompositeGroup's children into a full-frame offscreen layer
+  // (children's compositeOperations blend against siblings only), then draw
+  // the finished layer with the group's opacity. The group's OWN
+  // compositeOperation is applied by the dispatch loop above, so the layer
+  // itself blends into the scene like any single mobject would. Degrades to
+  // unscoped child rendering when no offscreen backend exists.
+  drawCompositeGroup(group: any): void {
+    const { camera } = this;
+    const off = this._makeOffscreen(camera.pixelWidth, camera.pixelHeight);
+    if (!off) {
+      this.renderMobjects(group.submobjects);
+      return;
+    }
+    const offCtx = off.getContext("2d");
+    const savedCtx = this.ctx;
+    this.ctx = offCtx;
+    try {
+      this.renderMobjects(group.submobjects);
+    } finally {
+      this.ctx = savedCtx;
+    }
+    const alpha = group.opacity ?? 1;
+    if (alpha >= 1) {
+      this.ctx.drawImage(off, 0, 0);
+    } else {
+      const savedAlpha = this.ctx.globalAlpha;
+      this.ctx.globalAlpha = savedAlpha * alpha;
+      this.ctx.drawImage(off, 0, 0);
+      this.ctx.globalAlpha = savedAlpha;
     }
   }
 
@@ -599,13 +679,13 @@ export class CanvasRenderer {
     // use its own toRGBAString()/toHex() explicitly.
     const fill = mob.fillColor?.toRGBAString?.() ?? String(mob.fillColor);
     const stroke = mob.strokeColor?.toRGBAString?.() ?? String(mob.strokeColor);
-    s += `|${fill}|${stroke}|${mob.strokeWidth}|${mob.fillOpacity}|${mob.strokeOpacity}|${mob.strokeEnd ?? 1}`;
+    s += `|${fill}|${stroke}|${mob.strokeWidth}|${mob.fillOpacity}|${mob.strokeOpacity}|${mob.strokeEnd ?? 1}|${mob.strokeStart ?? 0}`;
     return s;
   }
 
   private _cameraFingerprint(): string {
     const c = this.camera;
-    return `${c.frameCenter.join(",")}|${c.frameWidth}|${c.frameHeight}|${c.zoom ?? 1}`;
+    return `${c.frameCenter.join(",")}|${c.frameWidth}|${c.frameHeight}|${c.zoom ?? 1}|${c.rotation ?? 0}`;
   }
 
   private _pixelBBox(mob: any): { minX: number; minY: number; maxX: number; maxY: number } {
@@ -889,27 +969,42 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  // Trace a VMobject's subpaths into the current path, honoring strokeEnd for
-  // progressive drawing (Create/Write).
-  tracePath(mob: any, proportion = 1): void {
+  // Trace a VMobject's subpaths into the current path, honoring strokeEnd
+  // (and optionally strokeStart) for progressive drawing (Create/Write and
+  // Motion Canvas's start-side partial draw). Curves in [startProportion,
+  // proportion] of the total outline are emitted; entry/exit curves are
+  // clipped exactly via partialBezier.
+  tracePath(mob: any, proportion = 1, startProportion = 0): void {
     const { ctx, camera } = this;
     const subpaths = mob.getSubpaths();
     const totalCurves = subpaths.reduce((n: number, sp: number[][]) => n + Math.max(0, Math.floor((sp.length - 1) / 3)), 0);
     const drawCurves = totalCurves * Math.max(0, Math.min(1, proportion));
+    const skipCurves = totalCurves * Math.max(0, Math.min(1, startProportion));
     let drawn = 0;
+    let penDown = false;
 
     for (const sp of subpaths) {
       const nc = Math.floor((sp.length - 1) / 3);
       if (nc < 1) continue;
       if (drawn >= drawCurves) break;
-      const [sx, sy] = camera.toPixel(sp[0]);
-      ctx.moveTo(sx, sy);
+      penDown = false;
       for (let i = 0; i < nc; i++) {
         if (drawn >= drawCurves) break;
+        // Fully before the start window: skip without drawing.
+        if (drawn + 1 <= skipCurves) {
+          drawn += 1;
+          continue;
+        }
         let a = sp[3 * i], c1 = sp[3 * i + 1], c2 = sp[3 * i + 2], b = sp[3 * i + 3];
-        const remaining = drawCurves - drawn;
-        if (remaining < 1) {
-          [a, c1, c2, b] = partialBezier(a, c1, c2, b, 0, remaining);
+        const t0 = Math.max(0, skipCurves - drawn);
+        const t1 = Math.min(1, drawCurves - drawn);
+        if (t0 > 0 || t1 < 1) {
+          [a, c1, c2, b] = partialBezier(a, c1, c2, b, t0, t1);
+        }
+        if (!penDown || t0 > 0) {
+          const [sx, sy] = camera.toPixel(a);
+          ctx.moveTo(sx, sy);
+          penDown = true;
         }
         const p1 = camera.toPixel(c1);
         const p2 = camera.toPixel(c2);
@@ -959,6 +1054,7 @@ export class CanvasRenderer {
     if (mob.points.length === 0) return;
 
     const proportion = mob.strokeEnd ?? 1;
+    const startProportion = mob.strokeStart ?? 0;
     const opacity = mob.opacity ?? 1;
     const lineJoin: CanvasLineJoin = mob.lineJoin ?? "round";
     const lineCap: CanvasLineCap = mob.lineCap ?? "round";
@@ -980,7 +1076,7 @@ export class CanvasRenderer {
     const bgOpacity = mob.backgroundStrokeOpacity ?? 1;
     if (bgWidth > 0 && bgOpacity > 0 && mob.backgroundStrokeColor) {
       ctx.beginPath();
-      this.tracePath(mob, proportion);
+      this.tracePath(mob, proportion, startProportion);
       ctx.strokeStyle = mob.backgroundStrokeColor.toRGBAString(bgOpacity * opacity);
       ctx.lineWidth = bgWidth * camera.strokeScale();
       ctx.lineJoin = lineJoin;
@@ -993,7 +1089,7 @@ export class CanvasRenderer {
     const strokeWidth = mob.strokeWidth ?? 0;
     if (strokeWidth > 0 && strokeOpacity > 0) {
       ctx.beginPath();
-      this.tracePath(mob, proportion);
+      this.tracePath(mob, proportion, startProportion);
       ctx.strokeStyle = mob.strokeColor.toRGBAString(strokeOpacity * opacity);
       ctx.lineWidth = strokeWidth * camera.strokeScale();
       ctx.lineJoin = lineJoin;

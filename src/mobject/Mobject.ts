@@ -53,6 +53,12 @@ export class Mobject {
    *  renderer at draw time -- see the fluent helpers in the style section
    *  below and src/core/effects.ts for renderer support notes. */
   effects?: Effect[];
+  /** Canvas blend mode for this mobject's own draw (Motion Canvas
+   *  `compositeOperation`), e.g. "multiply", "screen", "destination-out".
+   *  Applies against whatever is already on the canvas beneath it; scope it
+   *  with a CompositeGroup to blend only against siblings. Canvas backends
+   *  only. */
+  compositeOperation?: GlobalCompositeOperation;
 
   constructor(config: MobjectConfig = {}) {
     this.id = _idCounter++;
@@ -342,7 +348,7 @@ export class Mobject {
     });
   }
 
-  colorAdjust(opts: { brightness?: number; contrast?: number; saturate?: number; hueRotate?: number }): this {
+  colorAdjust(opts: { brightness?: number; contrast?: number; saturate?: number; hueRotate?: number; grayscale?: number }): this {
     return this.addEffect({ type: "colorAdjust", ...opts });
   }
 
@@ -871,4 +877,17 @@ export class Group extends Mobject {
     super();
     this.add(...mobs);
   }
+}
+
+/**
+ * A Group whose children render into their own offscreen layer, so their
+ * `compositeOperation`s blend against SIBLINGS only (Motion Canvas's
+ * layer-scoped compositing: a "destination-out" child cuts a hole in the
+ * group, not in the whole scene). The finished layer is then drawn onto the
+ * scene normally (honoring the group's own opacity/compositeOperation).
+ * Canvas backends only; where no offscreen canvas exists the children draw
+ * unscoped (documented degradation, same convention as effects).
+ */
+export class CompositeGroup extends Group {
+  readonly _isCompositeGroup = true;
 }

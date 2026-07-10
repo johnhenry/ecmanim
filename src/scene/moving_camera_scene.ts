@@ -8,6 +8,7 @@ import { Scene } from "./Scene.ts";
 import type { SceneConfig } from "./Scene.ts";
 import { Rectangle } from "../mobject/geometry.ts";
 import type { Camera } from "../renderer/CanvasRenderer.ts";
+import type { Mobject } from "../mobject/Mobject.ts";
 import * as V from "../core/math/vector.ts";
 import { ApplyMethod } from "../animation/Animation.ts";
 import type { AnimationConfig } from "../animation/Animation.ts";
@@ -86,7 +87,82 @@ export class MovingCameraScene extends Scene {
       fillOpacity: 0,
     });
     frame.moveTo(V.clone(cam.frameCenter));
+    // Marks the frame as a rotatable camera rect: the renderer's preRender()
+    // derives frameWidth/frameHeight/rotation from its corner anchors (so
+    // `frame.animate.rotate(a)` rolls the camera) instead of the rotation-
+    // blind axis-aligned bounding box.
+    (frame as any).__isCameraFrameRect = true;
     cam.frame = frame;
+    this._initialFrameState = {
+      center: V.clone(cam.frameCenter),
+      width: cam.frameWidth,
+      height: cam.frameHeight,
+    };
+  }
+
+  private _initialFrameState?: { center: number[]; width: number; height: number };
+
+  /**
+   * Animate the camera to center on a mobject or point (Motion Canvas's
+   * `camera().centerOn(node, dur)`). Pure frame movement -- zoom/rotation
+   * are untouched.
+   */
+  async centerOn(target: Mobject | number[], config: AnimationConfig = {}): Promise<this> {
+    const point = Array.isArray(target) ? [...target] : target.getCenter();
+    const frame = this.getFrame();
+    const anim = new ApplyMethod(frame, function (this: any): void {
+      this.moveTo(point);
+    });
+    if (config.runTime != null) anim.runTime = config.runTime;
+    if (config.rateFunc != null) anim.rateFunc = config.rateFunc;
+    await this.play(anim);
+    return this;
+  }
+
+  /**
+   * Animate the camera roll by `angle` radians (Motion Canvas's
+   * `camera().rotation(deg, dur)`, additive). Sugar over rotating the frame
+   * mobject; preRender() picks the roll up from its corners.
+   */
+  async rotateCamera(angle: number, config: AnimationConfig = {}): Promise<this> {
+    const frame = this.getFrame();
+    const anim = new ApplyMethod(frame, function (this: any): void {
+      this.rotate(angle);
+    });
+    if (config.runTime != null) anim.runTime = config.runTime;
+    if (config.rateFunc != null) anim.rateFunc = config.rateFunc;
+    await this.play(anim);
+    return this;
+  }
+
+  /**
+   * Animate the camera back to its initial viewport (Motion Canvas's
+   * `camera().reset(dur)`): center, size, and zero roll as they were when
+   * the frame was created.
+   */
+  async resetCamera(config: AnimationConfig = {}): Promise<this> {
+    const init = this._initialFrameState;
+    const frame = this.getFrame();
+    if (!init) return this;
+    // Current roll, derived the same way the renderer does (first-edge angle
+    // vs the Rectangle's rest -x direction) so the un-rotation is exact.
+    const sp = frame.getSubpaths()[0];
+    let roll = sp && sp.length >= 4
+      ? Math.atan2(sp[3][1] - sp[0][1], sp[3][0] - sp[0][0]) - Math.PI
+      : 0;
+    // Same (-pi, pi] normalization the renderer's preRender() applies.
+    roll = ((roll % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    if (roll > Math.PI) roll -= 2 * Math.PI;
+    const anim = new ApplyMethod(frame, function (this: any): void {
+      if (roll !== 0) this.rotate(-roll);
+      this.setWidth(init.width, true);
+      this.setHeight(init.height, true);
+      this.moveTo(init.center);
+    });
+    if (config.runTime != null) anim.runTime = config.runTime;
+    if (config.rateFunc != null) anim.rateFunc = config.rateFunc;
+    await this.play(anim);
+    return this;
   }
 
   /** The camera's frame mobject (creating it if the camera was set late). */
