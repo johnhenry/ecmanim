@@ -47,12 +47,14 @@ test("preRender is a no-op when no frame is set (renderer unaffected)", () => {
   assert.ok(renderer);
 });
 
-test("ZoomedScene has a zoomedCamera region and a zoomedDisplay", () => {
+test("ZoomedScene has a zoomedCamera.frame region and a zoomedDisplay", () => {
   const scene = new ZoomedScene({ camera: new Camera(CFG) });
-  assert.ok(scene.zoomedCamera, "has zoomedCamera");
+  // manim shape: the source region is `zoomedCamera.frame` (a Rectangle).
+  assert.ok(scene.zoomedCamera.frame, "has zoomedCamera.frame");
   assert.ok(scene.zoomedDisplay, "has zoomedDisplay");
+  assert.ok(scene.zoomedDisplay.displayFrame, "display carries its border frame");
   // The region is smaller than the display it magnifies into.
-  assert.ok(scene.zoomedCamera.getHeight() < scene.zoomedDisplay.getHeight());
+  assert.ok(scene.zoomedCamera.frame.getHeight() < scene.zoomedDisplay.getHeight());
   assert.ok(scene.getZoomFactor() > 0 && scene.getZoomFactor() < 1);
 });
 

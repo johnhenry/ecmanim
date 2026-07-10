@@ -182,3 +182,41 @@ export class ChangeSpeed extends Animation {
     return this.wrapped.getMobjectsToRemove ? this.wrapped.getMobjectsToRemove() : [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// UpdateFromFunc / UpdateFromAlphaFunc (manim parity)
+// ---------------------------------------------------------------------------
+
+/**
+ * Calls `updateFunction(mobject)` every frame of the animation — manim's
+ * escape hatch for driving one mobject from another mid-play (e.g.
+ * MovingZoomedSceneAround keeps a backdrop glued to the zoomed display while
+ * it scales). The function receives NO alpha; use UpdateFromAlphaFunc for
+ * alpha-driven variants.
+ */
+export class UpdateFromFunc extends Animation {
+  updateFunction: (mob: any) => void;
+
+  constructor(mobject: any, updateFunction: (mob: any) => void, config: any = {}) {
+    super(mobject, config);
+    this.updateFunction = updateFunction;
+  }
+
+  interpolateMobject(_alpha: number): void {
+    this.updateFunction(this.mobject);
+  }
+}
+
+/** Like UpdateFromFunc, but the callback also receives the eased alpha. */
+export class UpdateFromAlphaFunc extends Animation {
+  updateFunction: (mob: any, alpha: number) => void;
+
+  constructor(mobject: any, updateFunction: (mob: any, alpha: number) => void, config: any = {}) {
+    super(mobject, config);
+    this.updateFunction = updateFunction;
+  }
+
+  interpolateMobject(alpha: number): void {
+    this.updateFunction(this.mobject, alpha);
+  }
+}

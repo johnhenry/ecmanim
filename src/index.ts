@@ -84,7 +84,7 @@ export { SVGMobject, parseXML, parseTransform } from "./mobject/svg_mobject.ts";
 export { ThreeDScene, ThreeDCamera, ThreeDAxes } from "./scene/three_d.ts";
 export { MovingCameraScene, ScreenRectangle, FullScreenRectangle } from "./scene/moving_camera_scene.ts";
 export type { CameraStop } from "./scene/moving_camera_scene.ts";
-export { ZoomedScene } from "./scene/zoomed_scene.ts";
+export { ZoomedScene, ZoomedDisplay } from "./scene/zoomed_scene.ts";
 export { VectorScene, LinearTransformationScene } from "./scene/vector_space_scene.ts";
 export { MultiCamera } from "./camera/multi_camera.ts";
 export { MappingCamera } from "./camera/mapping_camera.ts";
@@ -169,7 +169,7 @@ export { Player } from "./player.ts";
 export { Homotopy, SmoothedVectorizedHomotopy, ComplexHomotopy, PhaseFlow } from "./animation/movement.ts";
 export { ShowPassingFlash, ShowPassingFlashWithThinningStrokeWidth, ApplyWave, Blink } from "./animation/indication_extra.ts";
 export { AnimatedBoundary, TracedPath } from "./animation/changing.ts";
-export { Broadcast, ChangeSpeed } from "./animation/specialized.ts";
+export { Broadcast, ChangeSpeed, UpdateFromFunc, UpdateFromAlphaFunc } from "./animation/specialized.ts";
 export { ComplexValueTracker } from "./mobject/complex_value_tracker.ts";
 export * as rate_functions from "./animation/rate_functions.ts";
 

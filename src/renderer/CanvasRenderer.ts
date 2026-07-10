@@ -170,6 +170,8 @@ export class CanvasRenderer {
   _zb?: ZBuffer;
   private _staticCache = new WeakMap<any, StaticCacheEntry>();
   private _createCanvas?: (w: number, h: number) => any;
+  // Top-level mobjects of the current renderScene call (zoomed-display source).
+  private _sceneMobjects?: any[];
   // Deterministic noise-effect tile canvases, keyed by `${seed}|${mono}`.
   private _noiseTiles = new Map<string, any>();
 
@@ -194,6 +196,9 @@ export class CanvasRenderer {
   renderScene(mobjects: any[]): void {
     // Sync the viewport to an animatable camera frame (no-op when unset).
     this.camera.preRender?.();
+    // Remember the frame's full top-level list so a zoomed display can
+    // re-render the scene through its own derived camera (drawZoomedDisplay).
+    this._sceneMobjects = mobjects;
     // With a 3D camera, use the depth-buffered rasterizer so interpenetrating
     // surfaces resolve per pixel (painter sorting can't). 2D uses vector fills.
     if (typeof this.camera.projectionDepth === "function" && !this.camera.disableZBuffer) {
@@ -498,6 +503,9 @@ export class CanvasRenderer {
         const depth = camera3d ? camera3d.projectionDepth!(centroid(m.points)) : 0;
         flat.push({ mob: m, z, depth, seq: seq++, effects });
       }
+      // A zoomed display renders itself (blit + border) -- don't ALSO walk
+      // its children through the normal dispatch.
+      if (m._isZoomedDisplay) return;
       for (const s of m.submobjects) collect(s, z, effects);
     };
     for (const m of mobjects) collect(m, 0, undefined);
@@ -505,11 +513,62 @@ export class CanvasRenderer {
     flat.sort((a, b) => (a.z - b.z) || (a.depth - b.depth) || (a.seq - b.seq));
     for (const { mob, effects } of flat) {
       if (effects?.length) this._drawWithEffects(mob, effects);
+      else if (mob._isZoomedDisplay) this.drawZoomedDisplay(mob);
       else if (mob._isText) this.drawText(mob);
       else if (mob._isImage) this.drawImage(mob);
       else if (mob._isParticles) this.drawParticles(mob);
       else if (mob._cacheStatic) this._drawCachedVMobject(mob);
       else this.drawVMobject(mob);
+    }
+  }
+
+  // Render the scene AGAIN through a derived camera focused on the zoomed
+  // frame's region, into the display's screen rectangle (ZoomedScene's
+  // render-to-region compositing -- manim's MultiCamera equivalent). Uses the
+  // same offscreen machinery as the effects pipeline; on backends with no
+  // offscreen support the display draws only its border (documented
+  // degradation, same convention as effects).
+  drawZoomedDisplay(mob: any): void {
+    const { ctx, camera } = this;
+    const frame = mob._sourceFrame;
+    if (!frame) return;
+    // Display rect in pixels (from the display's own 4-corner box).
+    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+    for (const p of mob.points) {
+      const [x, y] = camera.toPixel(p);
+      minx = Math.min(minx, x); miny = Math.min(miny, y);
+      maxx = Math.max(maxx, x); maxy = Math.max(maxy, y);
+    }
+    const wpx = Math.max(2, Math.round(maxx - minx));
+    const hpx = Math.max(2, Math.round(maxy - miny));
+
+    const off = this._makeOffscreen(wpx, hpx);
+    if (off) {
+      const offCtx = off.getContext("2d");
+      const derived = new Camera({
+        pixelWidth: wpx,
+        pixelHeight: hpx,
+        frameWidth: frame.getWidth(),
+        frameHeight: frame.getHeight(),
+        frameCenter: frame.getCenter(),
+        background: camera.background,
+      });
+      const sub = new CanvasRenderer(offCtx, derived, { createCanvas: this._createCanvas as any });
+      // Everything the main render call saw, minus zoom displays (recursion)
+      // and the source-frame border itself (manim doesn't show the frame
+      // inside its own zoom).
+      const sceneMobs = (this._sceneMobjects ?? []).filter(
+        (m: any) => !m._isZoomedDisplay && m !== frame,
+      );
+      sub.clear();
+      sub.renderMobjects(sceneMobs);
+      ctx.save();
+      ctx.drawImage(off, minx, miny, wpx, hpx);
+      ctx.restore();
+    }
+    // Border + any other display chrome draw on top of the blit.
+    for (const child of mob.submobjects ?? []) {
+      if (child.points?.length) this.drawVMobject(child);
     }
   }
 

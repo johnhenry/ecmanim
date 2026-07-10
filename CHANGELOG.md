@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **ZoomedScene, for real**: the zoomed display now RENDERS the framed
+  region (render-to-region compositing through a derived camera, using the
+  effects pipeline's offscreen machinery) instead of being a placeholder
+  rectangle. manim-shaped API: `zoomedCamera.frame` (live source region),
+  `zoomedDisplay.displayFrame`, `zoomedCameraConfig.defaultFrameStroke*`,
+  `getZoomInAnimation()`, `getZoomedDisplayPopOutAnimation()`,
+  `activateZooming(animate)`. Plus `Scene.addForegroundMobject(s)` (kept
+  drawn last), `UpdateFromFunc`/`UpdateFromAlphaFunc` animations, and
+  `Mobject.replace(other, {stretch})`. Canvas backends only (SVG/GL draw
+  the border and skip the blit — same convention as effects/particles).
+
 - **Manim-gallery parity APIs (M1-M4)** — everything needed to port the 27
   examples on docs.manim.community 1:1: `NumberLine`
   `numbersToInclude`/`numbersWithElongatedTicks` (threaded through Axes

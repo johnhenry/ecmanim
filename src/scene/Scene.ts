@@ -260,7 +260,37 @@ export class Scene {
     for (const m of mobs.flat()) {
       if (m && !this.mobjects.includes(m)) this.mobjects.push(m);
     }
+    this._restackForeground();
     return this;
+  }
+
+  /** manim parity (add_foreground_mobject(s)): keep these drawn LAST, above
+   *  everything later add()s introduce. */
+  addForegroundMobject(...mobs: (Mobject | Mobject[])[]): this {
+    for (const m of mobs.flat()) {
+      if (m && !this._foreground.includes(m)) this._foreground.push(m);
+      if (m && !this.mobjects.includes(m)) this.mobjects.push(m);
+    }
+    this._restackForeground();
+    return this;
+  }
+  /** Alias matching manim's plural spelling. */
+  addForegroundMobjects(...mobs: (Mobject | Mobject[])[]): this {
+    return this.addForegroundMobject(...mobs);
+  }
+
+  removeForegroundMobject(...mobs: (Mobject | Mobject[])[]): this {
+    const set = new Set(mobs.flat());
+    this._foreground = this._foreground.filter((m) => !set.has(m));
+    return this;
+  }
+
+  private _foreground: Mobject[] = [];
+  private _restackForeground(): void {
+    if (!this._foreground.length) return;
+    const fg = this._foreground.filter((m) => this.mobjects.includes(m));
+    if (!fg.length) return;
+    this.mobjects = [...this.mobjects.filter((m) => !fg.includes(m)), ...fg];
   }
 
   remove(...mobs: (Mobject | Mobject[])[]): this {

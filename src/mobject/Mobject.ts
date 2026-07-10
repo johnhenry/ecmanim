@@ -163,6 +163,22 @@ export class Mobject {
     });
   }
 
+  /** manim parity (replace): move onto `other` and match its size along
+   *  `dimToMatch` (0=width, 1=height); `stretch` matches BOTH dimensions. */
+  replace(other: Mobject, { dimToMatch = 0, stretch = false }: { dimToMatch?: number; stretch?: boolean } = {}): this {
+    if (stretch) {
+      const w = other.getWidth() / Math.max(1e-12, this.getWidth());
+      const h = other.getHeight() / Math.max(1e-12, this.getHeight());
+      this.scale([w, h, 1]);
+    } else {
+      const ratio = dimToMatch === 1
+        ? other.getHeight() / Math.max(1e-12, this.getHeight())
+        : other.getWidth() / Math.max(1e-12, this.getWidth());
+      this.scale(ratio);
+    }
+    return this.moveTo(other.getCenter());
+  }
+
   /** manim parity: rotate about the world origin (not the mobject center). */
   rotateAboutOrigin(angle: number, axis: number[] = V.OUT): this {
     return this.rotate(angle, { axis, aboutPoint: V.ORIGIN });
