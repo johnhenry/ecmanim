@@ -51,6 +51,8 @@ jobs:
             demos: "11-treemap 16-force-directed-graph 06-bar-chart-race"
           - suite: threeb1b-parity
             demos: "01-fourier-epicycles 02-linear-transformation 08-taylor-series"
+          - suite: mermaid-parity
+            demos: "01-flowchart 02-sequence 13-diagram-diff"
     steps:
       - uses: actions/checkout@v4
 

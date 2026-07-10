@@ -139,3 +139,32 @@ test("gantt reveal: scaffolding first, bars grow in id order, plays clean", { sk
   assert.ok(scene.mobjects.includes(diagram), "diagram on scene");
   assert.equal(scene.mobjects.length, 1, "no stragglers");
 });
+
+// -- pie / un-id'd parts (campaign 4, M1.5) ----------------------------------------
+
+test("pie reveal: un-id'd parts get the documented GrowFromCenter default, plays clean", { skip: SKIP }, async () => {
+  const { GrowFromCenter } = await import("../src/animation/extra.ts");
+  const diagram = await loadMermaid('pie title Pets\n  "Dogs": 40\n  "Cats": 60');
+  assert.equal(diagram.diagramType, "pie");
+  const anim = revealDiagram(diagram, { runTime: 1 });
+  // Pie emits no per-element ids, so every part is synthetic — the per-type
+  // default (GrowFromCenter) must reach them (used to hardwire FadeIn).
+  const grows = (anim as any).animations.filter((a: unknown) => a instanceof GrowFromCenter);
+  assert.ok(grows.length > 0, `composed children include GrowFromCenter (${grows.length})`);
+  const scene = silentScene();
+  await scene.play(anim);
+  assert.ok(scene.mobjects.includes(diagram), "diagram on scene");
+  assert.equal(scene.mobjects.length, 1, "no stragglers");
+});
+
+test("pie reveal: a user nodeAnimation factory reaches synthetic parts too", { skip: SKIP }, async () => {
+  const { FadeIn } = await import("../src/animation/Animation.ts");
+  const diagram = await loadMermaid('pie title Pets\n  "Dogs": 40\n  "Cats": 60');
+  const seen: string[] = [];
+  const anim = revealDiagram(diagram, {
+    runTime: 1,
+    nodeAnimation: (part, id) => { seen.push(id); return new FadeIn(part); },
+  });
+  assert.ok(seen.length > 0 && seen.every((id) => /^part\d+$/.test(id)), `factory called for synthetic ids: ${seen.join(", ")}`);
+  assert.equal((anim as any).animations.length, seen.length, "every part went through the factory");
+});

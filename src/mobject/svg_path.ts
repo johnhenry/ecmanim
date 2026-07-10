@@ -33,6 +33,104 @@ function quadToCubic(p0: number[], q: number[], p2: number[]): number[][] {
   ];
 }
 
+// SVG elliptical arc (endpoint parameterization, spec appendix F.6.5) to a
+// list of cubic-Bezier segments [c1, c2, end], splitting sweeps > 90° so each
+// cubic approximates at most a quarter turn. Works directly in the path's own
+// (y-down) coordinate space; degenerate radii fall back to a straight chord
+// per the spec (F.6.6: rx==0 or ry==0 means a line; too-small radii scale up).
+export function arcToCubics(
+  x1: number, y1: number,
+  rx: number, ry: number,
+  xAxisRotationDeg: number,
+  largeArcFlag: number,
+  sweepFlag: number,
+  x2: number, y2: number,
+): Array<[number[], number[], number[]]> {
+  if (x1 === x2 && y1 === y2) return [];
+  rx = Math.abs(rx);
+  ry = Math.abs(ry);
+  const chord = (): Array<[number[], number[], number[]]> => [[
+    lerp2([x1, y1, 0], [x2, y2, 0], 1 / 3),
+    lerp2([x1, y1, 0], [x2, y2, 0], 2 / 3),
+    [x2, y2, 0],
+  ]];
+  if (rx === 0 || ry === 0) return chord();
+
+  const phi = (xAxisRotationDeg * Math.PI) / 180;
+  const cosP = Math.cos(phi), sinP = Math.sin(phi);
+
+  // (F.6.5.1) midpoint-relative start point in the ellipse's axis frame.
+  const dx = (x1 - x2) / 2, dy = (y1 - y2) / 2;
+  const x1p = cosP * dx + sinP * dy;
+  const y1p = -sinP * dx + cosP * dy;
+
+  // (F.6.6.2) scale radii up if no ellipse of the given radii can reach.
+  const lambda = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
+  if (lambda > 1) {
+    const s = Math.sqrt(lambda);
+    rx *= s;
+    ry *= s;
+  }
+
+  // (F.6.5.2) center in the axis frame.
+  const rx2 = rx * rx, ry2 = ry * ry;
+  const num = rx2 * ry2 - rx2 * y1p * y1p - ry2 * x1p * x1p;
+  const den = rx2 * y1p * y1p + ry2 * x1p * x1p;
+  if (den === 0) return chord();
+  const coef = (largeArcFlag !== sweepFlag ? 1 : -1) * Math.sqrt(Math.max(0, num / den));
+  const cxp = coef * ((rx * y1p) / ry);
+  const cyp = coef * (-(ry * x1p) / rx);
+
+  // (F.6.5.3) center in user space.
+  const cx = cosP * cxp - sinP * cyp + (x1 + x2) / 2;
+  const cy = sinP * cxp + cosP * cyp + (y1 + y2) / 2;
+
+  // (F.6.5.4-6) start angle and sweep extent.
+  const angleOf = (ux: number, uy: number, vx: number, vy: number): number => {
+    const dot = ux * vx + uy * vy;
+    const len = Math.hypot(ux, uy) * Math.hypot(vx, vy);
+    let a = Math.acos(Math.min(1, Math.max(-1, dot / len)));
+    if (ux * vy - uy * vx < 0) a = -a;
+    return a;
+  };
+  const ux = (x1p - cxp) / rx, uy = (y1p - cyp) / ry;
+  const vx = (-x1p - cxp) / rx, vy = (-y1p - cyp) / ry;
+  const theta1 = angleOf(1, 0, ux, uy);
+  let dTheta = angleOf(ux, uy, vx, vy);
+  if (!sweepFlag && dTheta > 0) dTheta -= 2 * Math.PI;
+  else if (sweepFlag && dTheta < 0) dTheta += 2 * Math.PI;
+
+  // Point on / derivative of the (rotated) ellipse at parameter t.
+  const pointAt = (t: number): number[] => {
+    const c = Math.cos(t), s = Math.sin(t);
+    return [cx + rx * c * cosP - ry * s * sinP, cy + rx * c * sinP + ry * s * cosP, 0];
+  };
+  const derivAt = (t: number): number[] => {
+    const c = Math.cos(t), s = Math.sin(t);
+    return [-rx * s * cosP - ry * c * sinP, -rx * s * sinP + ry * c * cosP, 0];
+  };
+
+  // Split into <= 90° segments; each becomes one cubic with the standard
+  // k = 4/3 * tan(delta/4) Hermite-style control-point construction.
+  const segments = Math.max(1, Math.ceil(Math.abs(dTheta) / (Math.PI / 2)));
+  const delta = dTheta / segments;
+  const k = (4 / 3) * Math.tan(delta / 4);
+  const out: Array<[number[], number[], number[]]> = [];
+  for (let s = 0; s < segments; s++) {
+    const t0 = theta1 + s * delta;
+    const t1 = t0 + delta;
+    const p0 = pointAt(t0), p1 = pointAt(t1);
+    const d0 = derivAt(t0), d1 = derivAt(t1);
+    const end: number[] = s === segments - 1 ? [x2, y2, 0] : p1; // land exactly on the endpoint
+    out.push([
+      [p0[0] + k * d0[0], p0[1] + k * d0[1], 0],
+      [p1[0] - k * d1[0], p1[1] - k * d1[1], 0],
+      end,
+    ]);
+  }
+  return out;
+}
+
 export function parsePathToSubpaths(d: string): number[][][] {
   const tokens = tokenize(d);
   const subpaths: number[][][] = [];
@@ -129,10 +227,18 @@ export function parsePathToSubpaths(d: string): number[][][] {
         }
         break;
       case "A":
-        // Arc: approximate with a straight line (rare in glyph/MathJax output).
+        // Elliptical arc: endpoint-to-center parameterization, converted to
+        // cubic segments (arcs > 90° are split). NOTE: the tokenizer assumes
+        // whitespace/comma-separated numbers, so the compact no-separator
+        // flag form ("a1 1 0 011 1") is not supported (mermaid/MathJax/
+        // inkscape all emit separated numbers).
         while (hasNum()) {
-          nextNum(); nextNum(); nextNum(); nextNum(); nextNum(); // rx ry rot laf sweep
-          lineTo(abs(nextNum(), nextNum()));
+          const rx = nextNum(), ry = nextNum(), rot = nextNum();
+          const laf = nextNum(), sweep = nextNum();
+          const end = abs(nextNum(), nextNum());
+          const cubics = arcToCubics(cursor[0], cursor[1], rx, ry, rot, laf ? 1 : 0, sweep ? 1 : 0, end[0], end[1]);
+          if (cubics.length === 0 && (cursor[0] !== end[0] || cursor[1] !== end[1])) lineTo(end);
+          for (const [c1, c2, e] of cubics) pushCubic(c1, c2, e);
         }
         break;
       case "Z":

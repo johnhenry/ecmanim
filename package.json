@@ -73,7 +73,8 @@
     "demos:manim": "node --experimental-strip-types --no-warnings examples/manim-parity/_all.ts",
     "demos:mc": "for f in examples/motion-canvas-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
     "demos:d3": "for f in examples/d3-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
-    "demos:3b1b": "for f in examples/threeb1b-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done"
+    "demos:3b1b": "for f in examples/threeb1b-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
+    "demos:mermaid": "for f in examples/mermaid-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done"
   },
   "keywords": [
     "manim",

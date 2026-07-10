@@ -54,6 +54,56 @@ const CSS_NAMED_COLORS: Record<string, string> = {
   white: "#ffffff", whitesmoke: "#f5f5f5", yellow: "#ffff00", yellowgreen: "#9acd32",
 };
 
+// CSS functional color notation: rgb()/rgba() (0-255 or %) and hsl()/hsla()
+// (h in degrees — bare number or "Ndeg"; s/l as % or 0..1 fractions), with
+// optional alpha (0..1 or %) in either comma- or space/slash-separated form.
+// Returns null for anything that isn't a recognizable color function, so the
+// caller can fall through to hex parsing.
+function parseCssColorFunction(input: string): Color | null {
+  const m = /^(rgba?|hsla?)\(\s*([^)]*?)\s*\)$/i.exec(input.trim());
+  if (!m) return null;
+  const kind = m[1].toLowerCase();
+  const parts = m[2].split(/[\s,/]+/).filter(Boolean);
+  if (parts.length < 3) return null;
+  const c01 = (x: number) => Math.max(0, Math.min(1, x));
+  const alphaOf = (t: string | undefined): number => {
+    if (t === undefined) return 1;
+    const v = parseFloat(t);
+    if (!Number.isFinite(v)) return 1;
+    return c01(t.trim().endsWith("%") ? v / 100 : v);
+  };
+  if (kind.startsWith("rgb")) {
+    const ch = (t: string): number => {
+      const v = parseFloat(t);
+      if (!Number.isFinite(v)) return 0;
+      return c01(t.trim().endsWith("%") ? v / 100 : v / 255);
+    };
+    return new Color(ch(parts[0]), ch(parts[1]), ch(parts[2]), alphaOf(parts[3]));
+  }
+  // hsl / hsla
+  const hRaw = parseFloat(parts[0]);
+  if (!Number.isFinite(hRaw)) return null;
+  let h = ((hRaw % 360) + 360) % 360;
+  const sl = (t: string): number => {
+    const v = parseFloat(t);
+    if (!Number.isFinite(v)) return 0;
+    return c01(t.trim().endsWith("%") ? v / 100 : v);
+  };
+  const s = sl(parts[1]);
+  const l = sl(parts[2]);
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const mm = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return new Color(r + mm, g + mm, b + mm, alphaOf(parts[3]));
+}
+
 export class Color {
   r: number;
   g: number;
@@ -71,6 +121,10 @@ export class Color {
     if (input == null) return new Color(1, 1, 1, 1);
     if (input instanceof Color) return new Color(input.r, input.g, input.b, input.a);
     if (typeof input === "string") {
+      // CSS functional notation: rgb()/rgba()/hsl()/hsla() — these used to
+      // fall through fromHex and silently come out black.
+      const fn = parseCssColorFunction(input);
+      if (fn) return fn;
       // Resolve plugin-registered / named colors (e.g. "RED") to their hex,
       // then the standard CSS named-color table (e.g. "lightseagreen").
       const named = registry.colors.get(input) ?? CSS_NAMED_COLORS[input.toLowerCase()];

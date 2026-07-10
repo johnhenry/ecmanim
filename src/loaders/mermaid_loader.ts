@@ -1,12 +1,19 @@
 // Mermaid → mobjects. Renders a mermaid diagram source string to SVG entirely
 // headlessly (mermaid@11 + jsdom + a DOM/SVG measurement shim — no browser, no
-// GPU), then feeds the SVG through SVGMobject's id-preserving loader so every
-// node/edge is addressable and animatable.
+// GPU), post-processes it on the live DOM (inlines the <style> CSS into
+// presentation attributes so mermaid's palette survives SVGMobject's
+// attribute-only styling; normalizes implicit stroke-widths; crops geometry
+// outside the declared viewBox), then feeds the SVG through SVGMobject's
+// id-preserving loader so every node/edge is addressable and animatable.
+// <text>/<tspan> runs — which SVGMobject skips — are rebuilt as Text label
+// mobjects (marked __isDiagramLabel, listed by diagram.labels(), included in
+// their node's byId group).
 //
 //   const diagram = await loadMermaid("flowchart TD\n  A --> B");
-//   diagram.byId("A")          // the node's shapes, as a VGroup
+//   diagram.byId("A")          // the node's shapes + label, as a VGroup
 //   diagram.nodeIds()          // ["A", "B"]
 //   diagram.edgeIds()          // ["L_A_B_0"]
+//   diagram.labels()           // every extracted Text label
 //
 // mermaid and jsdom are OPTIONAL dependencies (devDependencies here): both are
 // lazy-imported on first use with a clear install hint if absent, so this
@@ -33,6 +40,8 @@
 import { SVGMobject, parseXML } from "../mobject/svg_mobject.ts";
 import type { SVGMobjectConfig, XmlNode } from "../mobject/svg_mobject.ts";
 import { VGroup } from "../mobject/VMobject.ts";
+import { Text } from "../mobject/text/Text.ts";
+import { Color } from "../core/color.ts";
 
 // ---------------------------------------------------------------------------
 // Optional-dependency loading (graceful degrade, mirroring boolean_ops/three).
@@ -162,6 +171,16 @@ function pathBounds(d: string): Box | null {
   return sawAny ? { x: minX, y: minY, width: maxX - minX, height: maxY - minY } : null;
 }
 
+// Standalone affine multiply matching parseTransformAttr's composition:
+// apply `t` first, then `p` (result = p ∘ t, SVG matrix column order).
+function mulAffine(p: Affine6, t: Affine6): Affine6 {
+  return [
+    p[0] * t[0] + p[2] * t[1], p[1] * t[0] + p[3] * t[1],
+    p[0] * t[2] + p[2] * t[3], p[1] * t[2] + p[3] * t[3],
+    p[0] * t[4] + p[2] * t[5] + p[4], p[1] * t[4] + p[3] * t[5] + p[5],
+  ];
+}
+
 function attrNum(el: any, name: string, d = 0): number {
   const v = parseFloat(el.getAttribute?.(name));
   return Number.isFinite(v) ? v : d;
@@ -269,6 +288,146 @@ function bboxOf(el: any): Box | null {
       return box;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// SVG post-processing (on the live jsdom DOM, before serialization):
+//   1. inlineSvgStyles — mermaid styles everything through a <style> block;
+//      SVGMobject reads only presentation attributes, so without inlining
+//      every class-styled shape renders with the SVG default (black fill).
+//   2. cropSvgToViewBox — drop elements lying entirely outside the declared
+//      viewBox (gantt's "today" line lands ~96000px right of a ~1200px chart
+//      and would collapse the world fit to a sliver).
+// ---------------------------------------------------------------------------
+
+// Properties worth inlining: paint + the text-styling props the loader's
+// text extraction reads (font-size, text-anchor).
+const INLINABLE_PROPS = new Set([
+  "fill", "stroke", "stroke-width", "stroke-dasharray", "opacity",
+  "font-size", "font-family", "font-weight", "text-anchor",
+]);
+
+// Parse the <style> blocks' rules and copy matched declarations onto the
+// matched elements as presentation attributes, following the CSS cascade:
+// inline style="..." wins over stylesheet rules, which in turn beat
+// presentation attributes (mermaid relies on this — sequence message lines
+// carry stroke="none" attributes that its `.messageLine0 { stroke: #333 }`
+// rule must override). Rules apply in document order (later rules override
+// earlier ones); specificity is deliberately ignored — mermaid's stylesheet
+// is simple enough that order suffices. Selector matching uses
+// querySelectorAll directly (jsdom supports full CSS selectors); anything it
+// rejects falls back to matching the LAST simple selector of the chain,
+// else is skipped.
+export function inlineSvgStyles(svgEl: any): void {
+  const styleEls = Array.from(svgEl.querySelectorAll("style") ?? []);
+  if (styleEls.length === 0) return;
+  let css = styleEls.map((s: any) => String(s.textContent ?? "")).join("\n");
+  css = css.replace(/\/\*[\s\S]*?\*\//g, ""); // strip comments
+  const pending = new Map<any, Record<string, string>>();
+  const ruleRe = /([^{}]+)\{([^{}]*)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = ruleRe.exec(css)) !== null) {
+    const decls: Array<[string, string]> = [];
+    for (const decl of m[2].split(";")) {
+      const idx = decl.indexOf(":");
+      if (idx === -1) continue;
+      const k = decl.slice(0, idx).trim().toLowerCase();
+      const v = decl.slice(idx + 1).replace(/!important/gi, "").trim();
+      if (INLINABLE_PROPS.has(k) && v) decls.push([k, v]);
+    }
+    if (decls.length === 0) continue;
+    for (let sel of m[1].split(",")) {
+      sel = sel.trim();
+      // Skip at-rules and keyframe steps ("0%", "to") that the flat rule
+      // regex can surface from @keyframes bodies.
+      if (!sel || sel.startsWith("@") || /^\d/.test(sel) || /^(from|to)$/i.test(sel)) continue;
+      let matched: any[] = [];
+      try {
+        matched = Array.from(svgEl.querySelectorAll(sel) ?? []);
+        if (svgEl.matches?.(sel)) matched.unshift(svgEl);
+      } catch {
+        // Unsupported selector: pragmatically match the last simple selector
+        // (pseudo-classes stripped); give up on what still doesn't parse.
+        const last = sel.split(/[\s>+~]+/).filter(Boolean).pop()
+          ?.replace(/:{1,2}[a-zA-Z-]+(\([^)]*\))?/g, "");
+        if (!last) continue;
+        try { matched = Array.from(svgEl.querySelectorAll(last) ?? []); } catch { continue; }
+      }
+      for (const el of matched) {
+        const rec = pending.get(el) ?? {};
+        for (const [k, v] of decls) rec[k] = v; // later rules win
+        pending.set(el, rec);
+      }
+    }
+  }
+  for (const [el, rec] of pending) {
+    const inlineProps = new Set(
+      String(el.getAttribute?.("style") ?? "")
+        .split(";")
+        .map((d: string) => d.split(":")[0]?.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    for (const [k, v] of Object.entries(rec)) {
+      if (inlineProps.has(k)) continue; // inline style="..." wins
+      el.setAttribute(k, v); // stylesheet rule beats a presentation attribute
+    }
+  }
+}
+
+// SVGMobject defaults an unspecified stroke-width to 4 (a manim-ish default
+// for standalone art); SVG's actual initial value is 1. Mermaid output is
+// full of stroked elements that rely on that initial value (d3 axis ticks),
+// so pin stroke-width="1" wherever a stroke is set and no width is declared
+// on the element or any ancestor.
+export function normalizeStrokeWidths(svgEl: any): void {
+  const hasWidth = (el: any): boolean => {
+    for (let e = el; e && e !== svgEl.parentElement; e = e.parentElement) {
+      if (e.hasAttribute?.("stroke-width")) return true;
+      if (/(?:^|;)\s*stroke-width\s*:/.test(String(e.getAttribute?.("style") ?? ""))) return true;
+    }
+    return false;
+  };
+  const walk = (el: any) => {
+    for (const child of Array.from(el.children ?? []) as any[]) {
+      const tag = String(child.tagName ?? "").toLowerCase();
+      if (NON_RENDERED_TAGS.has(tag)) continue;
+      const stroke = child.getAttribute?.("stroke")
+        ?? /(?:^|;)\s*stroke\s*:\s*([^;]+)/.exec(String(child.getAttribute?.("style") ?? ""))?.[1];
+      if (stroke && stroke.trim() !== "none" && !hasWidth(child)) {
+        child.setAttribute("stroke-width", "1");
+      }
+      walk(child);
+    }
+  };
+  walk(svgEl);
+}
+
+// Remove elements whose absolute bounding box (own-space bbox mapped through
+// the accumulated ancestor transforms) lies entirely outside the declared
+// viewBox (with a small tolerance margin). Groups partially inside are
+// recursed into, so a single far-out child inside a mostly-visible group
+// still gets stripped.
+export function cropSvgToViewBox(svgEl: any): void {
+  const vb = String(svgEl.getAttribute?.("viewBox") ?? "").split(/[\s,]+/).filter(Boolean).map(Number);
+  if (vb.length !== 4 || !vb.every(Number.isFinite) || vb[2] <= 0 || vb[3] <= 0) return;
+  const padX = vb[2] * 0.05 + 10, padY = vb[3] * 0.05 + 10;
+  const minX = vb[0] - padX, minY = vb[1] - padY;
+  const maxX = vb[0] + vb[2] + padX, maxY = vb[1] + vb[3] + padY;
+  const prune = (el: any, m: Affine6) => {
+    for (const child of Array.from(el.children ?? []) as any[]) {
+      const tag = String(child.tagName ?? "").toLowerCase();
+      if (NON_RENDERED_TAGS.has(tag)) continue; // defs & friends: referenced, not placed
+      const cm = mulAffine(m, parseTransformAttr(child.getAttribute?.("transform")));
+      const b = bboxOf(child);
+      if (b) {
+        const abs = transformBox(b, cm);
+        const outside = abs.x > maxX || abs.x + abs.width < minX || abs.y > maxY || abs.y + abs.height < minY;
+        if (outside) { child.remove(); continue; }
+      }
+      prune(child, cm);
+    }
+  };
+  prune(svgEl, [1, 0, 0, 1, 0, 0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -457,11 +616,26 @@ async function renderMermaidInternal(
       });
       const renderId = `mmd${renderCounter++}`;
       const { svg } = await mermaid.render(renderId, source);
+      // Post-process on the live DOM: inline the <style> CSS into
+      // presentation attributes (SVGMobject reads attributes only) and crop
+      // geometry that lies entirely outside the declared viewBox.
+      let processed = svg;
+      try {
+        const host = sharedDom.window.document.createElement("div");
+        host.innerHTML = svg;
+        const svgEl = host.querySelector("svg");
+        if (svgEl) {
+          inlineSvgStyles(svgEl);
+          normalizeStrokeWidths(svgEl);
+          cropSvgToViewBox(svgEl);
+          processed = svgEl.outerHTML;
+        }
+      } catch { /* fall back to the raw svg string */ }
       // mermaid removes its temp element, but failed renders can leave error
       // divs behind; keep the persistent body clean between calls.
       const body = sharedDom.window.document.body;
       while (body.firstChild) body.removeChild(body.firstChild);
-      return { svg, renderId };
+      return { svg: processed, renderId };
     } finally {
       // Kill any rAF chain a diagram renderer (cytoscape) left running, so
       // the render never leaks timers that keep the host process alive.
@@ -624,6 +798,159 @@ function buildAliases(
 /** Extra options for loadMermaid / DiagramMobject. */
 export interface MermaidLoadConfig extends SVGMobjectConfig, MermaidRenderConfig {}
 
+// ---------------------------------------------------------------------------
+// <text>/<tspan> extraction. SVGMobject renders geometry only; the loader
+// walks the (already CSS-inlined) parsed tree for text and rebuilds each run
+// as a Text mobject mapped through the same viewBox->world fit the geometry
+// received.
+// ---------------------------------------------------------------------------
+
+// Containers whose text is never rendered in place.
+const TEXT_SKIP_TAGS = new Set([
+  "defs", "marker", "style", "title", "desc", "clippath", "mask", "pattern",
+  "symbol", "metadata", "script", "foreignobject",
+]);
+
+const TEXT_STYLE_KEYS = ["font-size", "fill", "text-anchor", "dominant-baseline", "alignment-baseline"];
+
+interface SvgTextItem {
+  content: string;
+  x: number;
+  y: number; // the row's VISUAL CENTER y in the text's local space
+  m: Affine6; // accumulated transform (svg root -> the text's local space)
+  anchor: string; // start | middle | end
+  fontPx: number;
+  fill: string | null;
+  enclosingId: string | null; // nearest ancestor (or own) SVG id
+}
+
+// All character data under a node (own text first, then children's, joined
+// with single spaces) — flattens mermaid's nested word-run tspans.
+function flattenText(node: XmlNode): string {
+  const parts: string[] = [];
+  const walk = (n: XmlNode) => {
+    const own = (n.text ?? "").trim();
+    if (own) parts.push(own);
+    for (const c of n.children ?? []) walk(c);
+  };
+  walk(node);
+  return parts.join(" ");
+}
+
+function collectSvgTexts(root: XmlNode, rootId: string): SvgTextItem[] {
+  const out: SvgTextItem[] = [];
+  const styleOf = (attrs: Record<string, string>, inherited: Record<string, string>): Record<string, string> => {
+    const next = { ...inherited };
+    for (const k of TEXT_STYLE_KEYS) if (attrs[k] !== undefined) next[k] = attrs[k];
+    if (attrs.style) {
+      for (const d of attrs.style.split(";")) {
+        const idx = d.indexOf(":");
+        if (idx === -1) continue;
+        const k = d.slice(0, idx).trim().toLowerCase();
+        if (TEXT_STYLE_KEYS.includes(k)) next[k] = d.slice(idx + 1).trim();
+      }
+    }
+    return next;
+  };
+  const pxOf = (v: string | undefined, d: number): number => {
+    const x = parseFloat(v ?? "");
+    return Number.isFinite(x) ? x : d;
+  };
+  // Resolve a font-size value (px / em / ex / rem / pt / %) against the
+  // inherited size — mermaid's journey/timeline titles use "4ex".
+  const resolveFontSize = (raw: string | undefined, parentPx: number): number => {
+    if (raw === undefined) return parentPx;
+    const v = parseFloat(raw);
+    if (!Number.isFinite(v)) return parentPx;
+    const t = raw.trim().toLowerCase();
+    if (t.endsWith("rem")) return v * 16;
+    if (t.endsWith("ex")) return v * 0.5 * parentPx;
+    if (t.endsWith("em")) return v * parentPx;
+    if (t.endsWith("%")) return (v / 100) * parentPx;
+    if (t.endsWith("pt")) return v * (4 / 3);
+    return v; // px or bare number
+  };
+  // A node's OWN font-size declaration (attribute or inline style), if any.
+  const ownFontRaw = (attrs: Record<string, string>): string | undefined => {
+    const inline = attrs.style ?? "";
+    const m2 = /(?:^|;)\s*font-size\s*:\s*([^;]+)/i.exec(inline);
+    if (m2) return m2[1].trim();
+    return attrs["font-size"];
+  };
+
+  const visit = (
+    node: XmlNode,
+    m: Affine6,
+    style: Record<string, string>,
+    id: string | null,
+    inLabel: boolean,
+    inEdgeLabel: boolean,
+    inheritedFontPx: number,
+  ) => {
+    const tag = node.tag.toLowerCase();
+    if (TEXT_SKIP_TAGS.has(tag)) return;
+    const attrs = node.attrs ?? {};
+    const cls = ` ${attrs.class ?? ""} `;
+    if (cls.includes(" edgeLabel ")) inEdgeLabel = true;
+    if (cls.includes(" label ")) inLabel = true;
+    const mm = attrs.transform ? mulAffine(m, parseTransformAttr(attrs.transform)) : m;
+    const st = styleOf(attrs, style);
+    const effId = attrs.id && attrs.id !== rootId ? attrs.id : id;
+    const nodeFontPx = resolveFontSize(ownFontRaw(attrs), inheritedFontPx);
+
+    if (tag === "text") {
+      const baseX = pxOf(attrs.x, 0), baseY = pxOf(attrs.y, 0);
+      const fontPx = nodeFontPx;
+      const numOnly = (v: string | undefined): number | null => {
+        if (v === undefined) return null;
+        const t = v.trim();
+        return /^-?(\d+\.?\d*|\.\d+)(px)?$/.test(t) ? parseFloat(t) : null;
+      };
+      // Rows: the direct tspan children (mermaid's line tspans — word-run
+      // tspans nested inside are flattened into the row's content), or the
+      // text's own character data when there are none.
+      const rows: Array<{ content: string; x: number; st: Record<string, string>; f: number }> = [];
+      for (const ts of node.children ?? []) {
+        if (ts.tag.toLowerCase() !== "tspan") continue;
+        const ta = ts.attrs ?? {};
+        const tst = styleOf(ta, st);
+        const content = flattenText(ts);
+        if (!content) continue;
+        rows.push({ content, x: numOnly(ta.x) ?? baseX, st: tst, f: resolveFontSize(ownFontRaw(ta), fontPx) });
+      }
+      const own = (node.text ?? "").replace(/\s+/g, " ").trim();
+      if (own) rows.push({ content: own, x: baseX, st, f: fontPx });
+      if (rows.length === 0) return;
+      // Vertical placement must mirror how mermaid POSITIONED the geometry
+      // around this text (using this loader's measurement shim):
+      //  - node labels (a <g class="label"> wrapper NOT under an edgeLabel)
+      //    get transform=translate(0, -h/2), assuming the text box spans
+      //    [0, h] below the wrapper origin -> row-stack center at +h/2;
+      //  - edge labels + everything else follow the shim's textBounds
+      //    (center = y - 0.3*lineH), which for plain d3-placed texts also
+      //    approximates "visual center ~0.35em above the baseline".
+      const lineH = 1.2 * fontPx;
+      const centerY = inLabel && !inEdgeLabel ? lineH / 2 : baseY - 0.3 * lineH;
+      rows.forEach((row, i) => {
+        out.push({
+          content: row.content,
+          x: row.x,
+          y: centerY + (i - (rows.length - 1) / 2) * lineH,
+          m: mm,
+          anchor: row.st["text-anchor"] ?? "start",
+          fontPx: row.f,
+          fill: row.st.fill ?? null,
+          enclosingId: effId,
+        });
+      });
+      return;
+    }
+    for (const child of node.children ?? []) visit(child, mm, st, effId, inLabel, inEdgeLabel, nodeFontPx);
+  };
+  visit(root, [1, 0, 0, 1, 0, 0], {}, null, false, false, 16);
+  return out;
+}
+
 /** A rendered mermaid diagram as an SVGMobject, with mermaid-aware friendly
  *  ids layered over the raw SVG element ids. */
 export class DiagramMobject extends SVGMobject {
@@ -633,6 +960,7 @@ export class DiagramMobject extends SVGMobject {
   readonly friendlyIds = new Map<string, string[]>();
   private readonly _nodeIds: string[];
   private readonly _edgeIds: string[];
+  private readonly _labels: Text[] = [];
 
   constructor(
     svgString: string,
@@ -679,6 +1007,56 @@ export class DiagramMobject extends SVGMobject {
       const w = this.getWidth(), h = this.getHeight();
       if (w > 1e-9 && h > 1e-9) this.scale(Math.min(10 / w, 7 / h));
     }
+
+    // Text extraction: rebuild <text>/<tspan> runs (which SVGMobject skips)
+    // as Text mobjects, mapped through the same svg->world transform the
+    // geometry received. Labels are marked __isDiagramLabel and registered
+    // under their enclosing id'd group, so byId("A") flashes the label too
+    // and labels()/the marker let scenes exclude them.
+    const sb = this.sourceBounds;
+    if (sb && sb.maxX - sb.minX > 1e-9) {
+      const s = this.getWidth() / (sb.maxX - sb.minX);
+      const center = this.getCenter();
+      const scx = (sb.minX + sb.maxX) / 2, scy = (sb.minY + sb.maxY) / 2;
+      for (const item of collectSvgTexts(tree, renderId)) {
+        const fillTok = (item.fill ?? "#333333").trim();
+        if (fillTok === "none" || fillTok === "transparent") continue;
+        // Anchor point in svg space (local x/y through the accumulated
+        // transform), then through the geometry's fit.
+        const ax = item.m[0] * item.x + item.m[2] * item.y + item.m[4];
+        const ay = item.m[1] * item.x + item.m[3] * item.y + item.m[5];
+        const det = Math.abs(item.m[0] * item.m[3] - item.m[1] * item.m[2]);
+        const fontWorld = item.fontPx * Math.sqrt(det) * s;
+        if (!(fontWorld > 1e-6)) continue;
+        const t = new Text(item.content, { fontSize: fontWorld, color: Color.parse(fillTok) });
+        // text-anchor: Text centers on moveTo, so shift start/end anchors by
+        // half the width mermaid's layout ASSUMED (the measurement shim's
+        // 0.6em/char heuristic) — centering on the assumed box keeps any
+        // real-vs-assumed glyph width difference symmetric.
+        const assumedW = item.content.length * 0.6 * item.fontPx * Math.sqrt(det) * s;
+        let wx = center[0] + (ax - scx) * s;
+        if (item.anchor === "end") wx -= assumedW / 2;
+        else if (item.anchor !== "middle") wx += assumedW / 2;
+        // item.y is already the row's visual center (see collectSvgTexts).
+        const wy = center[1] - (ay - scy) * s;
+        t.moveTo([wx, wy, 0]);
+        (t as any).__isDiagramLabel = true;
+        this._labels.push(t);
+        this.add(t);
+        if (item.enclosingId) {
+          const list = this.ids.get(item.enclosingId) ?? [];
+          list.push(t);
+          this.ids.set(item.enclosingId, list);
+        }
+      }
+    }
+  }
+
+  /** Every extracted text label (marked `__isDiagramLabel`), as a VGroup of
+   *  the SAME Text instances living in this diagram's tree — so scenes can
+   *  restyle them or exclude them from geometry-only effects. */
+  labels(): VGroup {
+    return new VGroup(...this._labels);
   }
 
   /** Friendly node ids for this diagram (see the per-type conventions). */

@@ -87,3 +87,31 @@ test("registry has hundreds of registered colors", () => {
   const n = registry.list("color").length;
   assert.ok(n > 500, `expected >500 colors, got ${n}`);
 });
+
+// -- CSS functional notation (campaign 4, M1.5: hsl()/rgb() used to fall
+// -- through fromHex and come out black — mermaid themes use hsl heavily) ----
+
+test("Color.parse: hsl() resolves to the CSS-correct rgb", () => {
+  assert.equal(Color.parse("hsl(120, 100%, 25%)").toHex(), "#008000");
+  assert.equal(Color.parse("hsl(0, 100%, 50%)").toHex(), "#ff0000");
+  assert.equal(Color.parse("hsl(240, 100%, 50%)").toHex(), "#0000ff");
+  // Space-separated + negative/wrapped hue forms.
+  assert.equal(Color.parse("hsl(480 100% 25%)").toHex(), "#008000");
+  assert.equal(Color.parse("hsl(-240, 100%, 25%)").toHex(), "#008000");
+});
+
+test("Color.parse: rgb()/rgba() with 0-255 and % channels", () => {
+  assert.equal(Color.parse("rgb(255, 0, 0)").toHex(), "#ff0000");
+  assert.equal(Color.parse("rgb(100%, 0%, 50%)").toHex(), "#ff0080");
+  const c = Color.parse("rgba(0, 128, 255, 0.25)");
+  assert.equal(c.toHex(), "#0080ff");
+  assert.ok(near(c.a, 0.25), `alpha carried (${c.a})`);
+});
+
+test("Color.parse: hsla alpha carried (number and percent)", () => {
+  const c = Color.parse("hsla(120, 100%, 25%, 0.5)");
+  assert.equal(c.toHex(), "#008000");
+  assert.ok(near(c.a, 0.5), `alpha ${c.a} = 0.5`);
+  assert.ok(near(Color.parse("hsl(120 100% 25% / 40%)").a, 0.4), "slash-percent alpha");
+  assert.equal(Color.parse("hsl(120, 100%, 25%)").a, 1, "no alpha -> opaque");
+});

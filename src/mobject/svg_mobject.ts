@@ -17,6 +17,9 @@ export interface XmlNode {
   tag: string;
   attrs: Record<string, string>;
   children: XmlNode[];
+  /** Concatenated direct character data (entity-decoded), for <text>/<tspan>
+   *  extraction. Element children's text is NOT included. */
+  text?: string;
 }
 
 /** Configuration accepted by SVGMobject. */
@@ -71,9 +74,11 @@ export function parseXML(str: string): XmlNode {
     return attrs;
   };
 
-  // Parse children of the current element until its matching close tag.
-  const parseNodes = (): XmlNode[] => {
+  // Parse children of the current element until its matching close tag,
+  // collecting both element nodes and the element's direct character data.
+  const parseNodes = (): { nodes: XmlNode[]; text: string } => {
     const nodes: XmlNode[] = [];
+    let text = "";
     while (i < n) {
       if (str[i] === "<") {
         // Comment / declaration / CDATA — skip wholesale.
@@ -81,24 +86,25 @@ export function parseXML(str: string): XmlNode {
         if (str.startsWith("<![CDATA[", i)) { i = skipTo(str, i, "]]>"); continue; }
         if (str[i + 1] === "?") { i = skipTo(str, i, "?>"); continue; }
         if (str[i + 1] === "!") { i = skipTo(str, i, ">"); continue; } // <!DOCTYPE ...>
-        if (str[i + 1] === "/") { i = skipTo(str, i, ">"); return nodes; } // close tag
+        if (str[i + 1] === "/") { i = skipTo(str, i, ">"); return { nodes, text }; } // close tag
         // Opening tag.
         i++; // consume '<'
         let tag = "";
         while (i < n && !/[\s/>]/.test(str[i])) tag += str[i++];
         const attrs = parseAttrs();
         let children: XmlNode[] = [];
+        let childText = "";
         if (str[i] === "/") { i = skipTo(str, i, ">"); }        // self-closing
-        else { i++; children = parseNodes(); }                  // consume '>', recurse
-        nodes.push({ tag, attrs, children });
+        else { i++; const r = parseNodes(); children = r.nodes; childText = r.text; } // consume '>', recurse
+        nodes.push({ tag, attrs, children, text: decodeEntities(childText) });
       } else {
-        i++; // ignore text node characters
+        text += str[i++]; // direct character data of the current element
       }
     }
-    return nodes;
+    return { nodes, text };
   };
 
-  const roots = parseNodes();
+  const roots = parseNodes().nodes;
   // Return the first real element (usually <svg>); fall back to a wrapper.
   const svg = roots.find((r) => r.tag === "svg") || roots[0];
   return svg || { tag: "svg", attrs: {}, children: [] };
@@ -234,18 +240,15 @@ function readStyleProps(attrs: Record<string, string>): Record<string, string> {
   return props;
 }
 
-// Parse a color token: none / #rgb / #rrggbb / rgb(r,g,b) / named-ish hex.
-// Returns { color, isNone }.
+// Parse a color token: none / #rgb / #rrggbb / rgb()/rgba()/hsl()/hsla() /
+// named-ish hex. Returns { color, isNone }.
 function parseColorToken(tok: string | null | undefined): { color: Color | null; isNone: boolean } {
   if (tok == null) return { color: null, isNone: false };
   const t = String(tok).trim().toLowerCase();
   if (t === "none" || t === "transparent") return { color: null, isNone: true };
-  const rgb = t.match(/^rgba?\(([^)]*)\)/);
-  if (rgb) {
-    const parts = rgb[1].split(",").map((s) => parseFloat(s.trim()));
-    const [r, g, b] = parts;
-    return { color: new Color((r || 0) / 255, (g || 0) / 255, (b || 0) / 255, 1), isNone: false };
-  }
+  // Functional notation (incl. hsl, which used to come out black) and CSS
+  // named colors — Color.parse handles both.
+  if (/^(?:rgb|hsl)a?\(/.test(t)) return { color: Color.parse(t), isNone: false };
   // Hex (with or without '#'); Color.parse handles #rgb and #rrggbb.
   return { color: Color.parse(t.startsWith("#") ? t : "#" + t.replace(/^#/, "")), isNone: false };
 }
@@ -459,6 +462,11 @@ export class SVGMobject extends VGroup {
    *  drawables). Ids inside <defs>/<clipPath>/... never appear here -- those
    *  are consumed for url(#id) resolution, not rendered content. */
   readonly ids = new Map<string, VMobject[]>();
+  /** Bounds of the parsed geometry in the SVG's OWN (y-down) coordinate
+   *  space, before the y-flip / world fit. Lets loaders (mermaid text
+   *  extraction) map additional SVG coordinates through the same transform
+   *  the geometry received. Null when the SVG had no drawable geometry. */
+  readonly sourceBounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
 
   // new SVGMobject(svgString, { height, width, point, fillColor, strokeColor, color })
   constructor(svgString = "", config: SVGMobjectConfig = {}) {
@@ -539,6 +547,19 @@ export class SVGMobject extends VGroup {
     walk(tree, IDENTITY.slice() as Affine, readStyleProps(tree.attrs || {}), null);
 
     this.add(...mobs);
+
+    // Record the geometry's bounds in SVG space (points are still y-down
+    // here), for loaders that need the svg->world mapping afterwards.
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const mob of mobs) {
+      for (const p of mob.points) {
+        if (p[0] < minX) minX = p[0];
+        if (p[0] > maxX) maxX = p[0];
+        if (p[1] < minY) minY = p[1];
+        if (p[1] > maxY) maxY = p[1];
+      }
+    }
+    if (minX <= maxX) this.sourceBounds = { minX, minY, maxX, maxY };
 
     // The SVG coordinate space is y-DOWN. Flip Y exactly once so the result is
     // upright in manim's y-UP world. (Small SVG-y -> large world-y.)

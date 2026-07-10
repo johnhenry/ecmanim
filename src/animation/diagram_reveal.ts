@@ -238,8 +238,8 @@ export function revealDiagram(diagram: DiagramMobject, config: DiagramRevealConf
     case "git": {
       if (nodes.length === 0 && edges.length === 0) {
         // git (and any render without per-element ids) has nothing addressable:
-        // degrade to the spatial fallback.
-        anims.push(...fallbackAnims(diagram, restLeaves, fadeIn));
+        // degrade to the spatial fallback (per-type default / user factory).
+        anims.push(...fallbackAnims(diagram, restLeaves, nodeAnim));
         break;
       }
       const nodeIdList = nodes.map((n) => n.id);
@@ -310,14 +310,13 @@ export function revealDiagram(diagram: DiagramMobject, config: DiagramRevealConf
     case "mindmap": {
       // Stagger over the id'd parts (nodes then edges — mindmap has edge_I_J
       // connectors) plus the un-id'd remainder, in spatial order. Mindmap
-      // orders radially from the diagram center instead.
+      // orders radially from the diagram center instead. Synthetic (un-id'd)
+      // parts get the SAME per-type default (pie/mindmap: GrowFromCenter) and
+      // honor a user nodeAnimation factory — pie and quadrant emit no
+      // per-element ids at all, so a hardwired FadeIn here used to make the
+      // documented GrowFromCenter default unreachable.
       const units: Part[] = [...nodes, ...edges];
-      const synthetic = new Set<Part>();
-      restLeaves.forEach((leaf, i) => {
-        const p = { id: `part${i}`, group: leaf };
-        synthetic.add(p);
-        units.push(p);
-      });
+      restLeaves.forEach((leaf, i) => units.push({ id: `part${i}`, group: leaf }));
       if (diagram.diagramType === "mindmap") {
         const center = diagram.getCenter();
         units.sort((a, b) =>
@@ -325,14 +324,12 @@ export function revealDiagram(diagram: DiagramMobject, config: DiagramRevealConf
       } else {
         units.sort((a, b) => spatialCompare(a.group, b.group));
       }
-      for (const u of units) {
-        anims.push(synthetic.has(u) ? fadeIn(u.group, u.id) : nodeAnim(u));
-      }
+      for (const u of units) anims.push(nodeAnim(u));
       break;
     }
 
     default:
-      anims.push(...fallbackAnims(diagram, restLeaves, fadeIn));
+      anims.push(...fallbackAnims(diagram, restLeaves, nodeAnim));
       break;
   }
 
@@ -344,15 +341,16 @@ export function revealDiagram(diagram: DiagramMobject, config: DiagramRevealConf
   return new DiagramReveal(diagram, anims, animConfig);
 }
 
-// Unknown/id-less diagrams: staggered FadeIn over the top-level children in
-// spatial (top-to-bottom, left-to-right) order.
+// Unknown/id-less diagrams: staggered reveal over the top-level children in
+// spatial (top-to-bottom, left-to-right) order, using the per-type default
+// node animation (or the user's nodeAnimation factory).
 function fallbackAnims(
   diagram: DiagramMobject,
   restLeaves: Mobject[],
-  fadeIn: (m: Mobject, id: string) => Animation,
+  nodeAnim: (part: { id: string; group: Mobject }) => Animation,
 ): Animation[] {
   const leaves = restLeaves.length ? restLeaves : diagram.submobjects;
-  return [...leaves].sort(spatialCompare).map((leaf, i) => fadeIn(leaf, `part${i}`));
+  return [...leaves].sort(spatialCompare).map((leaf, i) => nodeAnim({ id: `part${i}`, group: leaf }));
 }
 
 export default revealDiagram;

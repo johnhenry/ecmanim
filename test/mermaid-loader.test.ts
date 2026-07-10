@@ -204,3 +204,92 @@ test("render teardown leaves globalThis clean", { skip: SKIP }, async () => {
   // Node's own navigator must be back (not jsdom's).
   assert.ok(!/jsdom/i.test(String((globalThis as any).navigator?.userAgent ?? "")), "navigator restored to Node's");
 });
+
+// -- campaign 4 / M1.5: CSS inlining, text extraction, viewBox cropping -----------
+
+test("flowchart loads with mermaid's palette (CSS <style> inlined, not black)", { skip: SKIP }, async () => {
+  const diagram = await loadMermaid(FLOW_4);
+  const fills = new Set<string>();
+  for (const m of diagram.submobjects as any[]) {
+    if (m.fillOpacity > 0 && m.getWidth() > 0.3 && !m.__isDiagramLabel) fills.add(m.fillColor?.toHex?.());
+  }
+  assert.ok(!fills.has("#000000"), `no black-defaulted region: ${[...fills].join(", ")}`);
+  // mermaid's default theme node fill.
+  assert.ok(fills.has("#ececff"), `node fill is mermaid's #ececff: ${[...fills].join(", ")}`);
+});
+
+test("authored SVG <style> rules inline into presentation attributes", { skip: SKIP }, async () => {
+  const { JSDOM } = await import("jsdom");
+  const { inlineSvgStyles } = await import("../src/loaders/mermaid_loader.ts");
+  const { SVGMobject } = await import("../src/mobject/svg_mobject.ts");
+  const dom = new JSDOM(
+    `<body><svg viewBox="0 0 10 10"><style>.x { fill: hsl(0, 100%, 50%) } .x rect { stroke: #00ff00 }</style>` +
+    `<g class="x"><rect x="1" y="1" width="8" height="8"/></g>` +
+    `<rect class="x" x="0" y="0" width="2" height="2" fill="#123456" style="fill:#0000ff"/>` +
+    `<rect class="y" x="4" y="4" width="2" height="2" fill="#123456"/></svg></body>`,
+  );
+  const svgEl = dom.window.document.querySelector("svg");
+  inlineSvgStyles(svgEl);
+  const svg = new SVGMobject(svgEl!.outerHTML);
+  const [inGroup, inlineStyled, untouched] = svg.submobjects as any[];
+  assert.equal(inGroup.fillColor.toHex(), "#ff0000", "hsl() class fill inlined as red");
+  assert.equal(inGroup.strokeColor.toHex(), "#00ff00", "descendant selector (.x rect) stroke applied");
+  // CSS cascade: inline style beats the stylesheet rule; the stylesheet rule
+  // beats a presentation attribute; unmatched elements keep their attributes.
+  assert.equal(inlineStyled.fillColor.toHex(), "#0000ff", "inline style wins over CSS");
+  assert.equal(untouched.fillColor.toHex(), "#123456", "unmatched element keeps its attribute");
+});
+
+test("flowchart text extraction: labels once, inside their nodes, byId includes them", { skip: SKIP }, async () => {
+  const diagram = await loadMermaid(FLOW_4);
+  const texts = diagram.labels().submobjects.map((t: any) => t.text);
+  for (const caption of ["Start", "Is it working?", "Ship it", "Debug"]) {
+    assert.equal(texts.filter((s: string) => s === caption).length, 1, `caption "${caption}" present exactly once: ${texts.join(" | ")}`);
+  }
+  // Every label is marked, and a node's byId group includes its label.
+  for (const t of diagram.labels().submobjects as any[]) assert.ok(t.__isDiagramLabel, "label marked __isDiagramLabel");
+  const a = diagram.byId("A").submobjects as any[];
+  const label = a.find((m) => m.__isDiagramLabel);
+  assert.ok(label && label.text === "Start", 'byId("A") includes its "Start" label');
+  // Label world position sits inside the node's shape bounds (tolerance 15%).
+  const shapes = a.filter((m) => !m.__isDiagramLabel);
+  const xs = shapes.flatMap((m: any) => [m.getCenter()[0] - m.getWidth() / 2, m.getCenter()[0] + m.getWidth() / 2]);
+  const ys = shapes.flatMap((m: any) => [m.getCenter()[1] - m.getHeight() / 2, m.getCenter()[1] + m.getHeight() / 2]);
+  const [cx, cy] = label.getCenter();
+  const padX = (Math.max(...xs) - Math.min(...xs)) * 0.15, padY = (Math.max(...ys) - Math.min(...ys)) * 0.15;
+  assert.ok(cx > Math.min(...xs) - padX && cx < Math.max(...xs) + padX, `label x ${cx} inside node [${Math.min(...xs)}, ${Math.max(...xs)}]`);
+  assert.ok(cy > Math.min(...ys) - padY && cy < Math.max(...ys) + padY, `label y ${cy} inside node [${Math.min(...ys)}, ${Math.max(...ys)}]`);
+});
+
+test("gantt: off-canvas today line cropped — fit is not collapsed, bars preserved", { skip: SKIP }, async () => {
+  // The corpus example: 2014 dates put mermaid's "today" line ~96000px right
+  // of a ~1200px chart, which used to collapse the world fit to a sliver.
+  const diagram = await loadMermaid(`gantt
+    title A Gantt Diagram
+    dateFormat YYYY-MM-DD
+    section Section
+        A task          :a1, 2014-01-01, 30d
+        Another task    :after a1, 20d
+    section Another
+        Task in Another :2014-01-12, 12d
+        another task    :24d`);
+  assert.ok(diagram.getHeight() > 0.5, `height ${diagram.getHeight()} > 0.5 world units at default fit`);
+  assert.ok(diagram.getWidth() / diagram.getHeight() < 10, `aspect ${(diagram.getWidth() / diagram.getHeight()).toFixed(1)} is sane`);
+  // All four task bars survive the crop.
+  for (const id of ["a1", "task1", "task2", "task3"]) {
+    assert.ok(diagram.nodeIds().includes(id), `bar ${id} preserved: ${diagram.nodeIds().join(", ")}`);
+    assert.ok(diagram.byId(id).submobjects.length > 0, `bar ${id} has geometry`);
+  }
+});
+
+test("pie: slices carry the theme palette and labels are extracted", { skip: SKIP }, async () => {
+  const diagram = await loadMermaid('pie title Pets\n  "Dogs": 40\n  "Cats": 60');
+  const fills = new Set(
+    (diagram.submobjects as any[])
+      .filter((m) => m.fillOpacity > 0 && !m.__isDiagramLabel && m.getWidth() > 0.3)
+      .map((m) => m.fillColor?.toHex?.()),
+  );
+  assert.ok(!fills.has("#000000"), `no black slice/circle: ${[...fills].join(", ")}`);
+  const texts = diagram.labels().submobjects.map((t: any) => t.text);
+  assert.ok(texts.includes("Dogs") && texts.includes("Cats") && texts.includes("Pets"), `pie labels: ${texts.join(" | ")}`);
+});
