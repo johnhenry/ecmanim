@@ -31,6 +31,10 @@ export interface ThreeOptions {
   antialias?: boolean;
   bitrate?: number;
   three?: any;
+  // Post-processing pass config (bloom/film/glitch/LUT/custom shaders) --
+  // see src/renderer/three_post.ts. Loaded via enablePostProcessing() before
+  // the render loop starts.
+  postProcessing?: import("./renderer/three_post.ts").PostProcessingConfig;
   [key: string]: any;
 }
 
@@ -66,6 +70,7 @@ export async function play(sceneOrConstruct: any, options: ThreeOptions = {}) {
 
   const camera = resolveCamera(options, pixelWidth, pixelHeight, background);
   const renderer = new ThreeRenderer(THREE, { canvas, camera, background, antialias: options.antialias ?? true });
+  if (options.postProcessing) await renderer.enablePostProcessing(options.postProcessing);
   const nextFrame = () => new Promise<number>((r) => requestAnimationFrame(r));
 
   do {
@@ -98,6 +103,7 @@ export async function record(sceneOrConstruct: any, options: ThreeOptions = {}) 
   canvas.height = pixelHeight;
   const camera = resolveCamera(options, pixelWidth, pixelHeight, background);
   const renderer = new ThreeRenderer(THREE, { canvas, camera, background, antialias: options.antialias ?? true });
+  if (options.postProcessing) await renderer.enablePostProcessing(options.postProcessing);
 
   const stream = canvas.captureStream(0);
   const track = stream.getVideoTracks()[0];
@@ -121,7 +127,14 @@ export async function record(sceneOrConstruct: any, options: ThreeOptions = {}) 
     if (track.requestFrame) track.requestFrame();
     frame++;
     const target = start + (frame * 1000) / fps;
-    while (performance.now() < target) await nextFrame();
+    // ALWAYS yield at least one rAF per frame (do-while, not while): when a
+    // single render exceeds the frame budget -- e.g. post-processing bloom
+    // under software GL -- a plain while-loop's condition is already false,
+    // the page never yields to the browser's rendering steps, the canvas
+    // never PRESENTS, and requestFrame() captures nothing: the recording
+    // comes out as a header-only ~110-byte WebM with zero frames. One
+    // guaranteed yield lets presentation (and the queued capture) happen.
+    do { await nextFrame(); } while (performance.now() < target);
   };
   await runConstruct(sceneOrConstruct, scene);
 

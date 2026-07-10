@@ -11,6 +11,8 @@ import * as V from "../core/math/vector.ts";
 import { collectBuffers } from "./geometry_util.ts";
 import { makeBezierStrokeMaterial, buildStrokeGeometry } from "./bezier_shader.ts";
 import { buildTextAtlas } from "./text_atlas.ts";
+import { loadPostModules, buildComposer } from "./three_post.ts";
+import type { PostProcessingConfig, PostModules, BuiltComposer } from "./three_post.ts";
 import type { Mobject } from "../mobject/Mobject.ts";
 
 export interface ThreeRendererOptions {
@@ -27,6 +29,11 @@ export interface ThreeRendererOptions {
   // Enable GPU lighting for fill meshes (MeshStandardMaterial + normals + a
   // directional/ambient light). Default false keeps baked-color MeshBasicMaterial.
   lit?: boolean;
+  // Post-processing pass config (src/renderer/three_post.ts): bloom/film/
+  // glitch/LUT/SMAA/custom shaders. Stored here; the actual (async) module
+  // loading happens via enablePostProcessing() -- the entrypoints
+  // (browser-three play/record, node-gl harness) await it before rendering.
+  postProcessing?: PostProcessingConfig;
   [key: string]: any;
 }
 
@@ -44,6 +51,8 @@ export class ThreeRenderer {
   strokeMode: "line" | "sdf";
   strokeWidth: number;
   lit: boolean;
+  private _post: BuiltComposer | null = null;
+  private _postConfig?: PostProcessingConfig;
 
   constructor(THREE: any, opts: ThreeRendererOptions = {}) {
     this.THREE = THREE;
@@ -52,6 +61,7 @@ export class ThreeRenderer {
     this.strokeMode = opts.strokeMode ?? "line";
     this.strokeWidth = opts.strokeWidth ?? 4;
     this.lit = opts.lit ?? false;
+    this._postConfig = opts.postProcessing;
 
     // Pass our 0..1 colors straight through (no linear/sRGB conversion) so the
     // WebGL output matches the CPU renderer.
@@ -123,7 +133,7 @@ export class ThreeRenderer {
     threeCamera.updateProjectionMatrix();
   }
 
-  render(mobjects: any[]): void {
+  render(mobjects: any[], dt = 1 / 60): void {
     const buf = collectBuffers(mobjects);
     this._clearGroup();
 
@@ -152,7 +162,15 @@ export class ThreeRenderer {
     for (const mesh of buf.meshes) this.group.add(this._mesh3D(mesh));
 
     this.syncCamera();
-    this.renderer.render(this.scene, this.threeCamera);
+    if (this._post) {
+      // scene/threeCamera identities are stable across frames (only `group`
+      // is rebuilt above; syncCamera mutates threeCamera in place), so the
+      // RenderPass's captured references stay valid.
+      this._post.update(dt);
+      this._post.composer.render(dt);
+    } else {
+      this.renderer.render(this.scene, this.threeCamera);
+    }
   }
 
   /** SceneRenderer-shaped alias for render(), satisfying the shared interface
@@ -160,6 +178,25 @@ export class ThreeRenderer {
    *  primary, unchanged public method. */
   renderFrame(mobjects: Mobject[]): void {
     this.render(mobjects);
+  }
+
+  // --- post-processing (src/renderer/three_post.ts) --------------------------
+  // Async because the composer passes are dynamic "three/addons/..." imports;
+  // call once before the render loop (browser-three play/record and the
+  // node-gl harness both await it when options.postProcessing is set).
+  async enablePostProcessing(config?: PostProcessingConfig, injectedModules?: PostModules): Promise<void> {
+    const cfg = config ?? this._postConfig ?? {};
+    this.disablePostProcessing();
+    const modules = injectedModules ?? await loadPostModules(cfg);
+    this._post = buildComposer(
+      this.THREE, modules, this.renderer, this.scene, this.threeCamera, cfg,
+      { width: this.camera.pixelWidth, height: this.camera.pixelHeight },
+    );
+  }
+
+  disablePostProcessing(): void {
+    this._post?.dispose();
+    this._post = null;
   }
 
   _mesh(buf: any, transparent: boolean, alpha: number): any {
@@ -348,10 +385,12 @@ export class ThreeRenderer {
     this.renderer.setSize(pixelWidth, pixelHeight, false);
     if (this.threeCamera.isPerspectiveCamera) this.threeCamera.aspect = pixelWidth / pixelHeight;
     this.threeCamera.updateProjectionMatrix();
+    this._post?.setSize(pixelWidth, pixelHeight);
   }
 
   dispose(): void {
     this._clearGroup();
+    this.disablePostProcessing();
     this.renderer.dispose();
   }
 }

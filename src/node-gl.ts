@@ -51,6 +51,11 @@ export interface RenderGLOptions {
   camera?: any;
   mode?: string;
   antialias?: boolean;
+  // Post-processing pass config (src/renderer/three_post.ts). Threaded to
+  // browser-three's record() through the harness page, which JSON.stringifys
+  // the record options -- so this must stay JSON-serializable: use lut.url
+  // (not lut.texture) and plain-value custom uniforms via this path.
+  postProcessing?: import("./renderer/three_post.ts").PostProcessingConfig;
   verbose?: boolean;
   timeoutMs?: number;       // how long to wait for the page to finish (default 120000)
 }
@@ -259,6 +264,7 @@ export async function renderGL(options: RenderGLOptions): Promise<RenderGLResult
     antialias: options.antialias ?? true,
   };
   if (options.camera !== undefined) recordOptions.camera = options.camera;
+  if (options.postProcessing !== undefined) recordOptions.postProcessing = options.postProcessing;
 
   const harnessHtml = buildGLHarness({
     sceneModuleUrl: normalizeServedUrl(options.sceneModule),

@@ -33,7 +33,33 @@
     `createCanvas` factory (also making `cacheStatic()` work under Node,
     previously a silent no-op there).
 
+- **GPU post-processing for the WebGL backend**
+  (`src/renderer/three_post.ts`): bloom / film grain / glitch / LUT color
+  grading / SMAA via three's own bundled EffectComposer passes, plus custom
+  user fragment-shader passes (`tDiffuse` provided; `uTime`/`uResolution`
+  auto-injected when referenced). Configured with a `postProcessing` option
+  on `browser-three`'s `play()`/`record()` and Node's `renderGL()` (where it
+  is JSON-serialized into the headless-Chrome harness -- `lut.url`, not
+  `lut.texture`, on that path). `OutputPass` (sRGB + tone mapping) is
+  deliberately opt-in to preserve the CPU-renderer color parity that
+  `ColorManagement.enabled = false` exists for. New
+  `examples/post-processing.ts` (bloom + grain + a scanline shader) and a
+  docs section with the user-shader contract.
+
 ### Fixed
+- **`record()` (browser-three) captured ZERO frames whenever a single
+  render exceeded the frame budget** -- e.g. post-processing bloom under
+  software GL, or any sufficiently heavy scene. The pacing loop
+  (`while (now < target) await nextFrame()`) never awaited a single
+  requestAnimationFrame when already behind schedule, so the page never
+  yielded to the browser's rendering steps, the WebGL canvas never
+  PRESENTED, and `captureStream().requestFrame()` had nothing to capture:
+  the recording came out as a header-only ~110-byte WebM. Diagnosed by
+  reading pixels directly off the canvas in the same task (bloom rendered
+  perfectly -- 19,200/19,200 lit pixels -- proving capture, not rendering,
+  was broken). Fixed with a do-while (always yield at least one rAF per
+  frame). The e2e assertion that let this slip ("output size > 0", which a
+  110-byte header passes) is now "> 1000 bytes".
 - **`Circle`/`Arc` silently ignored a `point` config key** (issue #37) --
   only `Dot` respected it, while the correct key, `arcCenter`, wasn't
   discoverable, and `MobjectConfig`'s `[key: string]: any` index signature

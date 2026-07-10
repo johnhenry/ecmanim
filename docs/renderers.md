@@ -246,3 +246,42 @@ Determinism: seeded noise (and every other effect) is a pure function of its
 parameters, so the content-hash partial-movie render cache stays sound.
 Prefer `frameEffects` for scene-wide looks — per-mobject effects cost one
 offscreen composite per affected leaf per frame.
+
+## GPU post-processing (ThreeRenderer)
+
+The WebGL backend supports EffectComposer-based post-processing via
+`src/renderer/three_post.ts`, configured with a `postProcessing` option on
+`browser-three`'s `play()`/`record()` and Node's `renderGL()`:
+
+```ts
+postProcessing: {
+  bloom:  { strength: 1.2, radius: 0.5, threshold: 0.3 },  // UnrealBloomPass
+  film:   { intensity: 0.25, grayscale: false },            // animated grain
+  glitch: { goWild: false },
+  lut:    { url: "/luts/teal-orange.cube", intensity: 1 },  // color grading
+  smaa:   true,
+  output: false,   // OutputPass (sRGB + tone mapping) -- OPT-IN, see below
+  custom: [{ fragmentShader: MY_GLSL }],                    // user shader passes
+}
+```
+
+**User shader contract**: each `custom` entry is a fullscreen pass. Sample
+`tDiffuse` (the composed frame so far, a `sampler2D` + `varying vec2 vUv`);
+`uTime` (seconds) and `uResolution` (vec2, pixels) are auto-provided when the
+GLSL source references them. Extra uniforms use three's `{ value }`
+convention. See `examples/post-processing.ts` for a working scanline pass.
+
+**Color-space note**: ecmanim disables `THREE.ColorManagement` so GPU output
+matches the CPU renderer. three's `OutputPass` applies sRGB conversion + tone
+mapping, which would break that parity -- it is therefore opt-in
+(`output: true`) rather than appended automatically. Bloom's `threshold`
+consequently applies to the raw 0..1 channel values you set on mobjects.
+
+**Via `renderGL`**: the config is JSON-serialized into the headless-Chrome
+harness, so it must stay serializable -- use `lut.url` (not `lut.texture`)
+and plain-value custom uniforms on that path.
+
+**Async contract**: composer passes are dynamic `three/addons/...` imports;
+`ThreeRenderer.enablePostProcessing(config)` must be awaited before the
+render loop (the play/record/renderGL entrypoints do this automatically when
+the option is set).

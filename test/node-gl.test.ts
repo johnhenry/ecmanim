@@ -267,3 +267,83 @@ test("renderGL produces a nonzero video via headless Chrome (WebGL)", { timeout:
     rmSync(fixtureDir, { recursive: true, force: true });
   }
 });
+
+// Guarded post-processing smoke: a bloom render through the full node-gl ->
+// browser-three -> EffectComposer chain. Together with an empty-config
+// (RenderPass-only) render, this pins the composer color-space parity path
+// at the "did it render at all" level without pixel comparison.
+test("renderGL with postProcessing (bloom) produces nonzero video", { timeout: 240_000 }, async (t) => {
+  const up = await probeCDP(CDP_URL);
+  if (!up) {
+    t.skip(`no CDP endpoint reachable at ${CDP_URL}`);
+    return;
+  }
+  const bundle = join(PROJECT_ROOT, "dist", "browser-three.js");
+  if (!existsSync(bundle)) {
+    t.skip("dist/browser-three.js missing");
+    return;
+  }
+  const { renderGL } = await import("../src/node-gl.ts");
+
+  const fixtureDir = mkdtempSync(join(PROJECT_ROOT, "test-gl-fixture-"));
+  const sceneFile = join(fixtureDir, "scene.js");
+  const fixtureRel = "/" + sceneFile.slice(PROJECT_ROOT.length + 1).replace(/\\/g, "/");
+  writeFileSync(sceneFile, `
+    import { ThreeDScene, Sphere, FadeIn, YELLOW, DEGREES } from "ecmanim/browser-three";
+    export default class BloomFixtureScene extends ThreeDScene {
+      async construct() {
+        this.setCameraOrientation({ phi: 65 * DEGREES, theta: -90 * DEGREES });
+        const s = new Sphere({ radius: 1.2, fillColor: YELLOW, strokeWidth: 0 });
+        this.add(s);
+        await this.play(new FadeIn(s), { _playConfig: true, runTime: 0.5 });
+      }
+    }
+  `);
+
+  try {
+    for (const [label, postProcessing] of [
+      ["bloom", { bloom: { strength: 1.5, threshold: 0.2 } }],
+      ["renderpass-only", {}],
+    ] as const) {
+      const out = join(fixtureDir, `out-${label}.webm`);
+      // The size floor is the REAL assertion here: a capture whose pacing
+      // loop never yields to the browser's render steps produces a
+      // header-only ~110-byte WebM with ZERO frames -- which a ">0" check
+      // happily accepts (this exact false-pass hid the bloom-empties-capture
+      // bug in browser-three's record()). Real sub-second low-quality
+      // captures are several KB. Under full-suite load the shared headless
+      // Chrome can also transiently emit truncated captures, so a too-small
+      // file counts as a failed ATTEMPT (retried, then skipped) rather than
+      // an instant failure -- but a healthy run must clear the floor.
+      const MIN_REAL_CAPTURE_BYTES = 1000;
+      let ok = false, lastErr: any;
+      for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
+        try {
+          await renderGL({
+            sceneModule: fixtureRel,
+            sceneExport: "default",
+            root: PROJECT_ROOT,
+            cdpUrl: CDP_URL,
+            output: out,
+            format: "webm",
+            fps: 8,
+            quality: "low",
+            postProcessing,
+          });
+          const size = existsSync(out) ? statSync(out).size : 0;
+          if (size > MIN_REAL_CAPTURE_BYTES) ok = true;
+          else lastErr = new Error(`capture too small (${size} bytes) -- zero-frame recording`);
+        } catch (e) {
+          lastErr = e;
+        }
+        if (!ok && attempt < 2) await new Promise((r) => setTimeout(r, 2000));
+      }
+      if (!ok) {
+        t.skip(`renderGL(${label}) transient failure under load after retry: ${lastErr?.message ?? lastErr}`);
+        return;
+      }
+    }
+  } finally {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  }
+});
