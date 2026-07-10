@@ -239,6 +239,9 @@ test("webhook scheduler: 2xx delivers; failures walk the backoff then exhaust", 
     transport: async () => ({ status: 503 }),
   });
   failer.enqueue("j2", "http://example.test/hook", null, { x: 1 });
+  // enqueue stamps nextAttemptAt with the REAL clock, which may sit a few ms
+  // past the frozen t captured above — jump t safely beyond it.
+  t = Date.now() + 1000;
   await failer.tick(); t += 15;
   await failer.tick(); t += 25;
   await failer.tick();
