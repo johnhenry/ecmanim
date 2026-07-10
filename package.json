@@ -103,6 +103,8 @@
   "devDependencies": {
     "@types/node": "^26.1.0",
     "@types/three": "^0.185.0",
+    "jsdom": "^29.1.1",
+    "mermaid": "^11.16.0",
     "typescript": "^6.0.3"
   }
 }
