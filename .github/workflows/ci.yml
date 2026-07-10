@@ -29,13 +29,28 @@ jobs:
 
       - run: npm run build
 
-  showcase-smoke:
-    # Three representative showcase-parity demos rendered end-to-end at low
-    # quality: 01 (canvas core + effects), 09 (word captions), 13 (geo).
-    # A real net over render()/ffmpeg/fonts that unit tests can't cast.
+  demo-smoke:
+    # Three representative demos per parity suite, rendered end-to-end at
+    # low quality — a real net over render()/ffmpeg/fonts that unit tests
+    # can't cast. One matrix job per suite (roadmap policy: consolidate
+    # smoke jobs into a matrix once there are more than four suites).
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: showcase-parity
+            demos: "01-hackreels 09-submagic 13-electricity-maps"
+          - suite: manim-parity
+            demos: "02-BraceAnnotation 16-GraphAreaPlot 25-ThreeDSurfacePlot"
+          - suite: motion-canvas-parity
+            demos: "01-quickstart 06-camera 21-code"
+          - suite: d3-parity
+            demos: "11-treemap 16-force-directed-graph 06-bar-chart-race"
+          - suite: threeb1b-parity
+            demos: "01-fourier-epicycles 02-linear-transformation 08-taylor-series"
     steps:
       - uses: actions/checkout@v4
 
@@ -47,128 +62,18 @@ jobs:
 
       - run: npm ci
 
-      - name: Render smoke demos (low quality)
+      - name: Render ${{ matrix.suite }} smoke demos (low quality)
         env:
           ECMANIM_DEMO_QUALITY: low
-          ECMANIM_DEMO_SKIP_GL: "1"
         run: |
-          node --experimental-strip-types --no-warnings examples/showcase-parity/01-hackreels.ts
-          node --experimental-strip-types --no-warnings examples/showcase-parity/09-submagic.ts
-          node --experimental-strip-types --no-warnings examples/showcase-parity/13-electricity-maps.ts
-
-      - name: Verify outputs are real videos
-        run: |
-          for f in 01-hackreels 09-submagic 13-electricity-maps; do
-            path="examples/showcase-parity/out/$f.mp4"
-            size=$(stat -c%s "$path")
-            echo "$path: $size bytes"
-            test "$size" -gt 50000
-            ffprobe -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$path" | grep -q video
+          for f in ${{ matrix.demos }}; do
+            node --experimental-strip-types --no-warnings "examples/${{ matrix.suite }}/$f.ts"
           done
 
-  manim-smoke:
-    # Three representative manim-gallery ports rendered end-to-end at low
-    # quality: 02 (MathTex + Brace), 16 (axes depth), 25 (3D surface).
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
-
-      - run: npm ci
-
-      - name: Render manim-parity smoke ports (low quality)
-        env:
-          ECMANIM_DEMO_QUALITY: low
-        run: |
-          node --experimental-strip-types --no-warnings examples/manim-parity/02-BraceAnnotation.ts
-          node --experimental-strip-types --no-warnings examples/manim-parity/16-GraphAreaPlot.ts
-          node --experimental-strip-types --no-warnings examples/manim-parity/25-ThreeDSurfacePlot.ts
-
       - name: Verify outputs are real videos
         run: |
-          for f in 02-BraceAnnotation 16-GraphAreaPlot 25-ThreeDSurfacePlot; do
-            path="examples/manim-parity/out/$f.mp4"
-            size=$(stat -c%s "$path")
-            echo "$path: $size bytes"
-            # Mostly-static 1s scenes compress under 15KB at low quality; the
-            # ffprobe stream check below is the real validity gate.
-            test "$size" -gt 5000
-            ffprobe -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$path" | grep -q video
-          done
-
-  mc-smoke:
-    # Three representative Motion-Canvas ports rendered end-to-end at low
-    # quality: 01 (tween chains), 06 (camera roll/centerOn/reset), 21
-    # (code.edit tagged template).
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
-
-      - run: npm ci
-
-      - name: Render motion-canvas-parity smoke ports (low quality)
-        env:
-          ECMANIM_DEMO_QUALITY: low
-        run: |
-          node --experimental-strip-types --no-warnings examples/motion-canvas-parity/01-quickstart.ts
-          node --experimental-strip-types --no-warnings examples/motion-canvas-parity/06-camera.ts
-          node --experimental-strip-types --no-warnings examples/motion-canvas-parity/21-code.ts
-
-      - name: Verify outputs are real videos
-        run: |
-          for f in 01-quickstart 06-camera 21-code; do
-            path="examples/motion-canvas-parity/out/$f.mp4"
-            size=$(stat -c%s "$path")
-            echo "$path: $size bytes"
-            test "$size" -gt 5000
-            ffprobe -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$path" | grep -q video
-          done
-
-  d3-smoke:
-    # Three representative D3 ports rendered end-to-end at low quality:
-    # 11 (hierarchy/treemap), 16 (deterministic force settling), 06 (the
-    # bar-chart-race flagship: dataJoin + keyframes).
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
-
-      - run: npm ci
-
-      - name: Render d3-parity smoke ports (low quality)
-        env:
-          ECMANIM_DEMO_QUALITY: low
-        run: |
-          node --experimental-strip-types --no-warnings examples/d3-parity/11-treemap.ts
-          node --experimental-strip-types --no-warnings examples/d3-parity/16-force-directed-graph.ts
-          node --experimental-strip-types --no-warnings examples/d3-parity/06-bar-chart-race.ts
-
-      - name: Verify outputs are real videos
-        run: |
-          for f in 11-treemap 16-force-directed-graph 06-bar-chart-race; do
-            path="examples/d3-parity/out/$f.mp4"
+          for f in ${{ matrix.demos }}; do
+            path="examples/${{ matrix.suite }}/out/$f.mp4"
             size=$(stat -c%s "$path")
             echo "$path: $size bytes"
             test "$size" -gt 5000

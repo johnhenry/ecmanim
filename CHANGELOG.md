@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.5.0 — 2026-07-10
+
+### Added
+- **3Blue1Brown canon suite** (`examples/threeb1b-parity/`): ten iconic
+  3b1b visuals recreated on the public API (recreations of the visuals,
+  not code ports; sources cited per scene; no brand assets) — Fourier
+  epicycles tracing π, the linear-transformation grid morph, eigenvector
+  spans, the n² odd-sum proof, the prime spiral galaxy, Hilbert-curve
+  refinement, pendulum phase space, Taylor series, the 4πr² sphere unwrap
+  (CPU z-buffer 3D), and a neural-network forward pass. CANON.md spec +
+  README scorecard.
+- `FourierPath`/`dftOfPath`/`samplePath` (amplitude-sorted complex DFT +
+  epicycle chain, scrub-safe `setTime`, TracedPath-composable tip);
+  `NeuralNetworkMobject` (layered diagram, ellipsis abbreviation,
+  weight-styled edges, deterministic `forwardPass` pulse waves,
+  `highlightOutput`); `hilbertCurve` + generic `lsystem`; `sieve`/
+  `primesUpTo`/`isPrime` + `eigen2x2`; `Surface.setFunc` in-place
+  reparameterization (per-frame surface morphs).
+- CI: per-suite smoke jobs consolidated into one 5-suite matrix
+  (`demo-smoke`); `npm run demos:3b1b`.
+
+### Fixed (found by the recreation wave)
+- `Transform` now aligns FAMILY point counts — VGroup children with
+  mismatched counts kept only the leading fraction of their target
+  (curves dissolved into dashes).
+- `render()` re-binds the renderer to `scene.camera` after construction —
+  ThreeDScene's camera upgrade silently rendered with no 3D projection
+  unless a camera was passed explicitly.
+- `parseTexGroups` uses a balanced-brace scan — `{{\frac{x^3}{3!}}}`
+  lost its closing brace to the old non-greedy regex and corrupted the
+  tex.
+- `NeuralNetworkMobject.forwardPass` pulses bright throwaway edge copies —
+  flashing the live edges blanked the skeleton and removed scene-level
+  edges at finish.
+
+
 ## 0.4.0 — 2026-07-10
 
 ### Added
