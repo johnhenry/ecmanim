@@ -248,13 +248,23 @@ function parseTransform(str: string): Affine {
 function collectGlyphs(adaptor: any, svgNode: any): any[] {
   const defs: Record<string, string> = {};
 
+  // liteAdaptor's childNodes() THROWS on text nodes (LiteText has no children
+  // array) rather than returning [] -- and MathJax output can contain text
+  // nodes (e.g. inside <merror> or title elements). Guard every descent.
+  const kids = (node: any): any[] => {
+    const kind = adaptor.kind(node);
+    if (kind === "#text" || kind === "#comment" || kind === "#cdata") return [];
+    try { return adaptor.childNodes(node) || []; } catch { return []; }
+  };
+
   function scanDefs(node: any) {
+    if (adaptor.kind(node).startsWith("#")) return;
     if (adaptor.kind(node) === "path") {
       const id = adaptor.getAttribute(node, "id");
       const d = adaptor.getAttribute(node, "d");
       if (id && d) defs[id] = d;
     }
-    for (const child of adaptor.childNodes(node) || []) scanDefs(child);
+    for (const child of kids(node)) scanDefs(child);
   }
   scanDefs(svgNode);
 
@@ -262,6 +272,7 @@ function collectGlyphs(adaptor: any, svgNode: any): any[] {
 
   function walk(node: any, transform: Affine) {
     const kind = adaptor.kind(node);
+    if (kind.startsWith("#")) return; // text/comment nodes: no attrs, no children
     // Accumulate this node's own transform (present on <g> and sometimes <use>).
     let m = transform;
     const tAttr = adaptor.getAttribute(node, "transform");
@@ -286,7 +297,7 @@ function collectGlyphs(adaptor: any, svgNode: any): any[] {
       records.push({ type: "rect", x, y, w, h, m });
     }
 
-    for (const child of adaptor.childNodes(node) || []) walk(child, m);
+    for (const child of kids(node)) walk(child, m);
   }
   walk(svgNode, IDENTITY);
   return records;
@@ -294,8 +305,12 @@ function collectGlyphs(adaptor: any, svgNode: any): any[] {
 
 // Find the <svg> element inside the returned <mjx-container>.
 function findSvg(adaptor: any, node: any): any {
-  if (adaptor.kind(node) === "svg") return node;
-  for (const child of adaptor.childNodes(node) || []) {
+  const kind = adaptor.kind(node);
+  if (kind === "svg") return node;
+  if (kind === "#text" || kind === "#comment") return null;
+  let children: any[];
+  try { children = adaptor.childNodes(node) || []; } catch { return null; }
+  for (const child of children) {
     const found = findSvg(adaptor, child);
     if (found) return found;
   }
@@ -759,6 +774,18 @@ export class Tex extends MathTex {
   }
 }
 
+// Wrap a command-free prose run in \text{...}, hoisting TeX control
+// sequences (\LaTeX, \alpha, ...) OUT of the wrapper -- base MathJax does
+// not expand macros inside \text{} (that needs the textmacros extension),
+// so \text{This is some \LaTeX} renders an error box instead of the logo.
+function wrapProse(run: string): string {
+  const parts = run.split(/(\\[a-zA-Z]+\s*)/);
+  return parts
+    .filter((part) => part.length)
+    .map((part) => (part.startsWith("\\") ? part : `\\text{${part}}`))
+    .join("");
+}
+
 // Convert a Tex string to something MathJax renders upright. If the string has
 // no math delimiters and isn't already a \text/\mathrm command, wrap the whole
 // thing in \text{...}. If it contains $...$ segments, wrap only the non-math
@@ -768,8 +795,7 @@ function toTextMode(tex: string): string {
   if (/^\s*\\(text|mathrm|mbox|textrm)\s*\{/.test(tex)) return tex;
 
   if (!tex.includes("$")) {
-    // Escape nothing special; \text{} handles spaces/letters upright.
-    return `\\text{${tex}}`;
+    return wrapProse(tex);
   }
 
   // Mixed prose + inline math: split on $...$ and wrap prose runs only.
@@ -782,7 +808,7 @@ function toTextMode(tex: string): string {
       if (inMath) {
         out.push(buf); // math run, verbatim
       } else if (buf.length) {
-        out.push(`\\text{${buf}}`);
+        out.push(wrapProse(buf));
       }
       buf = "";
       inMath = !inMath;
@@ -790,6 +816,6 @@ function toTextMode(tex: string): string {
       buf += ch;
     }
   }
-  if (buf.length) out.push(inMath ? buf : `\\text{${buf}}`);
+  if (buf.length) out.push(inMath ? buf : wrapProse(buf));
   return out.join("");
 }
