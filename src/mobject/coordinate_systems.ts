@@ -66,7 +66,7 @@ export interface NumberPlaneConfig extends AxesConfig {
 }
 
 // Inclusive-ish range: values from start up to (and including, within eps) stop.
-function makeTickRange([start, stop, step]: number[]): number[] {
+export function makeTickRange([start, stop, step]: number[]): number[] {
   const out: number[] = [];
   if (step === 0) return out;
   const eps = 1e-6 * Math.abs(step);

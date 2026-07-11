@@ -59,6 +59,103 @@ test("ThreeDAxes exposes getAxis / getZAxis", () => {
   assert.equal(ax.getZAxis(), ax.zAxis);
 });
 
+// ecmanim#38: yAxis/zAxis built their number-label Text submobjects BEFORE
+// being rotated into place, so the rotate() calls in the constructor
+// rotated the labels right along with the axis line -- sideways/edge-on
+// relative to the camera, effectively illegible. Fixed by discarding those
+// mispositioned labels and rebuilding them in world space via
+// coordsToPoint (same fix 2D Axes already had for its own yAxis --
+// see coordinate_systems.ts's `_buildYNumbers()`).
+test("yAxisConfig.includeNumbers positions y-axis labels beside the y-axis line, not scattered by the rotation", () => {
+  const ax = new ThreeDAxes({
+    xRange: [-4, 4, 1],
+    yRange: [-4, 4, 1],
+    zRange: [-4, 4, 1],
+    yAxisConfig: { includeNumbers: true },
+  });
+  const labels = ax.getYAxis().numbers.submobjects;
+  assert.ok(labels.length > 0, "y-axis numbers were built");
+  for (const label of labels) {
+    const [lx] = label.getCenter();
+    // Correct placement hugs the y-axis (a small fixed buffer to its side,
+    // in world x); the pre-fix bug rotated the label's local
+    // horizontal-line offset along with the axis, scattering it away from
+    // the y-axis line by multiple world units instead.
+    assert.ok(Math.abs(lx) < 1, `y-axis label at x=${lx} should hug the y-axis (x~0), not be scattered by the rotation bug`);
+  }
+});
+
+test("zAxisConfig.includeNumbers positions z-axis labels beside the z-axis line, not scattered by the rotation", () => {
+  const ax = new ThreeDAxes({
+    xRange: [-4, 4, 1],
+    yRange: [-4, 4, 1],
+    zRange: [-4, 4, 1],
+    zAxisConfig: { includeNumbers: true },
+  });
+  const labels = ax.getZAxis().numbers.submobjects;
+  assert.ok(labels.length > 0, "z-axis numbers were built");
+  for (const label of labels) {
+    const [lx] = label.getCenter();
+    assert.ok(Math.abs(lx) < 1, `z-axis label at x=${lx} should hug the z-axis (x~0), not be scattered by the rotation bug`);
+  }
+});
+
+test("y-axis and z-axis number labels stay upright, matching the x-axis's own (never-rotated) label shape", () => {
+  // Uses the shared `axisConfig` path (not the new per-axis config) since
+  // that path already worked pre-fix -- an apples-to-apples check that
+  // isolates the rotation bug itself from the separate per-axis-config
+  // addition. Same xRange/yRange/zRange means the same tick values (and
+  // thus the same label text/shape) on every axis, so a correctly upright
+  // y/z label's world-space aspect ratio (getWidth()/getHeight()) should
+  // match the x-axis's own -- pre-fix, the y-axis's rotated label measured
+  // a visibly different (inflated) aspect, and the z-axis's collapsed to
+  // ~0 width (a 90-degree rotation about Y turns the label's in-plane
+  // width into near-zero depth).
+  const ax = new ThreeDAxes({
+    xRange: [-4, 4, 1],
+    yRange: [-4, 4, 1],
+    zRange: [-4, 4, 1],
+    axisConfig: { includeNumbers: true },
+  });
+  const aspect = (m: any) => m.getWidth() / Math.max(m.getHeight(), 1e-9);
+  // The x-axis's own labels include a "0" (the never-rotated NumberLine's
+  // stock _addNumbers() doesn't skip it); _buildAxisNumbers skips 0 on y/z
+  // to avoid stacking three axes' zero labels at the shared origin -- so
+  // compare against the SET of x's distinct aspect values rather than a
+  // 1:1 indexed pairing, which would otherwise assume equal label counts.
+  const xAspects = [...new Set(ax.getXAxis().numbers.submobjects.map(aspect).map((v: number) => v.toFixed(2)))].map(Number);
+  const yAspects = ax.getYAxis().numbers.submobjects.map(aspect);
+  const zAspects = ax.getZAxis().numbers.submobjects.map(aspect);
+  assert.ok(yAspects.length > 0 && zAspects.length > 0, "y and z labels were built");
+  for (const a of yAspects) {
+    assert.ok(
+      xAspects.some((x) => Math.abs(x - a) < 0.05),
+      `y-axis label aspect ${a} should match one of the x-axis's own upright aspects [${xAspects}], not a rotated shape`,
+    );
+  }
+  for (const a of zAspects) {
+    assert.ok(
+      xAspects.some((x) => Math.abs(x - a) < 0.05),
+      `z-axis label aspect ${a} should match one of the x-axis's own upright aspects [${xAspects}], not a rotated shape`,
+    );
+  }
+});
+
+test("y-axis and z-axis number labels vary along their own axis' world coordinate, confirming they track real tick values", () => {
+  const ax = new ThreeDAxes({
+    xRange: [-4, 4, 1],
+    yRange: [-4, 4, 1],
+    zRange: [-4, 4, 1],
+    axisConfig: { includeNumbers: true },
+  });
+  const yPositions = ax.getYAxis().numbers.submobjects.map((m: any) => m.getCenter()[1]);
+  const zPositions = ax.getZAxis().numbers.submobjects.map((m: any) => m.getCenter()[2]);
+  assert.ok(yPositions.length > 1, "multiple y-axis labels built");
+  assert.ok(zPositions.length > 1, "multiple z-axis labels built");
+  assert.ok(new Set(yPositions.map((v: number) => v.toFixed(3))).size > 1, "y-axis labels vary along world Y");
+  assert.ok(new Set(zPositions.map((v: number) => v.toFixed(3))).size > 1, "z-axis labels vary along world Z");
+});
+
 // Issue #31: an axis whose range doesn't include 0 (e.g. a log10 axis over
 // values that never reach 0) used to shift so data-value 0's position --
 // off that axis's own rendered segment -- sat at the world origin, leaving

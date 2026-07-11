@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.2 — 2026-07-11
+
+### Fixed
+- **`ThreeDAxes`'s y-axis and z-axis tick-number labels rendered rotated/edge-on relative to the camera, effectively illegible** (issue #38). Each axis's `NumberLine` builds its number `Text` labels *before* `ThreeDAxes`'s constructor rotates the y-axis and z-axis into place, so those labels — being submobjects of the line being rotated — rotated right along with it (the x-axis, never rotated, was never affected). Confirmed via a direct render: the z-axis's labels (rotated 90 degrees about Y) collapsed to near-zero world-space width; the y-axis's (rotated 90 degrees about Z) measured a visibly different aspect ratio than the x-axis's own upright labels. Fixed the same way the 2D `Axes` class's identical y-axis bug was fixed (see issue #31's changelog entry below): discard the mispositioned labels after rotation and rebuild them in world space via `coordsToPoint`, unrotated. Also added `xAxisConfig`/`yAxisConfig`/`zAxisConfig` per-axis overrides to `ThreeDAxesConfig` (previously only a single shared `axisConfig`), matching 2D `Axes`'s existing config API.
+
 ## 0.11.1 — 2026-07-11
 
 A follow-up to the parity-campaigns roadmap: three partial-movie-cache

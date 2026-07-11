@@ -11,8 +11,9 @@ import type { SceneConfig } from "./Scene.ts";
 import { VGroup } from "../mobject/VMobject.ts";
 import type { VMobject } from "../mobject/VMobject.ts";
 import { Line } from "../mobject/geometry.ts";
-import { NumberLine } from "../mobject/coordinate_systems.ts";
+import { NumberLine, makeTickRange } from "../mobject/coordinate_systems.ts";
 import type { NumberLineConfig } from "../mobject/coordinate_systems.ts";
+import { Text } from "../mobject/text/Text.ts";
 import * as V from "../core/math/vector.ts";
 import { smooth } from "../animation/rate_functions.ts";
 import type { RateFunc } from "../core/types.ts";
@@ -367,6 +368,10 @@ export interface ThreeDAxesConfig {
   zLength?: number;
   axisColors?: string[];
   axisConfig?: NumberLineConfig;
+  /** Per-axis overrides applied on top of `axisConfig`, same merge order as 2D Axes's identically-named config fields (ecmanim#38). */
+  xAxisConfig?: NumberLineConfig;
+  yAxisConfig?: NumberLineConfig;
+  zAxisConfig?: NumberLineConfig;
   [key: string]: any;
 }
 
@@ -399,9 +404,9 @@ export class ThreeDAxes extends VGroup {
     // Build three horizontal NumberLines then rotate y and z into place. Each
     // line's data value 0 sits at its center; we shift so the origin crosses at
     // the world origin.
-    this.xAxis = new NumberLine({ ...axisConfig, xRange: this.xRange, length: this.xLength, color: colors[0] });
-    this.yAxis = new NumberLine({ ...axisConfig, xRange: this.yRange, length: this.yLength, color: colors[1] });
-    this.zAxis = new NumberLine({ ...axisConfig, xRange: this.zRange, length: this.zLength, color: colors[2] });
+    this.xAxis = new NumberLine({ ...axisConfig, xRange: this.xRange, length: this.xLength, color: colors[0], ...(config.xAxisConfig ?? {}) });
+    this.yAxis = new NumberLine({ ...axisConfig, xRange: this.yRange, length: this.yLength, color: colors[1], ...(config.yAxisConfig ?? {}) });
+    this.zAxis = new NumberLine({ ...axisConfig, xRange: this.zRange, length: this.zLength, color: colors[2], ...(config.zAxisConfig ?? {}) });
 
     this._xUnit = this.xAxis.getUnitSize();
     this._yUnit = this.yAxis.getUnitSize();
@@ -422,7 +427,66 @@ export class ThreeDAxes extends VGroup {
     this.yAxis.shift(V.neg(this._axisPointRaw(this.yAxis, this._yRef(), [0, 1, 0])));
     this.zAxis.shift(V.neg(this._axisPointRaw(this.zAxis, this._zRef(), Z_AXIS)));
 
+    // The y-axis/z-axis NumberLines' OWN _addNumbers() (triggered inside
+    // their constructors above if includeNumbers was set) ran BEFORE the
+    // rotate() calls above: each label sits at a LOCAL offset assuming a
+    // horizontal line ("below the tick"). After the 90-degree rotation that
+    // offset is now rotated right along with it -- sideways/edge-on
+    // relative to the camera, effectively illegible (ecmanim#38). Same bug
+    // 2D Axes had (see coordinate_systems.ts's identical discard-and-rebuild
+    // right after its own yAxis.rotate()) -- discard the mispositioned
+    // labels here; they get rebuilt below in world space via coordsToPoint,
+    // unrotated (matching the x-axis's own labels, which are never rotated
+    // and were never buggy).
+    if (this.yAxis.includeNumbers && this.yAxis.numbers) {
+      this.yAxis.remove(this.yAxis.numbers);
+      this.yAxis.numbers = undefined as any;
+    }
+    if (this.zAxis.includeNumbers && this.zAxis.numbers) {
+      this.zAxis.remove(this.zAxis.numbers);
+      this.zAxis.numbers = undefined as any;
+    }
+
     this.add(this.xAxis, this.yAxis, this.zAxis);
+
+    if (this.yAxis.includeNumbers && !this.yAxis.numbers) {
+      this._buildAxisNumbers(this.yAxis, this.yRange, 1, [-0.3, 0, 0]);
+    }
+    if (this.zAxis.includeNumbers && !this.zAxis.numbers) {
+      this._buildAxisNumbers(this.zAxis, this.zRange, 2, [-0.3, 0, 0]);
+    }
+  }
+
+  /**
+   * Build one axis's number labels in WORLD space via coordsToPoint --
+   * correct regardless of that axis's post-construction rotation (mirrors
+   * 2D Axes's `_buildYNumbers()`). `coordIndex` selects which of
+   * coordsToPoint's (x, y, z) arguments `axis`'s own range varies;
+   * `worldOffset` nudges the label beside its tick rather than on top of
+   * the axis line, in WORLD space (unlike the buggy pre-rotation local
+   * offset this replaces).
+   */
+  private _buildAxisNumbers(axis: NumberLine, range: number[], coordIndex: 0 | 1 | 2, worldOffset: number[]): VGroup {
+    const numbers = new VGroup();
+    for (const v of makeTickRange(range)) {
+      // Skip the origin crossing -- it's already labeled (or deliberately
+      // unlabeled) by whichever axis owns 0 on its own line; every axis
+      // recomputing its own 0 label would stack multiple labels at the
+      // shared origin. Mirrors 2D Axes's `_buildYNumbers()`.
+      if (Math.abs(v) < 1e-9) continue;
+      const coords: number[] = [0, 0, 0];
+      coords[coordIndex] = v;
+      const p = this.coordsToPoint(coords[0], coords[1], coords[2]);
+      const label = new Text(axis._formatNumber(v), {
+        fontSize: axis.fontSize,
+        color: axis.color,
+        point: [p[0] + worldOffset[0], p[1] + worldOffset[1], p[2] + worldOffset[2]],
+      });
+      numbers.add(label);
+    }
+    axis.numbers = numbers;
+    axis.add(numbers);
+    return numbers;
   }
 
   // Data value used as each axis's crossing reference: 0 when it's actually
