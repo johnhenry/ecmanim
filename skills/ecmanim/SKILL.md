@@ -31,6 +31,7 @@ or the target project's `.claude/skills/`.
 | Live-reloading local preview server, schema-driven prop controls | `ecmanim-studio` |
 | CLI flags, quality/output presets, caching, renderer backends (canvas/WebGL/z-buffer 3D) | `ecmanim-render-cli` |
 | Content clipping/off-center near a frame edge, `Axes`/`NumberPlane` layout with a range not centered on zero, animating more than one mobject at once, a render that looks subtly wrong instead of erroring | `ecmanim-practical-authoring` |
+| D3-style scales/shapes/hierarchy/force/sankey/chord/dataJoin, chart mobjects (Radar/Gauge/Funnel/Candlestick/Legend), Fourier epicycles, neural-network diagrams, Game of Life, animated source-code diffs | `ecmanim-dataviz` |
 
 Everything below applies regardless of which child skill is also in play.
 
