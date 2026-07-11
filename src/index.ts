@@ -132,6 +132,10 @@ export { RadarChart } from "./mobject/radar.ts";
 export type { RadarChartConfig, RadarIndicator } from "./mobject/radar.ts";
 export { ParticleSystem } from "./mobject/particles.ts";
 export type { ParticleSystemConfig, ParticleState } from "./mobject/particles.ts";
+export { CellularAutomaton } from "./mobject/cellular_automaton.ts";
+export type { CellularAutomatonConfig, CellularAutomatonRule } from "./mobject/cellular_automaton.ts";
+export { SoftBodySimulation, SoftBody } from "./mobject/soft_body.ts";
+export type { SoftBodyConfig, SoftBodyMobjectConfig } from "./mobject/soft_body.ts";
 export * from "./mobject/vector_field.ts";
 export * from "./mobject/graphing_scale.ts";
 export { ValueTracker, DecimalNumber, Integer, alwaysRedraw } from "./mobject/value_tracker.ts";
@@ -235,6 +239,11 @@ export {
   forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide, forceX, forceY,
 } from "./layout/force.ts";
 export type { ForceSimulation, SimulationNode, SimulationLink, Force } from "./layout/force.ts";
+// Deterministic Reynolds flocking (boids) simulation + Mobject wrapper.
+export { BoidsSimulation, boidsSimulation } from "./layout/boids.ts";
+export type { BoidsConfig, BoidState } from "./layout/boids.ts";
+export { BoidsFlock } from "./mobject/boids.ts";
+export type { BoidsFlockConfig } from "./mobject/boids.ts";
 export { sankey, sankeyLinkHorizontalPoints } from "./layout/sankey.ts";
 export { chord, ribbonPoints, chordAngleToPoint } from "./layout/chord.ts";
 export { contours, contourThresholds } from "./layout/contours.ts";
