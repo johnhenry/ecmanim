@@ -195,12 +195,23 @@ export class CellularAutomaton extends VGroup {
 
   /** Count of the (up to) 8 Moore-neighborhood live neighbors of (row, col),
    *  wrapping toroidally when `wrap` is true (matching 06-game-of-life.js),
-   *  or simply not counting off-grid neighbors when false. */
+   *  or simply not counting off-grid neighbors when false.
+   *
+   *  A degenerate axis (rows===1, the documented "1D elementary CA via a
+   *  custom rule" use case in this class's config docs) must SKIP the dr
+   *  offsets that don't exist rather than wrap them onto the same row --
+   *  wrapping dr through rows===1 collapses all three dr values to rr=row,
+   *  so the naive toroidal formula would visit each physical neighbor
+   *  multiple times (the left/right cells 3x each, the center cell 2x)
+   *  instead of the true {left, right} pair a 1D rule expects. Same
+   *  reasoning applies to a degenerate cols===1 axis. */
   private _countNeighbors(row: number, col: number): number {
     const { rows, cols, grid, wrap } = this;
     let count = 0;
     for (let dr = -1; dr <= 1; dr++) {
+      if (rows === 1 && dr !== 0) continue;
       for (let dc = -1; dc <= 1; dc++) {
+        if (cols === 1 && dc !== 0) continue;
         if (dr === 0 && dc === 0) continue;
         let rr = row + dr;
         let cc = col + dc;

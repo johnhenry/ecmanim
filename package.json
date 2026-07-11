@@ -76,7 +76,8 @@
     "demos:3b1b": "for f in examples/threeb1b-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
     "demos:mermaid": "for f in examples/mermaid-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
     "demos:echarts": "for f in examples/echarts-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
-    "demos:gsap": "for f in examples/gsap-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done"
+    "demos:gsap": "for f in examples/gsap-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
+    "demos:p5": "for f in examples/p5-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done"
   },
   "keywords": [
     "manim",

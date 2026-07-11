@@ -135,3 +135,64 @@ test("step() rebuilds the mesh geometry to match the new grid state", () => {
   ca.step();
   assert.equal(totalMeshPoints(), 0, "an all-dead grid should produce no mesh geometry after step()");
 });
+
+// --- 1D elementary CA (rows:1 + custom rule) -------------------------------
+//
+// Regression (p5.js campaign, examples/p5-parity/07-ten-print-maze.ts port):
+// _countNeighbors's toroidal dr/dc loop collapsed all three dr offsets to
+// the same row when rows===1, so the "left"/"right" neighbors were each
+// counted 3x and the cell's own state 2x (neighbors = 3*left + 2*me +
+// 3*right) instead of the true {left, right} pair the class's own config
+// docs promise for this use case. Only detectable with an ASYMMETRIC rule
+// (a left/right-symmetric rule like Wolfram Rule 90 happens to still work
+// by coincidence, which is how this shipped unnoticed) or a rule that reads
+// `alive` (the 2x self-count corrupts the true "am I alive" signal for a
+// custom rule that ignores the `alive` boolean and infers it from the
+// neighbor sum instead, as a real 3-neighbor Wolfram rule does).
+
+test("rows:1 custom rule sees the TRUE {left,right} neighbor pair, not a 3x/2x/3x miscount", () => {
+  // A rule that only fires on neighbors===1 (exactly one of {left,right}
+  // alive) would misfire constantly under the old 3x/2x/3x counting (values
+  // like 3, 6, 2 instead of 0/1/2) -- assert the actual observed counts are
+  // confined to the true range {0,1,2} for a simple alternating pattern.
+  const grid = [[true, false, true, false, true, false, true, false]];
+  const seen = new Set<number>();
+  const ca = new CellularAutomaton({
+    cols: 8,
+    rows: 1,
+    wrap: true,
+    initialGrid: grid,
+    rule: (neighbors) => { seen.add(neighbors); return false; },
+  });
+  ca.step();
+  for (const n of seen) assert.ok(n <= 2, `1D neighbor count must be in {0,1,2}, saw ${n}`);
+});
+
+test("rows:1 reproduces Wolfram Rule 90 exactly (Sierpinski triangle from a single seed cell)", () => {
+  // Rule 90: next = left XOR right (ignores the cell's own state). Ground
+  // truth computed independently, not derived from the implementation under
+  // test.
+  const cols = 15;
+  const grid = emptyGrid(1, cols);
+  grid[0][Math.floor(cols / 2)] = true;
+  const ca = new CellularAutomaton({
+    cols,
+    rows: 1,
+    wrap: true,
+    initialGrid: grid,
+    rule: (neighbors) => neighbors === 1, // XOR of two binary neighbors == exactly one alive
+  });
+
+  let expected = cloneGrid(grid);
+  for (let gen = 0; gen < 5; gen++) {
+    ca.step();
+    const next = new Array(cols).fill(false);
+    for (let c = 0; c < cols; c++) {
+      const left = expected[0][(c - 1 + cols) % cols];
+      const right = expected[0][(c + 1) % cols];
+      next[c] = left !== right;
+    }
+    expected = [next];
+    assert.deepEqual(ca.grid, expected, `generation ${gen + 1} should match Rule 90's independently-computed XOR`);
+  }
+});
