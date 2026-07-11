@@ -379,7 +379,143 @@ remote-control session) down.
 
 ---
 
-## 6. Where the full record lives
+## 6. Full example inventory (the parity lists, campaign by campaign)
+
+Every numbered file below is a committed, individually-runnable parity demo —
+`npx tsx examples/<dir>/<file>.ts`. Filenames are the source-of-truth names
+(kept close to the upstream original so `grep`/diffing against the reference is
+easy); this section exists because the campaign summaries in §3 give counts,
+not the itemized list. Each directory also has its own `README.md`/`ref/` with
+provenance — check there for licensing and the exact upstream source per item.
+
+### Foundation era — manim-gallery parity (v0.2.0) — 27 examples
+
+Source: docs.manim.community official example gallery, ported 1:1. Directory: `examples/manim-parity/`
+
+- `01-ManimCELogo.ts` — `02-BraceAnnotation.ts` — `03-VectorArrow.ts` —
+  `04-GradientImageFromArray.ts` — `05-BooleanOperations.ts` —
+  `06-PointMovingOnShapes.ts` — `07-MovingAround.ts` — `08-MovingAngle.ts` —
+  `09-MovingDots.ts` — `10-MovingGroupToDestination.ts` —
+  `11-MovingFrameBox.ts` — `12-RotationUpdater.ts` — `13-PointWithTrace.ts` —
+  `14-SinAndCosFunctionPlot.ts` — `15-ArgMinExample.ts` —
+  `16-GraphAreaPlot.ts` — `17-PolygonOnAxes.ts` — `18-HeatDiagramPlot.ts` —
+  `19-FollowingGraphCamera.ts` — `20-MovingZoomedSceneAround.ts` —
+  `21-FixedInFrameMObjectTest.ts` — `22-ThreeDLightSourcePosition.ts` —
+  `23-ThreeDCameraRotation.ts` — `24-ThreeDCameraIllusionRotation.ts` —
+  `25-ThreeDSurfacePlot.ts` — `26-OpeningManim.ts` —
+  `27-SineCurveUnitCircle.ts`
+
+### Foundation era — Remotion.dev/showcase parity (v0.1.0) — 18 examples
+
+Source: Remotion.dev showcase reels. Directory: `examples/showcase-parity/`
+
+- `01-hackreels.ts` — `02-nextjs-tutorial.ts` — `03-animstats.ts` —
+  `04-mux.ts` — `05-github-unwrapped.ts` — `06-admove.ts` —
+  `07-supermotion.ts` — `08-revid.ts` — `09-submagic.ts` —
+  `10-mykaraoke.ts` — `11-relay.ts` — `12-hello-meteo.ts` —
+  `13-electricity-maps.ts` — `14-watercolor-map.ts` — `15-banger-show.ts` —
+  `16-fluidmotion.ts` — `17-remotion-recorder.ts` — `18-vibrantsnap.ts`
+
+### Campaign 1 — Motion Canvas (v0.3.0) — 25 examples
+
+Source: Motion Canvas example/docs gallery. Directory: `examples/motion-canvas-parity/`
+
+- `01-quickstart.ts` — `02-bezier.ts` — `03-bezier-advanced.ts` —
+  `04-spline.ts` — `05-path.ts` — `06-camera.ts` — `07-transitions.ts` —
+  `08-index-gallery.ts` — `09-flow.ts` — `10-spawners.ts` —
+  `11-logging.ts` — `12-time-events.ts` — `13-random.ts` —
+  `14-signals.ts` — `15-tweening.ts` — `16-positioning.ts` —
+  `17-layouts.ts` — `18-hierarchy.ts` — `19-media.ts` — `20-latex.ts` —
+  `21-code.ts` — `22-effects.ts` — `23-filters.ts` —
+  `24-showcase-logo.ts` — `25-showcase-signals.ts`
+
+### Campaign 2 — D3.js top 25 (v0.4.0) — 25 examples
+
+Source: observablehq.com/@d3/gallery. Directory: `examples/d3-parity/`
+
+- `01-bar-chart.ts` — `02-bar-chart-transitions.ts` —
+  `03-stacked-to-grouped-bars.ts` — `04-radial-stacked-bar.ts` —
+  `05-pie-chart-update.ts` — `06-bar-chart-race.ts` —
+  `07-connected-scatterplot.ts` — `08-streamgraph.ts` —
+  `09-parallel-coordinates.ts` — `10-calendar-view.ts` — `11-treemap.ts` —
+  `12-sunburst.ts` — `13-tree.ts` — `14-radial-tree.ts` —
+  `15-circle-packing.ts` — `16-force-directed-graph.ts` —
+  `17-disjoint-force-graph.ts` — `18-arc-diagram.ts` —
+  `19-chord-diagram.ts` — `20-sankey.ts` — `21-edge-bundling.ts` —
+  `22-choropleth.ts` — `23-volcano-contours.ts` — `24-hexbin.ts` —
+  `25-brushable-scatterplot.ts`
+
+### Campaign 3 — 3Blue1Brown canon (v0.5.0) — 10 examples
+
+Source: 3Blue1Brown canonical visual recreations. Directory: `examples/threeb1b-parity/`
+
+- `01-fourier-epicycles.ts` — `02-linear-transformation.ts` —
+  `03-eigenvectors.ts` — `04-sum-of-odds.ts` — `05-prime-spiral.ts` —
+  `06-hilbert-curve.ts` — `07-pendulum-phase.ts` — `08-taylor-series.ts` —
+  `09-sphere-unwrap.ts` — `10-neural-network.ts`
+
+### Campaign 4 — Mermaid diagrams (v0.6.0) — 13 examples
+
+Source: Mermaid diagram-type syntax docs. Directory: `examples/mermaid-parity/`
+
+- `01-flowchart.ts` — `02-sequence.ts` — `03-class.ts` — `04-state.ts` —
+  `05-er.ts` — `06-gantt.ts` — `07-pie.ts` — `08-journey.ts` —
+  `09-timeline.ts` — `10-mindmap.ts` — `11-quadrant.ts` —
+  `12-gitgraph.ts` — `13-diagram-diff.ts`
+
+### Campaign 5 — Lottie (uncut, in progress) — 5 examples
+
+Source: lottie-web sample corpus. Directory: `examples/lottie-parity/`
+
+- `01-bodymovin.ts` (rendered) — `02-gatin.ts` (rendered) —
+  `03-happy2016.ts` (rendered) — `04-adrock.ts` (rendered) —
+  `05-navidad.ts` (**not yet rendered** — see §5 render-OOM blocker)
+
+**Total shipped across all campaigns to date: 123 individually-runnable parity
+examples**, across 7 corpora. (Demos 06–11 the L2 agent was reportedly building
+for Lottie are not among these 5 — see the ambiguity note at the end of this
+doc.)
+
+---
+
+## 7. Planned but NOT YET STARTED: Campaigns 6–9
+
+The roadmap (`~/.claude/plans/parity-campaigns-roadmap.md`) queues four more
+campaigns after Lottie ships. None of this exists in the repo yet — no corpus,
+no code — this is forward planning only, included so a continuer knows the
+project isn't "done after Lottie."
+
+- **Campaign 6 — ECharts gallery subset (target v0.8.0).** ~15 examples from
+  echarts.apache.org/examples (Apache-2.0): bar race, smoothed line, stacked
+  bars, scatter+visualMap, radar, gauge, funnel, candlestick, calendar
+  heatmap, pie roseType, graph/sunburst/sankey/themeRiver (reusing D3-campaign
+  layouts), waterfall. New mobjects needed: Gauge, Radar, Funnel, Candlestick,
+  Waterfall; a `visualMap` continuous color-mapping helper.
+- **Campaign 7 — GSAP patterns (target v0.9.0).** Not a gallery port — a
+  ~15-item *pattern* canon from GSAP's docs proving the browser-player side:
+  timeline labels, stagger distributions, text split reveal, shape morph,
+  motionPath+autoRotate, FLIP transitions, scroll-scrubbed timelines
+  (ScrollTrigger-equiv), pin+progress, parallax. Needs a browser
+  scroll-binding in `src/player.ts`.
+- **Campaign 8 — p5.js generative subset (target v0.10.0).** 12 examples from
+  p5js.org/examples (LGPL): noise field, particle system, flocking/boids,
+  fractal tree, L-system, Conway's Game of Life, ten-print maze, wave
+  interference, recursive circles, softbody/spring, Perlin terrain, lerp
+  color gradient. Needs a determinism policy for simulations (fixed-step +
+  seeded, documented as cache-safe) and an L-system → turtle-path generator.
+- **Campaign 9 — Reveal.js / Slidev decks (target v0.11.0).** The
+  presentation finale: ~15 slides each from the reveal.js and Slidev demo
+  decks (MIT), covering fragments, auto-animate, code-highlight steps,
+  backgrounds, speaker notes. Needs a `Scene.step()` fragment API, a
+  `deckFromMarkdown()` loader, and a presenter-mode player — this is what the
+  playRecords/step substrate has been building toward.
+
+Full gap-cluster and corpus detail for each is in the roadmap doc, §CAMPAIGN
+6–9.
+
+---
+
+## 8. Where the full record lives
 
 - **Git history** — the authoritative record of *what shipped*. `cd
   ~/Projects/ecmanim && git log --oneline`. 195 commits; every campaign's
