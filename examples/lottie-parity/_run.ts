@@ -34,6 +34,12 @@ export async function demoRender(
     quality: DEMO_QUALITY,
     verbose: false,
     background: "#ffffff",
+    // Route through the single-stream render path: the default caching path in
+    // src/node.ts accumulates every frame's PNG buffer in memory (segMap) before
+    // encoding, which OOM-kills Lottie renders (native off-heap @napi-rs/canvas
+    // buffers, unbounded by --max-old-space-size). disableCaching pipes each
+    // frame straight to ffmpeg with no accumulation. See HANDOFF.md §5.
+    disableCaching: true,
     ...options,
     output,
   });

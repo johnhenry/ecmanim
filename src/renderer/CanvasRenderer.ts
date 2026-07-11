@@ -219,6 +219,48 @@ export class CanvasRenderer {
     return this._createCanvas?.(w, h) ?? makeSyncOffscreenCanvas(w, h);
   }
 
+  // Pool of full-frame offscreen canvases (camera.pixelWidth × pixelHeight).
+  // drawCompositeGroup would otherwise allocate a fresh full-frame canvas for
+  // EVERY composite group EVERY frame; under Node those are @napi-rs/canvas
+  // skia surfaces whose native memory V8 can't see (process.memoryUsage()
+  // external/heap stay flat while rss climbs ~hundreds of MB/frame), so GC
+  // never fires and RSS grows unbounded until OOM. A matte/mask-heavy Lottie
+  // frame issues ~150 composite draws → OOM in ~15 frames. Borrowing from a
+  // pool caps live full-frame canvases at the max composite NESTING depth
+  // (canvases are borrowed/released in LIFO order as the recursion unwinds),
+  // and reuses them across frames. See HANDOFF.md §5.
+  private _fullFramePool: any[] = [];
+  private _poolW = 0;
+  private _poolH = 0;
+
+  // Borrow a full-frame offscreen canvas in the same pristine state a freshly
+  // created one has: identity transform, alpha 1, source-over, no filter, and
+  // fully transparent. Returns null when no offscreen backend exists (callers
+  // fall back to unscoped direct rendering, exactly as before).
+  private _borrowFullFrame(): any {
+    const w = this.camera.pixelWidth;
+    const h = this.camera.pixelHeight;
+    if (w !== this._poolW || h !== this._poolH) {
+      // Frame size changed — old pooled canvases are the wrong size; drop them.
+      this._fullFramePool.length = 0;
+      this._poolW = w;
+      this._poolH = h;
+    }
+    const c = this._fullFramePool.pop() ?? this._makeOffscreen(w, h);
+    if (!c) return null;
+    const cx = c.getContext("2d");
+    cx.setTransform(1, 0, 0, 1, 0, 0);
+    cx.globalAlpha = 1;
+    cx.globalCompositeOperation = "source-over";
+    (cx as any).filter = "none";
+    cx.clearRect(0, 0, w, h);
+    return c;
+  }
+
+  private _releaseFullFrame(c: any): void {
+    if (c) this._fullFramePool.push(c);
+  }
+
   clear(): void {
     const { ctx, camera } = this;
     ctx.save();
@@ -577,8 +619,7 @@ export class CanvasRenderer {
   // itself blends into the scene like any single mobject would. Degrades to
   // unscoped child rendering when no offscreen backend exists.
   drawCompositeGroup(group: any): void {
-    const { camera } = this;
-    const off = this._makeOffscreen(camera.pixelWidth, camera.pixelHeight);
+    const off = this._borrowFullFrame();
     if (!off) {
       this.renderMobjects(group.submobjects);
       return;
@@ -591,6 +632,8 @@ export class CanvasRenderer {
     } finally {
       this.ctx = savedCtx;
     }
+    // drawImage synchronously copies the pixels, so the canvas is safe to
+    // return to the pool immediately after (before any nested-sibling reuse).
     const alpha = group.opacity ?? 1;
     if (alpha >= 1) {
       this.ctx.drawImage(off, 0, 0);
@@ -600,6 +643,7 @@ export class CanvasRenderer {
       this.ctx.drawImage(off, 0, 0);
       this.ctx.globalAlpha = savedAlpha;
     }
+    this._releaseFullFrame(off);
   }
 
   // Render the scene AGAIN through a derived camera focused on the zoomed
