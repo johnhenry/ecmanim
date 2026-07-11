@@ -57,10 +57,16 @@ export interface GaugeChartConfig {
   /** Number of evenly-spaced tick labels from min to max (default 5). */
   tickCount?: number;
   tickFontSize?: number;
+  /** Tick label color (default WHITE, matching Text's own default — set this
+   *  explicitly on a light/white background scene or the ticks render
+   *  invisibly, same footgun as any bare `Text` mobject in this codebase). */
+  tickColor?: ColorLike;
   /** Show the big value label at the center-bottom of the dial (default true). */
   showValueLabel?: boolean;
   valueFormat?: (value: number) => string;
   valueFontSize?: number;
+  /** Value label color (default WHITE — see `tickColor`'s note). */
+  valueColor?: ColorLike;
 }
 
 interface ResolvedGaugeConfig {
@@ -75,9 +81,11 @@ interface ResolvedGaugeConfig {
   needleWidthRatio: number;
   tickCount: number;
   tickFontSize?: number;
+  tickColor?: ColorLike;
   showValueLabel: boolean;
   valueFormat?: (value: number) => string;
   valueFontSize?: number;
+  valueColor?: ColorLike;
 }
 
 const DEFAULT_BANDS: GaugeBand[] = [
@@ -131,9 +139,11 @@ export class GaugeChart extends VGroup {
       needleWidthRatio: config.needleWidthRatio ?? 0.04,
       tickCount: config.tickCount ?? 5,
       tickFontSize: config.tickFontSize,
+      tickColor: config.tickColor,
       showValueLabel: config.showValueLabel ?? true,
       valueFormat: config.valueFormat,
       valueFontSize: config.valueFontSize,
+      valueColor: config.valueColor,
     };
     this.value = clamp(value, min, max);
 
@@ -182,7 +192,7 @@ export class GaugeChart extends VGroup {
   }
 
   private _buildTicks(): void {
-    const { min, max, radius, tickCount, tickFontSize } = this._config;
+    const { min, max, radius, tickCount, tickFontSize, tickColor } = this._config;
     this.tickLabels.length = 0;
     this._tickGroup.submobjects.length = 0;
     const n = Math.max(2, tickCount);
@@ -192,7 +202,10 @@ export class GaugeChart extends VGroup {
       const t = i / (n - 1);
       const value = min + t * (max - min);
       const angle = this.angleForValue(value);
-      const label = new Text(formatTick(value), { fontSize });
+      const label = new Text(formatTick(value), {
+        fontSize,
+        ...(tickColor !== undefined ? { color: tickColor } : {}),
+      });
       label.moveTo([tickRadius * Math.cos(angle), tickRadius * Math.sin(angle), 0]);
       this.tickLabels.push(label);
     }
@@ -221,9 +234,12 @@ export class GaugeChart extends VGroup {
   }
 
   private _buildValueLabel(value: number): Text {
-    const { radius, valueFormat, valueFontSize } = this._config;
+    const { radius, valueFormat, valueFontSize, valueColor } = this._config;
     const text = valueFormat ? valueFormat(value) : value.toFixed(0);
-    const label = new Text(text, { fontSize: valueFontSize ?? radius * 0.3 });
+    const label = new Text(text, {
+      fontSize: valueFontSize ?? radius * 0.3,
+      ...(valueColor !== undefined ? { color: valueColor } : {}),
+    });
     // ECharts convention: the detail label sits below the dial's center.
     label.moveTo([0, -radius * 0.35, 0]);
     return label;

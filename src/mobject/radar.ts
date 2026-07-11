@@ -40,6 +40,10 @@ export interface RadarChartConfig {
   strokeWidth?: number;
   fillOpacity?: number;
   labelFontSize?: number;
+  /** Indicator-name label color (default WHITE, matching Text's own default —
+   *  set this explicitly on a light/white background scene or the labels
+   *  render invisibly). */
+  labelColor?: ColorLike;
   /** Show indicator name labels at spoke tips (default true). */
   showLabels?: boolean;
 }
@@ -153,14 +157,17 @@ export class RadarChart extends VGroup {
   }
 
   private _buildLabels(): void {
-    const { showLabels = true, labelFontSize = 0.4 } = this._config;
+    const { showLabels = true, labelFontSize = 0.4, labelColor } = this._config;
     this._labelsGroup.submobjects.length = 0;
     this.labels.length = 0;
     if (!showLabels) return;
     const n = this.indicators.length;
     for (let i = 0; i < n; i++) {
       const point = this._axisPoint(i, 1.15); // just past the spoke tip
-      const label = new Text(this.indicators[i].name, { fontSize: labelFontSize });
+      const label = new Text(this.indicators[i].name, {
+        fontSize: labelFontSize,
+        ...(labelColor !== undefined ? { color: labelColor } : {}),
+      });
       label.moveTo(point);
       this.labels.push(label);
     }
