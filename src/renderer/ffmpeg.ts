@@ -5,8 +5,22 @@
 
 /// <reference types="node" />
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync, existsSync, rmSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { mkdirSync, writeFileSync, existsSync, rmSync, readdirSync, renameSync } from "node:fs";
+import { dirname, join, extname, basename } from "node:path";
+import { threadId } from "node:worker_threads";
+
+// Process- and thread-unique, monotonically-increasing suffix for temp partial
+// files (see encodeFrames() below). worker_threads share one process.pid, so
+// pid alone can't distinguish concurrent workers -- threadId does (0 = main
+// thread, unique per Worker). The counter guards against two temp files from
+// the SAME thread landing in the same call. Deliberately not Date.now()/
+// Math.random(): this is a filesystem-safety concern, not scene/animation
+// content, so it doesn't touch this project's render-determinism contract --
+// but a plain counter is simpler and just as sufficient here regardless.
+let _tempFileCounter = 0;
+function tempSuffix(): string {
+  return `pid${process.pid}-t${threadId}-${_tempFileCounter++}`;
+}
 
 // Start an ffmpeg process reading PNGs from stdin (image2pipe) and encoding to
 // `outPath`. Codec/pixel-format is chosen by `format` ("webm" | "gif" | "mov" |
@@ -50,16 +64,48 @@ export function writeToStream(stream: any, buf: any): Promise<void> {
 
 // Encode an array of PNG buffers to a single file via startFfmpeg. Used to write
 // one partial-movie file per animation segment.
+//
+// Writes to a TEMP path in the same directory and renameSync()s it to the
+// real `outPath` only after ffmpeg exits 0 -- never straight to `outPath`.
+// `partial/{hash}.{ext}` is a SHARED cache directory: node-parallel.ts's
+// workers write into it concurrently for one render, and separate Node
+// processes rendering DIFFERENT scenes at the same time (e.g. several parity
+// demos rendered in parallel) can too. Writing directly to the final path let
+// a concurrent reader's `existsSync(partialPath)` check see a file that was
+// still mid-write -- reading it then returned truncated/incomplete content,
+// or (if two segments happened to share a content hash, e.g. a false
+// positive from a since-fixed hashing blind spot) one process's read could
+// land mid-stream of a COMPLETELY UNRELATED render, splicing foreign footage
+// into its own output (confirmed reproducible during the Reveal.js/Slidev
+// campaign's parallel port wave). `rename()` on the same filesystem is
+// atomic on POSIX (and effectively atomic in practice on Windows via
+// fs.renameSync) -- a concurrent reader now only ever sees "doesn't exist
+// yet" or "fully written," never a partial state.
 export async function encodeFrames(frames: any[], opts: any): Promise<void> {
   const { outPath } = opts;
   mkdirSync(dirname(outPath), { recursive: true });
-  const ff = startFfmpeg(opts);
-  for (const buf of frames) await writeToStream(ff.stdin, buf);
-  ff.stdin.end();
-  await new Promise<void>((res, rej) => {
-    ff.on("close", (code: number) => (code === 0 ? res() : rej(new Error("ffmpeg partial exited " + code))));
-    ff.on("error", rej);
-  });
+  // ffmpeg infers its output muxer from the FILE EXTENSION -- the temp
+  // suffix must land BEFORE it (`seg.tmp-xyz.mp4`), not after
+  // (`seg.mp4.tmp-xyz`), or ffmpeg can't tell what container to write and
+  // exits with "Unable to choose an output format."
+  const ext = extname(outPath);
+  const stem = basename(outPath, ext);
+  const tempPath = join(dirname(outPath), `${stem}.tmp-${tempSuffix()}${ext}`);
+  const ff = startFfmpeg({ ...opts, outPath: tempPath });
+  try {
+    for (const buf of frames) await writeToStream(ff.stdin, buf);
+    ff.stdin.end();
+    await new Promise<void>((res, rej) => {
+      ff.on("close", (code: number) => (code === 0 ? res() : rej(new Error("ffmpeg partial exited " + code))));
+      ff.on("error", rej);
+    });
+    renameSync(tempPath, outPath);
+  } catch (err) {
+    // Don't leave a stray temp file behind on failure (a crashed/killed
+    // render shouldn't litter the cache dir with orphaned .tmp-* files).
+    try { rmSync(tempPath, { force: true }); } catch { /* already gone / never created */ }
+    throw err;
+  }
 }
 
 // Run a one-shot ffmpeg command. Resolves true on exit 0; on failure either
