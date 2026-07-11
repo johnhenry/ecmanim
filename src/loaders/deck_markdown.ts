@@ -60,6 +60,12 @@ export interface DeckSlide {
   notes?: string;
 }
 
+// Word-wrap width for heading/body/bullet Text (world units) -- keeps every
+// slide's text within FRAME_WIDTH (~14.22, src/core/constants.ts) regardless
+// of content length. See the wrap-width note in buildAndReveal() below for
+// the bug this fixes (bullets could otherwise render off the left edge).
+const SAFE_WIDTH = 12;
+
 const CODE_FENCE_RE = /^```(\S*)(?:\s*\{([^}]*)\})?\s*\n([\s\S]*?)\n```$/m;
 const MATH_RE = /\$\$([\s\S]*?)\$\$/;
 const ASIDE_NOTES_RE = /<aside\s+class="notes">([\s\S]*?)<\/aside>/i;
@@ -222,7 +228,7 @@ export function deckFromMarkdown(md: string, config: DeckConfig = {}): (scene: S
         let y = 3;
 
         if (slide.heading) {
-          const h = new Text(slide.heading, { fontSize: 0.7, color: headingColor });
+          const h = new Text(slide.heading, { fontSize: 0.7, color: headingColor, width: SAFE_WIDTH });
           h.moveTo([0, y, 0]);
           built.push(h);
           await scene.play(new FadeIn(h));
@@ -230,7 +236,7 @@ export function deckFromMarkdown(md: string, config: DeckConfig = {}): (scene: S
         }
 
         if (slide.body) {
-          const b = new Text(slide.body, { fontSize: 0.4, color: bodyColor });
+          const b = new Text(slide.body, { fontSize: 0.4, color: bodyColor, width: SAFE_WIDTH });
           b.moveTo([0, y, 0]);
           built.push(b);
           await scene.play(new FadeIn(b), { runTime: fragmentRunTime });
@@ -238,9 +244,17 @@ export function deckFromMarkdown(md: string, config: DeckConfig = {}): (scene: S
         }
 
         // Bullets: one play() per item -- each a natural step boundary.
+        // Regression (found by the 06-rendered-narration port's frame-check):
+        // Text.moveTo() centers the mobject's bounding box on the given
+        // point, NOT left-anchors it -- a fixed x=-4.5 combined with wide,
+        // unwrapped bullet text pushed the text's LEFT edge well past the
+        // frame's left border. Fixed with a `width` wrap (keeps every
+        // bullet's rendered width bounded) and centering on x=0 (matching
+        // heading/body) rather than guessing a fixed left offset that only
+        // happened to work for short strings.
         for (const bullet of slide.bullets) {
-          const t = new Text(`•  ${bullet}`, { fontSize: 0.4, color: bodyColor });
-          t.moveTo([-4.5, y, 0]);
+          const t = new Text(`•  ${bullet}`, { fontSize: 0.4, color: bodyColor, width: SAFE_WIDTH });
+          t.moveTo([0, y, 0]);
           built.push(t);
           await scene.play(new FadeIn(t, { shift: DOWN.map((v) => v * 0.3) }), { runTime: fragmentRunTime });
           y -= 0.6;

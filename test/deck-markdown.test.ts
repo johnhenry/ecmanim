@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { parseDeckMarkdown, deckFromMarkdown } from "../src/loaders/deck_markdown.ts";
 import { Scene } from "../src/scene/Scene.ts";
+import { FRAME_WIDTH } from "../src/core/constants.ts";
 
 before(async () => {
   await (await import("../src/renderer/fonts-node.ts")).loadVectorFont();
@@ -168,6 +169,27 @@ test("deckFromMarkdown: a slide's mobjects are actually removed after fading, no
   for (const m of scene.mobjects as any[]) {
     assert.ok((m.fillOpacity ?? 1) > 0, `${m.text} should not be a zero-opacity ghost left in the scene`);
   }
+});
+
+// Regression (found by the 06-rendered-narration port's frame-check): a
+// long bullet rendered off the left edge of frame. Text.moveTo() centers
+// the mobject's bounding box on the given point, NOT left-anchors it -- a
+// fixed x offset combined with wide, unwrapped text pushed the left edge
+// well past FRAME_WIDTH's boundary. Fixed with a word-wrap width.
+test("deckFromMarkdown: a long bullet stays within the frame's width, not clipped off-screen", async () => {
+  const longBullet = "Headless video output via ffmpeg, no browser required, and it just works";
+  const md = `# Wide\n- ${longBullet}`;
+  const build = deckFromMarkdown(md, { holdTime: 0.01, fragmentRunTime: 0.01 });
+  const scene = new Scene();
+  await build(scene);
+  const bulletMob = (scene.mobjects as any[]).find((m) => m.text?.includes("Headless"));
+  assert.ok(bulletMob, "the long bullet's Text mobject should be in the scene");
+  const bbox = bulletMob.getBoundingBox();
+  const halfFrame = FRAME_WIDTH / 2;
+  assert.ok(
+    bbox.min[0] >= -halfFrame && bbox.max[0] <= halfFrame,
+    `bullet bounding box [${bbox.min[0]}, ${bbox.max[0]}] must fit within frame [-${halfFrame}, ${halfFrame}]`,
+  );
 });
 
 test("deckFromMarkdown: autoAnimate:true uses autoAnimateToNextSection for slides after the first", async () => {
