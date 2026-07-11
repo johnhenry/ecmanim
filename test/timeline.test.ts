@@ -44,6 +44,20 @@ test("labels resolve as positions", () => {
   assert.equal(tl.duration, 6);
 });
 
+// Regression (GSAP campaign, examples/gsap-parity/01-timeline-labels.ts
+// port): GSAP's position-parameter grammar includes a compound "label+=n" /
+// "label-=n" form (e.g. `tl.to(x, {...}, "scene1+=3")`, GSAP's own docs
+// example) -- resolve() only handled bare label lookup and bare "+=n"/"-=n"
+// relative-to-cursor, so this threw "unknown position".
+test("'label+=n' / 'label-=n' offsets a label by a signed amount", () => {
+  const tl = timeline();
+  tl.add(fade());              // [0,1]
+  tl.addLabel("scene1", 2);
+  tl.add(fade(), "scene1+=3"); // 2+3=5 -> [5,6]
+  tl.add(fade(), "scene1-=1"); // 2-1=1 -> [1,2]
+  assert.deepEqual(windows(tl).slice(1), [[5, 6], [1, 2]]);
+});
+
 test("absolute numeric position + clamped to >= 0", () => {
   const tl = timeline();
   tl.add(fade(), 3);           // [3,4]

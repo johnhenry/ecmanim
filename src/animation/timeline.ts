@@ -50,6 +50,9 @@ export class Timeline {
   //   "<"           -> start of the previous add; "<0.5" -> 0.5s after prev start
   //   ">"           -> end of the previous add;   ">-0.25" -> 0.25s before prev end
   //   "label"       -> at a previously-added label
+  //   "label+=n"/"label-=n" -> offset from a label (GSAP's compound form —
+  //                    e.g. tl.to(x, {...}, "scene1+=3"), see GSAP's
+  //                    position-parameter docs)
   //   undefined     -> ">" (sequential, at current end cursor)
   private resolve(position?: string | number): number {
     if (position === undefined) return this.cursor;
@@ -79,8 +82,21 @@ export class Timeline {
     const asNum = Number(p);
     if (!Number.isNaN(asNum)) return asNum;
 
-    // Label lookup
+    // Label lookup (bare)
     if (this.labels.has(p)) return this.labels.get(p)!;
+
+    // Compound label form: "label+=n" / "label-=n". Match the LONGEST known
+    // label name that's a prefix of p (labels can themselves contain "+"/"-"
+    // in principle, so don't just split on the first +/- found).
+    const opMatch = /^(.*?)([+-]=)(-?[\d.]+)$/.exec(p);
+    if (opMatch) {
+      const [, labelName, op, amountStr] = opMatch;
+      if (this.labels.has(labelName)) {
+        const amount = parseFloat(amountStr);
+        const base = this.labels.get(labelName)!;
+        return op === "+=" ? base + amount : base - amount;
+      }
+    }
 
     throw new Error(`Timeline: unknown position "${position}"`);
   }
