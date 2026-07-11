@@ -72,3 +72,70 @@ test("hash distinguishes animation class and runTime", () => {
   slow.runTime = 3;
   assert.notEqual(h1, s.hashAnimations([slow], "play"));
 });
+
+// Regression: a play() whose animation targets mobject A said nothing about
+// a DIFFERENT, unanimated top-level mobject B sitting alongside it on the
+// scene -- mutating B (moveTo/scale/color/...) before this play() call
+// produced the IDENTICAL hash as leaving B alone, so the partial-movie cache
+// could replay a stale segment whose rendered frame was visibly wrong (B in
+// the old position). Verified with a direct repro before fixing. Found
+// during the parity-campaigns roadmap retrospective (Campaign 9), not by
+// any single campaign's port — a "what else might be broken" follow-up.
+test("hash changes when an UNANIMATED sibling mobject moves (the untouched-mobject blind spot)", () => {
+  const makeScene = (bPos: number[]) => {
+    const s = scene();
+    const a = new Circle({ radius: 1 });
+    const b = new Circle({ radius: 1 });
+    s.add(a, b);
+    b.moveTo(bPos);
+    return { s, a };
+  };
+  const one = makeScene([5, 0, 0]);
+  const two = makeScene([-5, 0, 0]);
+  assert.notEqual(
+    one.s.hashAnimations([new FadeIn(one.a)], "play"),
+    two.s.hashAnimations([new FadeIn(two.a)], "play"),
+  );
+});
+
+test("hash stays the SAME when every top-level mobject is untouched-identical (no false-positive cache miss)", () => {
+  const makeScene = () => {
+    const s = scene();
+    const a = new Circle({ radius: 1 });
+    const b = new Circle({ radius: 1 });
+    s.add(a, b);
+    b.moveTo([5, 0, 0]);
+    return { s, a };
+  };
+  const one = makeScene();
+  const two = makeScene();
+  assert.equal(
+    one.s.hashAnimations([new FadeIn(one.a)], "play"),
+    two.s.hashAnimations([new FadeIn(two.a)], "play"),
+  );
+});
+
+test("the play()'s own animated mobject is excluded from the untouched set (moving it isn't double-counted as a false miss trigger)", () => {
+  // Two scenes with the SAME two top-level mobjects (a, b); only `a` (the
+  // one actually animated) differs in position between them. Since `a`'s
+  // own position is already covered by hashAnimations()'s per-animation
+  // geometry fingerprint (the pre-existing mechanism, not this fix), and
+  // `a` must be EXCLUDED from the untouched-set fingerprint (it's touched),
+  // the hashes should still differ here -- confirming `a` isn't silently
+  // dropped from consideration entirely, just correctly attributed to the
+  // existing geometry fingerprint rather than double-counted via untouched.
+  const makeScene = (aPos: number[]) => {
+    const s = scene();
+    const a = new Circle({ radius: 1 });
+    const b = new Circle({ radius: 1 });
+    s.add(a, b);
+    a.moveTo(aPos);
+    return { s, a };
+  };
+  const one = makeScene([1, 0, 0]);
+  const two = makeScene([2, 0, 0]);
+  assert.notEqual(
+    one.s.hashAnimations([new FadeIn(one.a)], "play"),
+    two.s.hashAnimations([new FadeIn(two.a)], "play"),
+  );
+});

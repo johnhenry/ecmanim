@@ -286,6 +286,25 @@ export class Scene {
       return n + fam.reduce((m: number, f: any) => m + (f?.points?.length ?? 0), 0);
     }, 0);
     if (total === 0) parts.push(`scene:${this._sceneContentFingerprint()}`);
+    // Confirmed bug (Campaign 9 retrospective, verified with a direct repro):
+    // a play() whose animation(s) target mobject A says NOTHING about the
+    // state of a different, unanimated top-level mobject B that happens to
+    // sit alongside it in the scene -- mutating B (moveTo/scale/color/etc)
+    // BEFORE this play() call produces the IDENTICAL hash as leaving B
+    // alone, so the partial-movie cache can replay a stale segment whose
+    // rendered frame is visibly wrong (B in the old position). Folding in
+    // `_sceneContentFingerprint()` unconditionally (like wait() already
+    // does) would fix this outright but pays an O(total scene points) cost
+    // on EVERY play() call, not just ones with an untouched mobject present
+    // -- expensive for point-heavy scenes (particle systems, cellular
+    // automata) with many play() calls. Instead, fingerprint ONLY the
+    // top-level mobjects this play() does NOT touch: in the common case
+    // (a play() animates most/all of what's currently visible) that set is
+    // empty and this is a cheap no-op; it only pays real cost exactly when
+    // there's something else on screen whose silent mutation would
+    // otherwise be invisible to the hash.
+    const untouched = this._untouchedMobjectsFingerprint(anims);
+    if (untouched) parts.push(`untouched:${untouched}`);
     return fnv1a(parts.join("|"));
   }
 
@@ -293,21 +312,40 @@ export class Scene {
   // wait-segment hashes and by play-segment hashes for geometry-less
   // animations). Per-leaf position + fill + opacity + strokeEnd.
   private _sceneContentFingerprint(): string {
-    return this.mobjects.map((m: any) => {
-      const fam: any[] = typeof m?.getFamily === "function" ? m.getFamily() : [m];
-      let npts = 0;
-      const bits: string[] = [];
-      for (const f of fam) {
-        npts += Array.isArray(f?.points) ? f.points.length : 0;
-        const c = typeof f?.getCenter === "function" && f.points?.length ? f.getCenter() : [0, 0, 0];
-        bits.push(
-          `${Math.round(c[0] * 1000)},${Math.round(c[1] * 1000)},` +
-          `${f?.fillColor?.toHex?.() ?? ""},${Math.round((f?.opacity ?? 1) * 1000)},` +
-          `${Math.round((f?.strokeEnd ?? 1) * 1000)}`,
-        );
-      }
-      return `${m?.constructor?.name ?? "m"}:${npts}:${fnv1a(bits.join(";"))}`;
-    }).join(",");
+    return this.mobjects.map((m: any) => this._mobjectFingerprint(m)).join(",");
+  }
+
+  // Fingerprint of only the top-level scene mobjects NOT directly targeted
+  // by any animation in `anims` (compared by identity against each
+  // animation's own `.mobject` -- matching the convention every introducer
+  // animation uses to add ITS target as a top-level scene entry, see
+  // FadeIn/Create's `getMobjectsToIntroduce()`). Empty string (cheap,
+  // common case) when every top-level mobject is touched by this play().
+  private _untouchedMobjectsFingerprint(anims: any[]): string {
+    if (this.mobjects.length === 0) return "";
+    const touched = new Set(anims.map((a: any) => a?.mobject).filter(Boolean));
+    const rest = this.mobjects.filter((m: any) => !touched.has(m));
+    if (rest.length === 0) return "";
+    return rest.map((m: any) => this._mobjectFingerprint(m)).join(",");
+  }
+
+  // Per-mobject family-deep fingerprint shared by _sceneContentFingerprint()
+  // (all mobjects) and _untouchedMobjectsFingerprint() (a subset) — same
+  // per-leaf signal either way: position + fill + opacity + strokeEnd.
+  private _mobjectFingerprint(m: any): string {
+    const fam: any[] = typeof m?.getFamily === "function" ? m.getFamily() : [m];
+    let npts = 0;
+    const bits: string[] = [];
+    for (const f of fam) {
+      npts += Array.isArray(f?.points) ? f.points.length : 0;
+      const c = typeof f?.getCenter === "function" && f.points?.length ? f.getCenter() : [0, 0, 0];
+      bits.push(
+        `${Math.round(c[0] * 1000)},${Math.round(c[1] * 1000)},` +
+        `${f?.fillColor?.toHex?.() ?? ""},${Math.round((f?.opacity ?? 1) * 1000)},` +
+        `${Math.round((f?.strokeEnd ?? 1) * 1000)}`,
+      );
+    }
+    return `${m?.constructor?.name ?? "m"}:${npts}:${fnv1a(bits.join(";"))}`;
   }
 
   // Schedule an audio clip. Defaults to the current animation time, so calling
