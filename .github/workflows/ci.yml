@@ -92,16 +92,17 @@ jobs:
             ffprobe -v error -select_streams v -show_entries stream=codec_type -of csv=p=0 "$path" | grep -q video
           done
 
-      # Soft gate for now (continue-on-error): baseline goldens under
-      # test/golden/parity/ were generated locally, not on ubuntu-latest +
-      # fonts-dejavu-core -- font/AA rendering can differ enough to trip the
-      # tolerance on a font stack these goldens have never actually seen.
-      # Watch the first few real runs; if diffs are small/font-driven, bump
-      # tolerance or regenerate goldens from this job's own .actual.png
-      # artifacts (uploaded below) and drop continue-on-error to make this a
-      # real gate.
-      - name: Check visual fidelity (golden-frame, informational for now)
-        continue-on-error: true
+      # Hard gate: baseline goldens under test/golden/parity/ were generated
+      # locally (not on ubuntu-latest + fonts-dejavu-core), so this ran
+      # continue-on-error for its first two runs to confirm font/AA drift
+      # wasn't going to cause false failures here. Both passed clean (one
+      # after rebaselining 2 lottie-parity goldens that had been captured
+      # from stale medium-quality mp4s -- a baselining bug, not drift; see
+      # commit 09d5346). If this starts failing for real font/AA reasons
+      # later, regenerate the affected goldens from this job's own
+      # .actual.png artifacts (uploaded below) -- see
+      # test/golden/parity/README.md.
+      - name: Check visual fidelity (golden-frame)
         env:
           GOLDEN_PARITY_SUITE: ${{ matrix.suite }}
         run: npm run test:golden-parity

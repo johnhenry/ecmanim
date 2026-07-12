@@ -32,14 +32,15 @@ Only regenerate what actually changed intentionally — review the diff (or the
 ## If CI drifts from a locally-baselined golden
 
 These goldens were first generated on a NixOS dev machine, not CI's
-`ubuntu-latest` + `fonts-dejavu-core`. If `demo-smoke`'s golden-frame step
-(currently `continue-on-error: true` while this is being watched) reports
-drift that's really just a different font stack rather than a real
-regression:
+`ubuntu-latest` + `fonts-dejavu-core`. `demo-smoke`'s golden-frame step ran
+`continue-on-error: true` for its first two runs to confirm that wasn't going
+to cause false failures — both passed clean (the first run's one failure
+turned out to be 2 lottie-parity goldens baselined from stale medium-quality
+mp4s, a real bug, not font/AA drift — see commit `09d5346`), so it's now a
+hard gate. If it ever does fail from a genuine font/AA difference rather than
+a real regression:
 
 1. Download that job's `golden-parity-actuals-<suite>` artifact (the
    `.actual.png` files it captured from CI's own render).
 2. Replace the corresponding golden(s) in this directory with them.
-3. Commit. Once a few runs confirm CI's own renders are internally stable
-   (a re-run without code changes doesn't drift further), drop
-   `continue-on-error` from that CI step to make it a real gate.
+3. Commit.
