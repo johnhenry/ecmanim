@@ -14,6 +14,19 @@ header {
 }
 header h1 { margin: 0 0 0.25rem; font-size: 1.6rem; }
 header p { margin: 0.15rem 0; color: #8b949e; }
+
+.setup-banner {
+  max-width: 1200px;
+  margin: 0.5rem auto 1.5rem;
+  padding: 0.9rem 1.1rem;
+  background: #1c2333;
+  border: 1px solid #3d4a6b;
+  border-radius: 8px;
+  color: #c9d1d9;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.setup-banner strong { color: #f0b429; }
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: #161b22;

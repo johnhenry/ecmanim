@@ -81,7 +81,8 @@
     "demos:p5": "for f in examples/p5-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
     "demos:reveal": "for f in examples/reveal-slidev-parity/[0-9]*.ts; do npx tsx \"$f\" || exit 1; done",
     "gallery:build": "node --experimental-strip-types --no-warnings examples/gallery/build.ts",
-    "gallery:thumbs": "node --experimental-strip-types --no-warnings examples/gallery/thumbs.ts"
+    "gallery:thumbs": "node --experimental-strip-types --no-warnings examples/gallery/thumbs.ts",
+    "gallery:render-missing": "node --experimental-strip-types --no-warnings examples/gallery/render-missing.ts"
   },
   "keywords": [
     "manim",

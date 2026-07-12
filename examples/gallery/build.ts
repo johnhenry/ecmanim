@@ -57,7 +57,7 @@ ${body}
 function demoCard(demo: DemoEntry): string {
   const media = demo.video
     ? `<video controls preload="none" poster="${escapeHtml(demo.thumb ? fromGallery(demo.thumb) : "")}"><source src="${escapeHtml(fromGallery(demo.video))}" type="video/mp4"></video>`
-    : `<div class="unrendered">not yet rendered<br><code>npx tsx examples/${escapeHtml(demo.file)}</code></div>`;
+    : `<div class="unrendered">not yet rendered — run <code>npm run gallery:render-missing</code><br>(or just this one: <code>npx tsx examples/${escapeHtml(demo.file)}</code>)</div>`;
   return `<figure class="card">
   ${media}
   <figcaption>
@@ -86,6 +86,19 @@ function buildIndex(manifest: Manifest): string {
 </a>`;
     })
     .join("\n");
+  const missing = totalDemos - totalRendered;
+  const setupBanner =
+    missing > 0
+      ? `<div class="setup-banner">
+  <strong>${missing} demo${missing === 1 ? "" : "s"} not yet rendered on this machine.</strong>
+  Rendered videos aren't committed to git (they're regenerated locally), so a fresh clone starts empty.
+  From the repo root: <code>npm install</code>, then <code>npm run gallery:render-missing</code>
+  (renders everything missing at low quality, then rebuilds this site — safe to re-run, skips
+  anything already rendered). Pass <code>-- --category d3-parity</code> to render one gallery at a
+  time, or <code>-- --limit 5</code> to try a few first. If a render fails, run
+  <code>npx ecmanim checkhealth</code> to check for a missing system dependency (ffmpeg, canvas, fonts).
+</div>`
+      : "";
   return page(
     "ecmanim examples gallery",
     `<header>
@@ -93,6 +106,7 @@ function buildIndex(manifest: Manifest): string {
   <p>${manifest.categories.length} galleries · ${totalDemos} demos · ${totalRendered} rendered</p>
   <p><a href="../../README.md">← back to README</a></p>
 </header>
+${setupBanner}
 <main class="cat-grid">
 ${cards}
 </main>`,

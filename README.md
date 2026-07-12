@@ -245,8 +245,8 @@ inline thumbnails/video, generated from these same READMEs — see
 [`examples/gallery/`](examples/gallery/):
 
 ```bash
-npm run gallery:build    # regenerate the site from whatever's already rendered
-npx serve .               # from the repo root, then open /examples/gallery/index.html
+npm run gallery:render-missing   # fresh clone? nothing's rendered yet -- this renders what's missing
+npx serve .                       # from the repo root, then open /examples/gallery/index.html
 ```
 
 ## Architecture
