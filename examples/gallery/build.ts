@@ -58,12 +58,16 @@ function demoCard(demo: DemoEntry): string {
   const media = demo.video
     ? `<video controls preload="none" poster="${escapeHtml(demo.thumb ? fromGallery(demo.thumb) : "")}"><source src="${escapeHtml(fromGallery(demo.video))}" type="video/mp4"></video>`
     : `<div class="unrendered">not yet rendered — run <code>npm run gallery:render-missing</code><br>(or just this one: <code>npx tsx examples/${escapeHtml(demo.file)}</code>)</div>`;
+  const original = demo.sourceUrl
+    ? `<a class="original" href="${escapeHtml(demo.sourceUrl)}" target="_blank" rel="noopener">original ↗</a>`
+    : "";
   return `<figure class="card">
   ${media}
   <figcaption>
     <span class="name">${escapeHtml(demo.name)}</span>
     <p class="desc">${mdInline(demo.description || "—")}</p>
     <code class="path">${escapeHtml(demo.file)}</code>
+    ${original}
   </figcaption>
 </figure>`;
 }
@@ -115,12 +119,15 @@ ${cards}
 
 function buildCategoryPage(cat: Category): string {
   const cards = cat.demos.map(demoCard).join("\n");
+  const originalsNote = cat.sourceUrl
+    ? ` · recreates <a href="${escapeHtml(cat.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(cat.sourceLabel ?? cat.sourceUrl)}</a>`
+    : "";
   return page(
     `${cat.title} — ecmanim gallery`,
     `<header>
   <p><a href="index.html">← all galleries</a></p>
   <h1>${escapeHtml(cat.title)}</h1>
-  <p class="scorecard">${escapeHtml(cat.scorecard ?? "")}</p>
+  <p class="scorecard">${escapeHtml(cat.scorecard ?? "")}${originalsNote}</p>
   <p><a href="${escapeHtml(fromGallery(cat.readme))}">README</a></p>
 </header>
 <main class="demo-grid">

@@ -18,6 +18,7 @@ export interface DemoEntry {
   description: string;
   video: string | null; // path relative to EXAMPLES_DIR, for <video src>
   thumb: string | null; // path relative to EXAMPLES_DIR, for <img src>
+  sourceUrl: string | null; // link to the specific original example this demo recreates, when reliably known
 }
 
 export interface Category {
@@ -27,7 +28,24 @@ export interface Category {
   scorecard: string | null;
   readme: string; // path relative to EXAMPLES_DIR
   demos: DemoEntry[];
+  sourceUrl: string | null; // the original gallery/site this whole campaign recreates
+  sourceLabel: string | null; // display text for sourceUrl
 }
+
+// Every URL below is copied verbatim from (or, where noted, trivially
+// schemed from) text already committed in this repo -- see the campaign's
+// own README.md / ref/README.md for the citation. Never invent a URL that
+// isn't already written down somewhere in the repo: several campaigns
+// (threeb1b-parity, reveal-slidev-parity) cite their originals only as
+// plain-text titles with no URL at all, and get no link here rather than a
+// guessed one.
+const CAMPAIGN_SOURCE: Record<string, { url: string; label: string }> = {
+  "manim-parity": { url: "https://docs.manim.community/en/stable/examples.html", label: "docs.manim.community" },
+  "showcase-parity": { url: "https://www.remotion.dev/showcase", label: "remotion.dev/showcase" },
+  "motion-canvas-parity": { url: "https://motioncanvas.io", label: "motioncanvas.io" },
+  "lottie-parity": { url: "https://github.com/airbnb/lottie-web", label: "github.com/airbnb/lottie-web" },
+  "mermaid-parity": { url: "https://github.com/mermaid-js/mermaid", label: "github.com/mermaid-js/mermaid" },
+};
 
 export interface Manifest {
   generatedAt: string;
@@ -96,11 +114,56 @@ function parseScorecardTable(readmeText: string): { heading: string | null; byNu
   return { heading, byNumber };
 }
 
+// Parses a `ref/README.md` provenance table whose rows are
+// `| NN | [label](./NN-name.ext) ... | ... | URL |` (echarts-parity,
+// gsap-parity, p5-parity all use this exact shape) into { number -> URL }.
+// Scans cells right-to-left for the first one containing a bare http(s) URL,
+// since the URL is always the last cell but a couple of rows (e.g. p5's 11)
+// have trailing parenthetical prose *after* the URL in the same cell.
+function parseRefSourceUrls(readmeText: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const line of readmeText.split("\n")) {
+    if (!line.trim().startsWith("|")) continue;
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    const num = cells[0]?.replace(/\*/g, "").trim();
+    if (!/^\d+$/.test(num ?? "")) continue;
+    for (let i = cells.length - 1; i >= 0; i--) {
+      const m = cells[i].match(/https?:\/\/\S+/);
+      if (m) {
+        map.set(num.padStart(2, "0"), m[0].replace(/[),.]+$/, ""));
+        break;
+      }
+    }
+  }
+  return map;
+}
+
+// d3-parity's ref/ files aren't numbered (bar-chart.js, treemap.js, ...) --
+// match by exact basename against the demo's name with its "NN-" prefix
+// stripped, and only link when that match is exact (a fuzzy/best-guess
+// match risks a broken link more than it's worth -- ~5/25 demo names don't
+// exactly match their ref file, e.g. "radial-stacked-bar" vs the ref file
+// "radial-stacked-bar-chart.js", and those get no link rather than a guess).
+// The https://observablehq.com/@d3/<slug> URL form itself is documented in
+// ref/README.md as the exact fetch template these files came from.
+function d3SourceUrl(dir: string, demoName: string): string | null {
+  const base = demoName.replace(/^\d+-/, "");
+  return existsSync(join(dir, "ref", `${base}.js`)) ? `https://observablehq.com/@d3/${base}` : null;
+}
+
+const REF_SOURCE_TABLE_CAMPAIGNS = new Set(["echarts-parity", "gsap-parity", "p5-parity"]);
+
 function parityCategory(dirName: string): Category {
   const dir = join(EXAMPLES_DIR, dirName);
   const readmePath = join(dir, "README.md");
   const readmeText = existsSync(readmePath) ? readFileSync(readmePath, "utf8") : "";
   const { heading, byNumber } = parseScorecardTable(readmeText);
+
+  let refUrlsByNumber = new Map<string, string>();
+  if (REF_SOURCE_TABLE_CAMPAIGNS.has(dirName)) {
+    const refReadmePath = join(dir, "ref", "README.md");
+    if (existsSync(refReadmePath)) refUrlsByNumber = parseRefSourceUrls(readFileSync(refReadmePath, "utf8"));
+  }
 
   const files = readdirSync(dir)
     .filter((f) => /^\d+.*\.ts$/.test(f))
@@ -110,6 +173,7 @@ function parityCategory(dirName: string): Category {
     const name = f.replace(/\.ts$/, "");
     const num = (name.match(/^(\d+)/)?.[1] ?? "").padStart(2, "0");
     const { video, thumb } = findVideoAndThumb(dir, name);
+    const sourceUrl = dirName === "d3-parity" ? d3SourceUrl(dir, name) : refUrlsByNumber.get(num) ?? null;
     return {
       id: `${dirName}/${name}`,
       file: `${dirName}/${f}`,
@@ -117,9 +181,11 @@ function parityCategory(dirName: string): Category {
       description: byNumber.get(num) ?? "",
       video,
       thumb,
+      sourceUrl,
     };
   });
 
+  const campaignSource = CAMPAIGN_SOURCE[dirName] ?? null;
   return {
     key: dirName,
     title: dirName.replace(/-parity$/, "").replace(/-/g, " "),
@@ -127,6 +193,8 @@ function parityCategory(dirName: string): Category {
     scorecard: heading,
     readme: `${dirName}/README.md`,
     demos,
+    sourceUrl: campaignSource?.url ?? null,
+    sourceLabel: campaignSource?.label ?? null,
   };
 }
 
@@ -160,6 +228,7 @@ function featureCategory(): Category {
       description: rows.get(name) ?? "",
       video,
       thumb,
+      sourceUrl: null,
     };
   });
 
@@ -168,6 +237,8 @@ function featureCategory(): Category {
     title: "feature demos",
     kind: "feature",
     scorecard: `${demos.filter((d) => d.video).length}/${demos.length} rendered`,
+    sourceUrl: null,
+    sourceLabel: null,
     readme: "../README.md",
     demos,
   };

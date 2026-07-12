@@ -38,7 +38,18 @@ see [docs/external-tools.md](../../docs/external-tools.md).
   each campaign README's `## Scorecard` table (and the top-level README's
   `## Examples` table) for per-demo descriptions, and checks each demo's
   `out/*.mp4` / `thumbs/*.jpg` for existing renders — no demo file is
-  imported or executed.
+  imported or executed. It also links each demo to the original example it
+  recreates, but **only from a URL already committed in the repo** — never
+  invented or guessed. d3-parity/echarts-parity/gsap-parity/p5-parity get a
+  per-demo link (parsed from each campaign's `ref/README.md` provenance
+  table, or for d3 constructed from its documented `@d3/<slug>` fetch
+  template matched against an exact `ref/<slug>.js` filename — no link when
+  the match isn't exact, rather than a guess). manim-parity/showcase-parity/
+  motion-canvas-parity/lottie-parity/mermaid-parity get one campaign-wide
+  link instead (their README only cites a single source site, not one per
+  demo). threeb1b-parity and reveal-slidev-parity get no link at all — their
+  READMEs cite originals as plain-text titles with no URL anywhere in the
+  repo to link to.
 - **`thumbs.ts`** extracts a JPEG thumbnail from each demo that already has a
   rendered `.mp4` (via `ffmpeg`/`ffprobe`, one frame ~40% through), into a
   sibling `thumbs/` dir next to that campaign's `out/`. It never renders a

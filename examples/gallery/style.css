@@ -87,5 +87,6 @@ code {
 .card .name { font-weight: 600; }
 .card .desc { margin: 0.3rem 0; color: #c9d1d9; font-size: 0.88rem; }
 .card .path { display: inline-block; margin-top: 0.2rem; color: #8b949e; }
+.card .original { display: block; margin-top: 0.35rem; font-size: 0.82rem; }
 
 .unrendered { display: flex; align-items: center; justify-content: center; color: #6e7681; aspect-ratio: 16/9; }
