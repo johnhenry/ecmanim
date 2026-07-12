@@ -63,8 +63,10 @@ see [docs/external-tools.md](../../docs/external-tools.md).
   The index page also shows a setup banner when anything is unrendered.
 - **`render-missing.ts`** is the one-command fix for a fresh clone: renders
   every demo lacking a video (`npx tsx` each file, sequentially, continuing
-  past failures), then runs `thumbs.ts` and `build.ts` for you. Supports
-  `--category <key>` and `--limit <n>`.
+  past failures). It re-runs `thumbs.ts` + `build.ts` after **each** demo,
+  not just once at the end — a browser tab already open on the gallery
+  picks up each demo as it finishes on a plain refresh, rather than staying
+  blank for the whole batch. Supports `--category <key>` and `--limit <n>`.
 
 ## Serving
 

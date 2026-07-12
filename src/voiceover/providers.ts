@@ -124,15 +124,25 @@ export const systemProvider: TTSProvider = {
     const { cp, fs } = await nodeMods();
     const file = await cacheFile(text, "system", "wav", opts.cacheDir);
     if (!fs.existsSync(file)) {
-      const safe = text.replace(/"/g, '\\"');
-      if (hasBinary(cp, "say")) {
-        // macOS `say` writes AIFF; convert to wav via ffmpeg.
-        const aiff = file.replace(/\.wav$/, ".aiff");
-        cp.execSync(`say ${opts.voice ? `-v "${opts.voice}"` : ""} -o "${aiff}" "${safe}"`, { stdio: "ignore" });
-        cp.execSync(`ffmpeg -v error -i "${aiff}" -y "${file}"`, { stdio: "ignore" });
-      } else {
-        const bin = hasBinary(cp, "espeak-ng") ? "espeak-ng" : "espeak";
-        cp.execSync(`${bin} -w "${file}" "${safe}"`, { stdio: "ignore" });
+      // escape ", $, `, \ -- execSync runs this through a shell, and `text` is
+      // caller-supplied narration prose, not a fixed string.
+      const safe = text.replace(/[\\$`"]/g, "\\$&");
+      try {
+        if (hasBinary(cp, "say")) {
+          // macOS `say` writes AIFF; convert to wav via ffmpeg.
+          const aiff = file.replace(/\.wav$/, ".aiff");
+          cp.execSync(`say ${opts.voice ? `-v "${opts.voice}"` : ""} -o "${aiff}" "${safe}"`, { stdio: ["ignore", "ignore", "pipe"] });
+          cp.execSync(`ffmpeg -v error -i "${aiff}" -y "${file}"`, { stdio: ["ignore", "ignore", "pipe"] });
+        } else {
+          const bin = hasBinary(cp, "espeak-ng") ? "espeak-ng" : "espeak";
+          cp.execSync(`${bin} -w "${file}" "${safe}"`, { stdio: ["ignore", "ignore", "pipe"] });
+        }
+      } catch (err) {
+        // stdio:"ignore" on stderr used to swallow the real reason (missing
+        // ffmpeg, no default voice installed, etc.) -- surface it instead of
+        // letting the caller see only a bare, message-less crash.
+        const stderr = (err as any).stderr?.toString().trim();
+        throw new Error(`system TTS synthesis failed: ${stderr || (err as Error).message}`);
       }
     }
     return { file, durationSeconds: await audioDurationSeconds(file) };
