@@ -119,11 +119,19 @@ export interface DiffResult {
   total: number;
 }
 
+export interface DiffTolerance {
+  perChannel?: number;   // default PER_CHANNEL (8) -- looser values suit less machine-stable content (e.g. system-font text)
+  maxDiffRatio?: number; // default MAX_DIFF_RATIO (0.005)
+}
+
 /** Tolerance diff of two same-size RGBA buffers. */
 export function diffRGBA(
   a: { data: Uint8ClampedArray; width: number; height: number },
   b: { data: Uint8ClampedArray; width: number; height: number },
+  tolerance: DiffTolerance = {},
 ): DiffResult {
+  const perChannel = tolerance.perChannel ?? PER_CHANNEL;
+  const maxDiffRatio = tolerance.maxDiffRatio ?? MAX_DIFF_RATIO;
   if (a.width !== b.width || a.height !== b.height) {
     return { ok: false, diffRatio: 1, meanAbs: 255, differing: a.width * a.height, total: a.width * a.height };
   }
@@ -137,11 +145,11 @@ export function diffRGBA(
       sumAbs += d;
       if (d > maxD) maxD = d;
     }
-    if (maxD > PER_CHANNEL) differing++;
+    if (maxD > perChannel) differing++;
   }
   const diffRatio = differing / total;
   const meanAbs = sumAbs / (total * 3);
-  return { ok: diffRatio <= MAX_DIFF_RATIO, diffRatio, meanAbs, differing, total };
+  return { ok: diffRatio <= maxDiffRatio, diffRatio, meanAbs, differing, total };
 }
 
 /**

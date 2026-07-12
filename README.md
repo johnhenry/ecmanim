@@ -419,9 +419,21 @@ Deeper module map, rendering pipeline, and registry mechanics:
 ## Testing
 
 ```bash
-npm test    # node --test — ~850 tests across 110+ files (math, mobjects, animations,
-            # 3D/z-buffer, plugins, manifest, CLI/config, Studio/Player, integration + headless renders)
+npm test    # node --test — 1500+ tests (math, mobjects, animations, 3D/z-buffer,
+            # plugins, manifest, CLI/config, Studio/Player, integration + headless renders)
 ```
+
+Two tiers of visual-regression ("golden-frame") tests guard against "it still
+runs but looks wrong" regressions, which `npm test`'s functional coverage
+can't catch on its own:
+
+```bash
+npm test                       # includes test/golden/ -- 6 synthetic vector-only scenes, tight tolerance
+npm run test:golden-parity     # test/golden/parity/ -- 33 real campaign demos, looser (font-aware) tolerance
+```
+
+See [test/golden/parity/README.md](test/golden/parity/README.md) for what's
+covered and how to regenerate goldens after an intentional visual change.
 
 ## Building
 
