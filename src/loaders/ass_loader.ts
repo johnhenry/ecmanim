@@ -484,6 +484,7 @@ export interface ResolvedRunStyle {
   shearY: number; // \fay: y' = y + shearY*x
   blurRadius: number; // \be or \blur, in PlayRes-pixel-ish units (see applyOneRunEffects for the world-unit conversion)
   alignment: number;
+  drawScale: number; // \p<n>: 0 = normal text; n>=1 = drawing mode, n is parseDrawingCommands' scaleExponent
 }
 
 export interface ResolvedRun {
@@ -503,6 +504,7 @@ function styleFromASSStyle(s: ASSStyle): ResolvedRunStyle {
     scaleX: s.scaleX, scaleY: s.scaleY, angle: s.angle,
     borderWidth: s.outline, shadowDepth: s.shadow,
     posOverride: null, orgOverride: null, shearX: 0, shearY: 0, blurRadius: 0, alignment: s.alignment,
+    drawScale: 0,
   };
 }
 
@@ -583,6 +585,7 @@ export function resolveLineRuns(
       case "u": cur.underline = a.replace(/[()]/g, "") !== "0"; break;
       case "s": cur.strikeOut = a.replace(/[()]/g, "") !== "0"; break;
       case "k": break; // consumed by the mobject layer's karaoke syllable pass, not per-run style
+      case "p": { const n = parseInt(a.replace(/[()]/g, ""), 10); if (Number.isFinite(n)) cur.drawScale = Math.max(0, n); break; }
       case "r": {
         const name = a.trim();
         cur = styleFromASSStyle((name && styles.get(name)) || baseStyle);
@@ -592,9 +595,8 @@ export function resolveLineRuns(
         cur = applyTransformTag(cur, a, relMs, lineDurMs);
         break;
       }
-      // \clip, \iclip, \K, \kf, \ko, \org, \fax, \fay, \be, \blur, \p, \pbo:
-      // known but not yet implemented at this stage -- silently no-op here;
-      // ass_mobject.ts's warning pass is responsible for surfacing them.
+      // \pbo (drawing baseline offset): known but not yet implemented --
+      // silently no-op here; ass_mobject.ts's warning pass surfaces it.
       default:
         break;
     }

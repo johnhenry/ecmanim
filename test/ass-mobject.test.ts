@@ -63,6 +63,9 @@ const CASES: Case[] = [
   { name: "19-karaoke-ko", fixture: "19-karaoke-ko.ass", waitSeconds: 3, width: 10, frames: { syl0: frameAt(0.4), syl1: frameAt(1.4), syl2: frameAt(2.4) } },
   { name: "20-org-shear", fixture: "20-org-shear.ass", waitSeconds: 4, width: 13, frames: { orgRotation: frameAt(1), orgShear: frameAt(3) } },
   { name: "21-blur-shadow", fixture: "21-blur-shadow.ass", waitSeconds: 4, width: 13, frames: { blurred: frameAt(1), shadowed: frameAt(3) } },
+  // v2 (Stage 4): \p<n> drawing-mode dialogue lines -- see task #31.
+  { name: "22-drawing-p", fixture: "22-drawing-p.ass", waitSeconds: 4, width: 13, frames: { triangle: frameAt(1), rotated: frameAt(3) } },
+  { name: "23-drawing-bspline", fixture: "23-drawing-bspline.ass", waitSeconds: 2, width: 13, frames: { blob: frameAt(1) } },
 ];
 
 for (const c of CASES) {

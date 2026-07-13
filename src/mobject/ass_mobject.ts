@@ -27,14 +27,24 @@
 // _renderKaraoke), \ko (approximated as an instant color swap, not a true
 // outline-only sweep -- see _renderKaraoke for the scope-management
 // reasoning).
+// Supported (v2): \p<n> drawing-mode dialogue lines (m/l/b/s/p/c mini-
+// language, via ass_loader.ts's parseDrawingCommands + svg_path.ts's
+// subpathsToVMobject, reused verbatim) -- see _renderDrawing. A drawing
+// run's own (0,0) origin maps directly to the line's \pos/alignment anchor
+// point (a documented simplification of the real alignment-vs-bbox
+// interaction libass uses; the overwhelming majority of real \p content
+// pairs \an7+\pos for exactly this top-left-origin placement anyway).
 // NOT yet implemented (recognized, silently skipped -- warned once by tag
-// name): vector-drawing \clip/\iclip, \p, \pbo. Unsupported features never
-// throw.
+// name): vector-drawing \clip/\iclip (the drawing PARSER this needs now
+// exists via v2, but wiring it into the clip-mask path is still open),
+// \pbo. Unsupported features never throw.
 
 import { Group, CompositeGroup } from "./Mobject.ts";
 import type { Mobject } from "./Mobject.ts";
 import { Text } from "./text/Text.ts";
 import { Rectangle } from "./geometry.ts";
+import { VMobject } from "./VMobject.ts";
+import { subpathsToVMobject } from "./svg_path.ts";
 import {
   parseASS,
   tokenizeOverrideText,
@@ -45,6 +55,7 @@ import {
   extractKaraokeSyllables,
   hasKaraokeTags,
   alignmentAnchorFraction,
+  parseDrawingCommands,
 } from "../loaders/ass_loader.ts";
 import type { ASSScript, ASSStyle, ASSEvent, ASSToken, ResolvedRun, ResolvedRunStyle, ClipRect } from "../loaders/ass_loader.ts";
 
@@ -61,7 +72,7 @@ export interface ASSConfig {
 // Tags known to the loader but not yet rendered at this stage -- used only
 // to produce an accurate "not yet supported" warning instead of silently
 // doing nothing with no explanation.
-const NOT_YET_SUPPORTED_TAGS = new Set(["p", "pbo"]);
+const NOT_YET_SUPPORTED_TAGS = new Set(["pbo"]);
 
 interface CueState {
   event: ASSEvent;
@@ -207,7 +218,9 @@ export class ASSMobject extends Group {
     const opacity = evalLineOpacity(tokens, tMs, event.startMs, lineDurMs);
     const runs = resolveLineRuns(tokens, style, this._script.styles, tMs, event.startMs, lineDurMs);
 
-    let mobs = cue.karaoke
+    let mobs = runs.some((r) => r.style.drawScale > 0)
+      ? this._renderDrawing(runs, event, style)
+      : cue.karaoke
       ? this._renderKaraoke(cue, tMs, runs[0]?.style ?? styleDefaults(style))
       : this._renderRuns(runs, event, style);
 
@@ -383,6 +396,49 @@ export class ASSMobject extends Group {
     return mobs;
   }
 
+  // \p<n> drawing-mode dialogue lines (fansub sign/logo redraws): each
+  // drawing run's own (0,0) origin is built at world [0,0,0] first (mirrors
+  // _buildRunText's "rotate about local origin, then shift into place"
+  // two-phase order, so \frz/\fax/\fay with no \org pivot about the
+  // drawing's own origin exactly like a no-org text run pivots about its
+  // own placement point), then shifted to the line's \pos/alignment anchor.
+  // A plain-text run mixed into a \p line (rare -- most real content is a
+  // drawing run alone) is simply skipped, not rendered as text; that
+  // mixed-content case isn't supported at this stage.
+  private _renderDrawing(runs: ResolvedRun[], event: ASSEvent, baseStyle: ASSStyle): Mobject[] {
+    const mobs: Mobject[] = [];
+    for (const run of runs) {
+      if (run.style.drawScale <= 0) continue;
+      const subpaths = parseDrawingCommands(run.text, run.style.drawScale);
+      if (subpaths.length === 0) continue;
+
+      const vm = new VMobject({
+        fillColor: run.style.primary, fillOpacity: run.style.primary.a,
+        strokeColor: run.style.outline,
+        strokeWidth: this._refPx(run.style.borderWidth),
+        strokeOpacity: run.style.borderWidth > 0 ? run.style.outline.a : 0,
+      });
+      // scale by _k (PlayRes px -> world units, same scale every other
+      // pixel-valued field on this class uses) and flip Y (ASS drawing
+      // space is Y-down like SVG; ecmanim world space is Y-up).
+      subpathsToVMobject(vm, subpaths, { scale: this._k, flipY: true });
+
+      if (!run.style.orgOverride) {
+        if (run.style.angle) vm.rotate((run.style.angle * Math.PI) / 180);
+        if (run.style.shearX || run.style.shearY) vm.applyMatrix([[1, run.style.shearX], [run.style.shearY, 1]]);
+      }
+      if (run.style.blurRadius > 0) vm.blur(this._refPx(run.style.blurRadius));
+
+      let anchorX: number, anchorY: number;
+      if (run.style.posOverride) [anchorX, anchorY] = [this._worldX(run.style.posOverride[0]), this._worldY(run.style.posOverride[1])];
+      else [anchorX, anchorY] = this._marginAnchor(event, baseStyle, run.style.alignment);
+      vm.shift([anchorX, anchorY, 0]);
+      this._applyOrgTransform(vm, run.style);
+      mobs.push(vm);
+    }
+    return mobs;
+  }
+
   // \org(x,y)-pivoted rotation/shear: must run AFTER the mobject's final
   // moveTo(), since \org is an absolute PlayRes point, not relative to the
   // not-yet-placed mobject _buildRunText() constructs.
@@ -550,5 +606,6 @@ function styleDefaults(style: ASSStyle): ResolvedRunStyle {
     scaleX: style.scaleX, scaleY: style.scaleY, angle: style.angle,
     borderWidth: style.outline, shadowDepth: style.shadow,
     posOverride: null, orgOverride: null, shearX: 0, shearY: 0, blurRadius: 0, alignment: style.alignment,
+    drawScale: 0,
   };
 }

@@ -2,11 +2,11 @@
 
 ## Unreleased
 
-ASS/SSA subtitle campaign, v1 + v1.5 (import direction; v2's vector-drawing
-engine and the ecmanim→`.ass` export direction are still to come). Mirrors
-the Lottie campaign's shape: a pure-parsing loader
-(`src/loaders/ass_loader.ts`) + a pure-function-of-time mobject player
-(`src/mobject/ass_mobject.ts`), "never throw, degrade + warn" contract.
+ASS/SSA subtitle campaign, v1 + v1.5 + v2 (import direction; the
+ecmanim→`.ass` export direction is still to come). Mirrors the Lottie
+campaign's shape: a pure-parsing loader (`src/loaders/ass_loader.ts`) + a
+pure-function-of-time mobject player (`src/mobject/ass_mobject.ts`),
+"never throw, degrade + warn" contract.
 
 ### Added
 - **v1 core tags** (previously landed without a changelog entry — recorded
@@ -39,6 +39,28 @@ the Lottie campaign's shape: a pure-parsing loader
   `\blur`/`\shad`) + golden-frame tests, plus unit coverage for karaoke
   `kind` normalization, sweep-fraction math, and `evalClipRect`'s
   rectangular-vs-vector-form split.
+- **v2: vector-drawing engine.** `parseDrawingCommands(raw, scaleExponent)`
+  tokenizes ASS's `\p<n>` drawing mini-language (`m`/`l`/`b`/`s`/`p`/`c`,
+  space-separated — NOT SVG syntax) into the same `number[][][]` subpath
+  shape `svg_path.ts`'s `parsePathToSubpaths` emits, so `subpathsToVMobject`
+  (same file) is reused **verbatim** for `\p` dialogue lines — zero changes
+  to that file. `uniformBSplineToBezier` (the one genuinely new math
+  primitive `\s`/`p` b-spline commands need) is derived from the canonical
+  uniform-cubic-B-spline blending function — not a remembered libass
+  detail — and locked down with a hand-computed collinear-control-points
+  unit test *before* any golden-frame PNG was built on top of it, per the
+  plan's explicit caution. `\p<n>` drawing-mode dialogue lines now render
+  as a `VMobject` (fill from `\c`/PrimaryColour, stroke from `\3c`/
+  `OutlineColour`+`\bord`, rotation/shear/blur reusing the same
+  `_applyOrgTransform`/`Mobject.blur()` machinery text runs use); a
+  drawing's own `(0,0)` origin maps directly to the line's `\pos`/alignment
+  anchor point (a documented simplification of the real alignment-vs-bbox
+  interaction libass uses — most real `\p` content pairs `\an7`+`\pos` for
+  exactly this top-left-origin placement anyway). 2 new synthetic fixtures
+  (a positioned/rotated drawing "sign"; a closed b-spline blob) + golden-
+  frame tests, plus loader-level unit coverage for the tokenizer, the
+  scale-exponent conversion, and `uniformBSplineToBezier`'s segment count/
+  continuity/n=3-fallback/n<3-empty behavior.
 
 ### Fixed
 - **`\bord`/`\shad`/`\blur`/`\be` were scaled into the wrong unit space and
@@ -63,6 +85,12 @@ the Lottie campaign's shape: a pure-parsing loader
   three tags; regenerated all 26 affected v1 golden PNGs after visually
   confirming the corrected renders show a plausible, subtle outline/shadow
   halo rather than the previous flat, borderless text.
+- **`parseDrawingCommands` crashed on a dangling odd coordinate** (e.g. a
+  truncated `l 10` with no `y`) instead of tolerating it — found while
+  writing the "never throw on malformed input" unit tests this file's other
+  parsing functions already have. Fixed by having the point reader bail
+  with `null` (discarding the dangling number) rather than reading past the
+  token list.
 
 ## 0.11.2 — 2026-07-11
 
