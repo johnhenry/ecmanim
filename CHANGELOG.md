@@ -2,11 +2,11 @@
 
 ## Unreleased
 
-ASS/SSA subtitle campaign, v1 + v1.5 + v2 (import direction; the
-ecmanim→`.ass` export direction is still to come). Mirrors the Lottie
-campaign's shape: a pure-parsing loader (`src/loaders/ass_loader.ts`) + a
-pure-function-of-time mobject player (`src/mobject/ass_mobject.ts`),
-"never throw, degrade + warn" contract.
+ASS/SSA subtitle campaign: v1 + v1.5 + v2 import, plus the first half of
+the export direction (`wordCaptionTrackToAss`; `vmobjectToAssDrawing` is
+still to come). Mirrors the Lottie campaign's shape: a pure-parsing loader
+(`src/loaders/ass_loader.ts`) + a pure-function-of-time mobject player
+(`src/mobject/ass_mobject.ts`), "never throw, degrade + warn" contract.
 
 ### Added
 - **v1 core tags** (previously landed without a changelog entry — recorded
@@ -61,6 +61,23 @@ pure-function-of-time mobject player (`src/mobject/ass_mobject.ts`),
   frame tests, plus loader-level unit coverage for the tokenizer, the
   scale-exponent conversion, and `uniformBSplineToBezier`'s segment count/
   continuity/n=3-fallback/n<3-empty behavior.
+- **Export: `wordCaptionTrackToAss(track, config?)`** (`src/interchange/ass.ts`)
+  serializes a `WordCaptionTrack`'s word-timed pages to a karaoke `.ass`
+  file — one `Dialogue:` line per page, one `\k<centiseconds>` syllable per
+  token, using the track's own per-token `{fromMs, toMs, text}` timing
+  directly (ms→centiseconds, hex color BGR-reorder — no new animation math).
+  Scoped honestly as a caption/typography-layer interchange, not a general
+  ecmanim-scene exporter (same disclaimer `interchange/lottie.ts`'s header
+  already states for its own "static geometry" scope) — ASS's animation
+  vocabulary has no equivalent for spring dynamics, custom rate functions,
+  or point-correspondence morphing, so only caption timing/color/text round-
+  trips. Produces a real soft-subtitle deliverable (plays over the raw,
+  unburned mp4 in any libass-capable player) that ecmanim didn't have before
+  (captions were burn-in only), and hands off cleanly to Aegisub for manual
+  polish. Verified end-to-end, not just structurally: the exported string
+  round-trips through this campaign's own `parseASS`/`loadASS` cleanly (no
+  tag-parsing warnings) and a rendered still of the round-tripped file shows
+  the correct instant-swap karaoke sweep matching the source timing.
 
 ### Fixed
 - **`\bord`/`\shad`/`\blur`/`\be` were scaled into the wrong unit space and
