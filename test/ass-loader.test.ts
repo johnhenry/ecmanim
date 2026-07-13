@@ -16,6 +16,7 @@ import {
   evalMove,
   evalKaraoke,
   evalLineOpacity,
+  evalClipRect,
   extractKaraokeSyllables,
   hasKaraokeTags,
   alignmentAnchorFraction,
@@ -199,6 +200,39 @@ test("extractKaraokeSyllables + hasKaraokeTags", () => {
   assert.equal(syllables.length, 3);
   assert.equal(syllables[0].text, "ka");
   assert.equal(syllables[0].durCs, 50);
+});
+
+// \K is a documented libass/Aegisub alias for \kf (continuous sweep), NOT an
+// instant-swap sibling of lowercase \k -- get this normalization right, since
+// mixing it up silently downgrades \K lines to instant-swap rendering.
+test("extractKaraokeSyllables: \\k/\\K/\\kf/\\ko kind normalization", () => {
+  const tokens = tokenizeOverrideText("{\\k50}a{\\K50}b{\\kf50}c{\\ko50}d");
+  const syllables = extractKaraokeSyllables(tokens);
+  assert.deepEqual(syllables.map((s) => s.kind), ["k", "kf", "kf", "ko"]);
+});
+
+test("evalKaraoke: fraction progresses 0->1 across a sweep syllable's window", () => {
+  const syllables = [{ durCs: 100, text: "sweep", kind: "kf" as const }];
+  assert.equal(evalKaraoke(syllables, 0, 0).fraction, 0);
+  assert.ok(Math.abs(evalKaraoke(syllables, 250, 0).fraction - 0.25) < 1e-9);
+  assert.ok(Math.abs(evalKaraoke(syllables, 500, 0).fraction - 0.5) < 1e-9);
+  assert.ok(Math.abs(evalKaraoke(syllables, 750, 0).fraction - 0.75) < 1e-9);
+  assert.equal(evalKaraoke(syllables, 1000, 0).fraction, 1);
+});
+
+test("evalClipRect: rectangular form parses, vector form is flagged distinctly", () => {
+  const rectTokens = tokenizeOverrideText("{\\clip(0,0,100,200)}text");
+  const rect = evalClipRect(rectTokens);
+  assert.deepEqual(rect.rect, { x1: 0, y1: 0, x2: 100, y2: 200, invert: false });
+  assert.equal(rect.vectorFormPresent, false);
+
+  const iclipTokens = tokenizeOverrideText("{\\iclip(0,0,100,200)}text");
+  assert.equal(evalClipRect(iclipTokens).rect?.invert, true);
+
+  const vectorTokens = tokenizeOverrideText("{\\clip(m 0 0 l 100 0 100 100 0 100)}text");
+  const vector = evalClipRect(vectorTokens);
+  assert.equal(vector.rect, null);
+  assert.equal(vector.vectorFormPresent, true);
 });
 
 test("evalLineOpacity: \\fad tag drives opacity", () => {

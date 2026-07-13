@@ -12,15 +12,26 @@
 //
 // Supported (v1): \pos, \move, \an (+legacy \a) + margins, \fad, \fade,
 // \c/\1c-\4c, \alpha/\1a-\4a, \fscx, \fscy, \fs, \fn (with fallback+warn),
-// \b, \i, \u, \s, \frz/\fr (pivoted at run-bbox-center -- a documented v1
-// approximation, corrected once \org lands), \bord, \shad, \k (instant
-// karaoke), Layer z-order, \N (+\n under WrapStyle 2) hard line breaks,
-// greedy word-wrap within PlayRes margins.
+// \b, \i, \u, \s, \frz/\fr (pivoted at run-bbox-center when no \org is
+// given), \bord, \shad, \k (instant karaoke), Layer z-order, \N (+\n under
+// WrapStyle 2) hard line breaks, greedy word-wrap within PlayRes margins.
+// Supported (v1.5): \t(t1,t2,accel,tags) animating numeric/color fields
+// (see applyTransformTag in the loader), rectangular \clip/\iclip via
+// CompositeGroup + destination-in/out (verbatim reuse of LottieMobject's
+// own mask mechanism -- see _clipMask below), \org (explicit rotate/shear
+// pivot, applied post-placement -- see _applyOrgTransform), \fax/\fay
+// (shear, via Mobject.applyMatrix), \be/\blur (via Mobject.blur()), \kf/\K
+// (continuous sweep-fill karaoke -- secondary-color base + primary-color
+// overlay clipped to the sampled per-frame fraction via the same
+// CompositeGroup+destination-in mask mechanism as \clip, see
+// _renderKaraoke), \ko (approximated as an instant color swap, not a true
+// outline-only sweep -- see _renderKaraoke for the scope-management
+// reasoning).
 // NOT yet implemented (recognized, silently skipped -- warned once by tag
-// name): \t, \clip, \iclip, \K, \kf, \ko, \org, \fax, \fay, \be, \blur, \p,
-// \pbo. Unsupported features never throw.
+// name): vector-drawing \clip/\iclip, \p, \pbo. Unsupported features never
+// throw.
 
-import { Group } from "./Mobject.ts";
+import { Group, CompositeGroup } from "./Mobject.ts";
 import type { Mobject } from "./Mobject.ts";
 import { Text } from "./text/Text.ts";
 import { Rectangle } from "./geometry.ts";
@@ -29,12 +40,13 @@ import {
   tokenizeOverrideText,
   resolveLineRuns,
   evalLineOpacity,
+  evalClipRect,
   evalKaraoke,
   extractKaraokeSyllables,
   hasKaraokeTags,
   alignmentAnchorFraction,
 } from "../loaders/ass_loader.ts";
-import type { ASSScript, ASSStyle, ASSEvent, ASSToken, ResolvedRun, ResolvedRunStyle } from "../loaders/ass_loader.ts";
+import type { ASSScript, ASSStyle, ASSEvent, ASSToken, ResolvedRun, ResolvedRunStyle, ClipRect } from "../loaders/ass_loader.ts";
 
 export interface ASSConfig {
   /** World-unit fit (like LottieConfig) -- default ~10 units wide. */
@@ -49,7 +61,7 @@ export interface ASSConfig {
 // Tags known to the loader but not yet rendered at this stage -- used only
 // to produce an accurate "not yet supported" warning instead of silently
 // doing nothing with no explanation.
-const NOT_YET_SUPPORTED_TAGS = new Set(["t", "clip", "iclip", "K", "kf", "ko", "org", "fax", "fay", "be", "blur", "p", "pbo"]);
+const NOT_YET_SUPPORTED_TAGS = new Set(["p", "pbo"]);
 
 interface CueState {
   event: ASSEvent;
@@ -182,6 +194,9 @@ export class ASSMobject extends Group {
         this._warn(`\\${tok.name} is recognized but not yet implemented -- ignored`);
       }
     }
+    if (evalClipRect(tokens).vectorFormPresent) {
+      this._warn("\\clip/\\iclip with a vector-drawing shape is not yet implemented -- only the rectangular form is; ignored");
+    }
   }
 
   // --- per-frame geometry (rebuilt from scratch every call) ---------------------
@@ -192,11 +207,14 @@ export class ASSMobject extends Group {
     const opacity = evalLineOpacity(tokens, tMs, event.startMs, lineDurMs);
     const runs = resolveLineRuns(tokens, style, this._script.styles, tMs, event.startMs, lineDurMs);
 
-    const mobs = cue.karaoke
+    let mobs = cue.karaoke
       ? this._renderKaraoke(cue, tMs, runs[0]?.style ?? styleDefaults(style))
       : this._renderRuns(runs, event, style);
 
     for (const m of mobs) m.opacity = (m.opacity ?? 1) * opacity;
+
+    const { rect } = evalClipRect(tokens);
+    if (rect) mobs = [this._clipMask(mobs, rect)];
     return mobs;
   }
 
@@ -206,6 +224,23 @@ export class ASSMobject extends Group {
   // mobject gets constructed, or layout math and rendered glyphs will disagree.
   private _worldFontSize(style: Pick<ResolvedRunStyle, "fontSize">): number {
     return style.fontSize * this._k;
+  }
+
+  // \bord/\shad/\blur/\be values are PlayRes pixels, but Mobject.strokeWidth/
+  // blur()/dropShadow() all live in the "roughly px at 1080p" reference space
+  // strokeScale() (src/renderer/CanvasRenderer.ts) later converts to actual
+  // output pixels -- NOT world units, despite every other pixel-valued ASS
+  // field on this class (_worldFontSize, _worldX/_worldY) going through the
+  // world-unit scale `_k`. Scaling these three by `_k` instead (an earlier,
+  // uncaught bug in this file) put border/shadow/blur into WORLD-unit-sized
+  // numbers a thousandfold too small once strokeScale() then shrank them
+  // again -- border invisible, shadow/blur imperceptible even at extreme
+  // ASS values. This mirrors lottie_mobject.ts's STROKE_PX_PER_WORLD_UNIT
+  // precedent (= 1080/8, the same "reference height" idea) but keyed off the
+  // script's own PlayResY instead of a world frame height, since there's no
+  // world-unit hop in between for this conversion.
+  private _refPx(playResPx: number): number {
+    return playResPx * (1080 / (this.resY || 1));
   }
 
   private _worldX(px: number): number {
@@ -232,6 +267,26 @@ export class ASSMobject extends Group {
     const pxYTop = mV; // ay=1
     const pxY = pxYBottom + (pxYTop - pxYBottom) * ay;
     return [this._worldX(pxX), this._worldY(pxY)];
+  }
+
+  // Rectangular \clip(x1,y1,x2,y2) / \iclip(...): wrap the cue's content in a
+  // CompositeGroup with a Rectangle mask, VERBATIM the same mechanism
+  // LottieMobject uses for masks/mattes (a mask VMobject's
+  // compositeOperation set to "destination-in"/"destination-out", added
+  // alongside the target inside a CompositeGroup) -- no new renderer code.
+  private _clipMask(content: Mobject[], rect: ClipRect): Mobject {
+    const left = this._worldX(Math.min(rect.x1, rect.x2));
+    const right = this._worldX(Math.max(rect.x1, rect.x2));
+    const top = this._worldY(Math.min(rect.y1, rect.y2)); // smaller pixel Y -> larger world Y
+    const bottom = this._worldY(Math.max(rect.y1, rect.y2));
+    const mask = new Rectangle({
+      width: Math.max(0, right - left),
+      height: Math.max(0, top - bottom),
+      point: [(left + right) / 2, (top + bottom) / 2, 0],
+      fillColor: "#FFFFFF", fillOpacity: 1, strokeWidth: 0,
+    });
+    mask.compositeOperation = rect.invert ? "destination-out" : "destination-in";
+    return new CompositeGroup(new Group(...content), mask);
   }
 
   // Left edge (world X) of a `totalW`-wide line so that the horizontal
@@ -319,12 +374,23 @@ export class ASSMobject extends Group {
       let x = this._lineLeftX(anchorX, totalW, ax);
       for (const p of line) {
         p.mob.moveTo([x + p.w / 2, rowCenterY, 0]);
+        this._applyOrgTransform(p.mob, p.word.style);
         mobs.push(p.mob);
         x += p.w + p.spaceAfter;
       }
       rowTop -= lh;
     });
     return mobs;
+  }
+
+  // \org(x,y)-pivoted rotation/shear: must run AFTER the mobject's final
+  // moveTo(), since \org is an absolute PlayRes point, not relative to the
+  // not-yet-placed mobject _buildRunText() constructs.
+  private _applyOrgTransform(mob: Mobject, style: ResolvedRunStyle): void {
+    if (!style.orgOverride || (!style.angle && !style.shearX && !style.shearY)) return;
+    const aboutPoint = [this._worldX(style.orgOverride[0]), this._worldY(style.orgOverride[1]), 0];
+    if (style.angle) mob.rotate((style.angle * Math.PI) / 180, { aboutPoint });
+    if (style.shearX || style.shearY) mob.applyMatrix([[1, style.shearX], [style.shearY, 1]], { aboutPoint });
   }
 
   private _buildRunText(text: string, style: ResolvedRunStyle, at: number[]): Mobject {
@@ -348,15 +414,25 @@ export class ASSMobject extends Group {
       fillColor: style.primary,
       fillOpacity: style.primary.a,
       strokeColor: style.outline,
-      strokeWidth: style.borderWidth * this._k,
+      strokeWidth: this._refPx(style.borderWidth),
       strokeOpacity: style.borderWidth > 0 ? style.outline.a : 0,
       align: "center",
       point: at,
     });
     if (style.shadowDepth > 0) {
-      t.dropShadow({ color: style.back, offsetX: style.shadowDepth * this._k, offsetY: -style.shadowDepth * this._k });
+      t.dropShadow({ color: style.back, offsetX: this._refPx(style.shadowDepth), offsetY: -this._refPx(style.shadowDepth) });
     }
-    if (style.angle) t.rotate((style.angle * Math.PI) / 180);
+    if (style.blurRadius > 0) t.blur(this._refPx(style.blurRadius));
+    // Rotation/shear about the run's own bbox center (the default, no-\org
+    // case) can be applied right here at construction time -- it commutes
+    // correctly with the later moveTo() either way. \org-pivoted rotation
+    // needs the run's FINAL on-screen position (org is an absolute PlayRes
+    // point, not relative to this not-yet-placed mobject), so that case is
+    // deferred to _applyOrgTransform(), called by the caller after moveTo().
+    if (!style.orgOverride) {
+      if (style.angle) t.rotate((style.angle * Math.PI) / 180);
+      if (style.shearX || style.shearY) t.applyMatrix([[1, style.shearX], [style.shearY, 1]]);
+    }
     if (!style.underline && !style.strikeOut) return t;
 
     const w = t.getWidth();
@@ -390,7 +466,7 @@ export class ASSMobject extends Group {
   private _renderKaraoke(cue: CueState, tMs: number, style: ResolvedRunStyle): Mobject[] {
     const syllables = extractKaraokeSyllables(cue.tokens);
     if (syllables.length === 0) return [];
-    const { index: activeIndex } = evalKaraoke(syllables, tMs, cue.event.startMs);
+    const { index: activeIndex, fraction } = evalKaraoke(syllables, tMs, cue.event.startMs);
 
     const [anchorX, anchorY] = this._marginAnchor(cue.event, cue.style, style.alignment);
     const [ax] = alignmentAnchorFraction(style.alignment);
@@ -404,7 +480,38 @@ export class ASSMobject extends Group {
     // purpose. Adding a spaceW unconditionally between every syllable (as
     // _renderRuns does between WRAPPED WORDS, a different situation) would
     // double-space every syllable that already ends in a space.
+    //
+    // \k/\ko: instant color swap the moment a syllable becomes active (\ko
+    // is approximated as an instant swap too, not a true outline-only sweep
+    // -- real-world \ko usage is rare enough that a full second sweep
+    // pipeline for outline-vs-fill isn't worth it at this stage; \kf/\K get
+    // the real continuous sweep, being the overwhelmingly common case).
+    // \kf/\K (normalized to "kf" by the loader): the ACTIVE syllable gets a
+    // continuous sweep -- a SECONDARY-colored base plus a PRIMARY-colored
+    // overlay clipped to `fraction` of the syllable's own width via the same
+    // CompositeGroup+Rectangle destination-in mechanism _clipMask uses for
+    // \clip, composing the existing clip primitive with the already-computed
+    // per-frame `fraction` (no separate KeyframeTrack/tween instance needed
+    // -- this whole class already evaluates everything as a pure function of
+    // tMs, so `fraction` IS that sampled value).
     const built = syllables.map((syl, i) => {
+      if (i === activeIndex && syl.kind === "kf") {
+        const base = this._buildRunText(syl.text, { ...style, primary: style.secondary }, [0, 0, 0]);
+        const w = base.getWidth();
+        if (fraction <= 0) return { mob: base, w };
+        const overlay = this._buildRunText(syl.text, { ...style, primary: style.primary }, [0, 0, 0]);
+        if (fraction >= 1) return { mob: overlay, w };
+        const h = overlay.getHeight();
+        const sweepW = w * fraction;
+        const mask = new Rectangle({
+          width: sweepW, height: h * 1.5,
+          point: [-w / 2 + sweepW / 2, 0, 0], // left-aligned within the syllable's own (origin-centered) bbox
+          fillColor: "#FFFFFF", fillOpacity: 1, strokeWidth: 0,
+        });
+        mask.compositeOperation = "destination-in";
+        const clippedOverlay = new CompositeGroup(overlay, mask);
+        return { mob: new Group(base, clippedOverlay), w };
+      }
       const active = i <= activeIndex;
       const color = active ? style.primary : style.secondary;
       const mob = this._buildRunText(syl.text, { ...style, primary: color }, [0, 0, 0]);
@@ -416,6 +523,7 @@ export class ASSMobject extends Group {
     const mobs: Mobject[] = [];
     for (const b of built) {
       b.mob.moveTo([x + b.w / 2, anchorY, 0]);
+      this._applyOrgTransform(b.mob, style);
       mobs.push(b.mob);
       x += b.w;
     }
@@ -441,6 +549,6 @@ function styleDefaults(style: ASSStyle): ResolvedRunStyle {
     primary: style.primaryColor, secondary: style.secondaryColor, outline: style.outlineColor, back: style.backColor,
     scaleX: style.scaleX, scaleY: style.scaleY, angle: style.angle,
     borderWidth: style.outline, shadowDepth: style.shadow,
-    posOverride: null, alignment: style.alignment,
+    posOverride: null, orgOverride: null, shearX: 0, shearY: 0, blurRadius: 0, alignment: style.alignment,
   };
 }

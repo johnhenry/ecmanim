@@ -18,10 +18,14 @@
 //   `Text` is comma-greedy per the real format).
 // - Override tags: \pos, \move, \an (+legacy \a), \fad, \fade, \c/\1c-\4c,
 //   \alpha/\1a-\4a, \fscx, \fscy, \fs, \fn, \b, \i, \u, \s, \frz/\fr, \bord,
-//   \shad, \k (instant karaoke), \r/\r[Name] (style reset), \N/\n + WrapStyle.
-// - Known-but-not-yet-implemented tags (\t, \clip, \iclip, \K, \kf, \ko,
-//   \org, \fax, \fay, \be, \blur, \p, \pbo) are recognized (so warnings name
-//   the exact tag) but currently skipped, not evaluated.
+//   \shad, \k/\kf/\K/\ko (karaoke -- \K is a documented alias for \kf, see
+//   KaraokeSyllable), \r/\r[Name] (style reset), \N/\n + WrapStyle,
+//   \t(t1,t2,accel,tags) (numeric/color fields only -- see applyTransformTag),
+//   rectangular \clip/\iclip(x1,y1,x2,y2) (see evalClipRect), \org
+//   (explicit rotate/shear pivot), \fax/\fay (shear), \be/\blur.
+// - Known-but-not-yet-implemented tags (vector-drawing \clip/\iclip, \p,
+//   \pbo) are recognized (so warnings name the exact tag) but currently
+//   skipped, not evaluated.
 // - Unknown tags are tolerated silently at the tokenizer level; the
 //   evaluator is what decides whether to warn (see ass_mobject.ts's _warn).
 // - NEVER throws on malformed input except when there's no [Events] section
@@ -416,6 +420,12 @@ export function evalMove(
 export interface KaraokeSyllable {
   durCs: number; // centiseconds until this syllable finishes
   text: string;
+  // \k: instant color swap at the syllable boundary. \kf: continuous fill
+  // sweep across the syllable's duration. \ko: continuous OUTLINE-only
+  // sweep. \K is normalized to "kf" here -- it's a documented libass/Aegisub
+  // alias for \kf (continuous sweep), NOT an instant-swap sibling of
+  // lowercase \k, despite the capitalization looking that way.
+  kind: "k" | "kf" | "ko";
 }
 
 /** Which syllable is active at tMs (relative to the line's own start), and how far through it (0..1, for sweep tags). */
@@ -469,6 +479,10 @@ export interface ResolvedRunStyle {
   borderWidth: number;
   shadowDepth: number;
   posOverride: [number, number] | null; // set by \pos or \move; null = use default alignment-based layout
+  orgOverride: [number, number] | null; // set by \org; null = rotate/shear about the run's own bbox center (v1 approximation)
+  shearX: number; // \fax: x' = x + shearX*y
+  shearY: number; // \fay: y' = y + shearY*x
+  blurRadius: number; // \be or \blur, in PlayRes-pixel-ish units (see applyOneRunEffects for the world-unit conversion)
   alignment: number;
 }
 
@@ -488,7 +502,7 @@ function styleFromASSStyle(s: ASSStyle): ResolvedRunStyle {
     primary: s.primaryColor, secondary: s.secondaryColor, outline: s.outlineColor, back: s.backColor,
     scaleX: s.scaleX, scaleY: s.scaleY, angle: s.angle,
     borderWidth: s.outline, shadowDepth: s.shadow,
-    posOverride: null, alignment: s.alignment,
+    posOverride: null, orgOverride: null, shearX: 0, shearY: 0, blurRadius: 0, alignment: s.alignment,
   };
 }
 
@@ -556,6 +570,14 @@ export function resolveLineRuns(
       case "frz": case "fr": { const n = parseFloat(a); if (Number.isFinite(n)) cur.angle = n; break; }
       case "bord": { const n = parseFloat(a); if (Number.isFinite(n)) cur.borderWidth = n; break; }
       case "shad": { const n = parseFloat(a); if (Number.isFinite(n)) cur.shadowDepth = n; break; }
+      case "org": {
+        const [x, y] = parseArgList(a).map(Number);
+        if (Number.isFinite(x) && Number.isFinite(y)) cur.orgOverride = [x, y];
+        break;
+      }
+      case "fax": { const n = parseFloat(a); if (Number.isFinite(n)) cur.shearX = n; break; }
+      case "fay": { const n = parseFloat(a); if (Number.isFinite(n)) cur.shearY = n; break; }
+      case "be": case "blur": { const n = parseFloat(a); if (Number.isFinite(n)) cur.blurRadius = n; break; }
       case "b": cur.bold = a.replace(/[()]/g, "") !== "0"; break;
       case "i": cur.italic = a.replace(/[()]/g, "") !== "0"; break;
       case "u": cur.underline = a.replace(/[()]/g, "") !== "0"; break;
@@ -566,7 +588,11 @@ export function resolveLineRuns(
         cur = styleFromASSStyle((name && styles.get(name)) || baseStyle);
         break;
       }
-      // \t, \clip, \iclip, \K, \kf, \ko, \org, \fax, \fay, \be, \blur, \p, \pbo:
+      case "t": {
+        cur = applyTransformTag(cur, a, relMs, lineDurMs);
+        break;
+      }
+      // \clip, \iclip, \K, \kf, \ko, \org, \fax, \fay, \be, \blur, \p, \pbo:
       // known but not yet implemented at this stage -- silently no-op here;
       // ass_mobject.ts's warning pass is responsible for surfacing them.
       default:
@@ -575,6 +601,77 @@ export function resolveLineRuns(
   }
   if (runs.length === 0) runs.push({ text: "", style: cur });
   return runs;
+}
+
+// ---------------------------------------------------------------------------
+// \t(t1,t2,accel,tags) -- animate a set of inner tags' target values in
+// linearly over [t1,t2] (accel-eased), relative to the line's own start.
+// Real ASS supports 4 arities: \t(tags), \t(accel,tags), \t(t1,t2,tags),
+// \t(t1,t2,accel,tags) -- disambiguated below by counting numeric args
+// before the first backslash. Only NUMERIC/COLOR fields are interpolated
+// (fscx/fscy/fs/frz/fr/bord/shad/c/1c-4c/alpha/1a-4a); toggle/string tags
+// (\b/\i/\u/\s/\fn/\pos/\an/\r) inside a \t block are intentionally not
+// blended (they don't have continuous semantics) and are ignored if present.
+// Overlapping \t windows on the same property compose LAST-TAG-WINS in tag
+// order (not libass's true additive blend) -- a documented approximation.
+// ---------------------------------------------------------------------------
+
+const ANIMATABLE_NUMERIC: Array<keyof ResolvedRunStyle> = ["fontSize", "scaleX", "scaleY", "angle", "borderWidth", "shadowDepth"];
+const ANIMATABLE_NUMERIC_TAGS: Record<string, keyof ResolvedRunStyle> = {
+  fs: "fontSize", fscx: "scaleX", fscy: "scaleY", frz: "angle", fr: "angle", bord: "borderWidth", shad: "shadowDepth",
+};
+const ANIMATABLE_COLOR_TAGS: Record<string, keyof ResolvedRunStyle> = {
+  c: "primary", "1c": "primary", "2c": "secondary", "3c": "outline", "4c": "back",
+};
+const ANIMATABLE_ALPHA_TAGS: Record<string, keyof ResolvedRunStyle> = {
+  alpha: "primary", "1a": "primary", "2a": "secondary", "3a": "outline", "4a": "back",
+};
+
+function lerpColor(a: Color, b: Color, t: number): Color {
+  return new Color(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t);
+}
+
+function applyTransformTag(cur: ResolvedRunStyle, rawArgs: string, relMs: number, lineDurMs: number): ResolvedRunStyle {
+  const m = rawArgs.match(/^\(([^)]*)\)$/);
+  if (!m) return cur;
+  const inner = m[1];
+  const backslash = inner.indexOf("\\");
+  const head = backslash === -1 ? inner : inner.slice(0, backslash);
+  const tagString = backslash === -1 ? "" : inner.slice(backslash);
+  const headArgs = head.split(",").map((s) => s.trim()).filter((s) => s !== "");
+  let t1 = 0, t2 = lineDurMs, accel = 1;
+  if (headArgs.length === 1) accel = Number(headArgs[0]) || 1;
+  else if (headArgs.length === 2) { t1 = Number(headArgs[0]) || 0; t2 = Number(headArgs[1]) || lineDurMs; }
+  else if (headArgs.length >= 3) { t1 = Number(headArgs[0]) || 0; t2 = Number(headArgs[1]) || lineDurMs; accel = Number(headArgs[2]) || 1; }
+  if (!tagString) return cur;
+
+  let u = t2 > t1 ? Math.max(0, Math.min(1, (relMs - t1) / (t2 - t1))) : (relMs < t1 ? 0 : 1);
+  u = Math.pow(u, accel);
+
+  const target = cloneStyle(cur);
+  for (const innerTok of tokenizeOverrideText(`{${tagString}}`)) {
+    if (innerTok.type !== "tag") continue;
+    const n = parseFloat(innerTok.args);
+    if (ANIMATABLE_NUMERIC_TAGS[innerTok.name] && Number.isFinite(n)) {
+      (target as any)[ANIMATABLE_NUMERIC_TAGS[innerTok.name]] = n;
+    } else if (ANIMATABLE_COLOR_TAGS[innerTok.name]) {
+      (target as any)[ANIMATABLE_COLOR_TAGS[innerTok.name]] = parseAssColor(innerTok.args);
+    } else if (ANIMATABLE_ALPHA_TAGS[innerTok.name]) {
+      const field = ANIMATABLE_ALPHA_TAGS[innerTok.name];
+      const base = (cur as any)[field] as Color;
+      const alpha = 1 - parseInt(innerTok.args.replace(/[&Hh]/g, ""), 16) / 255;
+      (target as any)[field] = new Color(base.r, base.g, base.b, alpha);
+    }
+  }
+
+  const out = cloneStyle(cur);
+  for (const field of ANIMATABLE_NUMERIC) {
+    (out as any)[field] = (cur as any)[field] + ((target as any)[field] - (cur as any)[field]) * u;
+  }
+  for (const field of ["primary", "secondary", "outline", "back"] as const) {
+    out[field] = lerpColor(cur[field], target[field], u);
+  }
+  return out;
 }
 
 /** Fade opacity considering both \fad and \fade tags anywhere in the token stream (last one wins, matching \r-reset-style "last stated value wins" semantics). */
@@ -594,21 +691,53 @@ export function evalLineOpacity(tokens: ASSToken[], tMs: number, lineStartMs: nu
   return opacity;
 }
 
+export interface ClipRect { x1: number; y1: number; x2: number; y2: number; invert: boolean }
+
+/**
+ * Extract a RECTANGULAR \clip(x1,y1,x2,y2) / \iclip(x1,y1,x2,y2) anywhere in
+ * the token stream (last one wins). Vector-drawing clip
+ * (\clip([scale,]drawing-commands)) is detected but returns null with
+ * `vectorForm: true` in the second element, since it needs the v2 drawing
+ * parser (parseDrawingCommands) that doesn't exist yet at this stage --
+ * ass_mobject.ts's warning pass surfaces that case distinctly from "no clip
+ * at all" so a future v2 pass can find every site that needs upgrading.
+ */
+export function evalClipRect(tokens: ASSToken[]): { rect: ClipRect | null; vectorFormPresent: boolean } {
+  let rect: ClipRect | null = null;
+  let vectorFormPresent = false;
+  for (const tok of tokens) {
+    if (tok.type !== "tag" || (tok.name !== "clip" && tok.name !== "iclip")) continue;
+    const parts = parseArgList(tok.args);
+    const nums = parts.map(Number);
+    if (parts.length === 4 && nums.every(Number.isFinite)) {
+      rect = { x1: nums[0], y1: nums[1], x2: nums[2], y2: nums[3], invert: tok.name === "iclip" };
+    } else {
+      vectorFormPresent = true;
+    }
+  }
+  return { rect, vectorFormPresent };
+}
+
 /** Extract \k/\K/\kf/\ko syllables + the plain text between them, in order (used to decide the karaoke-vs-plain layout path and drive per-syllable timing). */
+function normalizeKaraokeKind(tagName: string): "k" | "kf" | "ko" {
+  if (tagName === "K" || tagName === "kf") return "kf"; // \K is an alias for \kf, see KaraokeSyllable's kind doc
+  if (tagName === "ko") return "ko";
+  return "k";
+}
+
 export function extractKaraokeSyllables(tokens: ASSToken[]): KaraokeSyllable[] {
   const out: KaraokeSyllable[] = [];
   let pendingDur = 0;
+  let pendingKind: "k" | "kf" | "ko" = "k";
   let haveK = false;
   for (const tok of tokens) {
     if (tok.type === "tag" && (tok.name === "k" || tok.name === "K" || tok.name === "kf" || tok.name === "ko")) {
-      if (haveK) out.push({ durCs: pendingDur, text: "" }); // no text arrived before the next \k -- empty syllable
+      if (haveK) out.push({ durCs: pendingDur, text: "", kind: pendingKind }); // no text arrived before the next \k -- empty syllable
       pendingDur = parseInt(tok.args.replace(/[()]/g, ""), 10) || 0;
+      pendingKind = normalizeKaraokeKind(tok.name);
       haveK = true;
     } else if (tok.type === "text" && haveK) {
-      if (out.length > 0 && out[out.length - 1].text === "" && out[out.length - 1].durCs === pendingDur) {
-        // unreachable in practice; kept simple on purpose
-      }
-      out.push({ durCs: pendingDur, text: tok.text });
+      out.push({ durCs: pendingDur, text: tok.text, kind: pendingKind });
       haveK = false;
     }
   }

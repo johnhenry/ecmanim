@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased
+
+ASS/SSA subtitle campaign, v1 + v1.5 (import direction; v2's vector-drawing
+engine and the ecmanim→`.ass` export direction are still to come). Mirrors
+the Lottie campaign's shape: a pure-parsing loader
+(`src/loaders/ass_loader.ts`) + a pure-function-of-time mobject player
+(`src/mobject/ass_mobject.ts`), "never throw, degrade + warn" contract.
+
+### Added
+- **v1 core tags** (previously landed without a changelog entry — recorded
+  here for the record): `[Script Info]`/`[V4+ Styles]` + legacy `[V4 Styles]`
+  (SSA) alignment remap, `\pos`, `\move`, `\an`(+legacy `\a`)+margins, `\fad`,
+  `\fade`, `\c`/`\1c`-`\4c`+`\alpha`/`\1a`-`\4a`, `\fscx`/`\fscy`/`\fs`/`\fn`
+  (fallback+warn), `\b`/`\i`/`\u`/`\s`, `\frz`/`\fr` (bbox-center pivot),
+  `\bord`/`\shad`, `\k` (instant karaoke), `\r`/`\r[Name]`, `\N`/`\n`+
+  WrapStyle, greedy word-wrap. 14 synthetic fixtures + golden-frame tests,
+  20 loader unit tests.
+- **v1.5: time-varying composition.** `\t(t1,t2[,accel],tags)` transform
+  composition (numeric/color fields; overlapping windows on the same
+  property compose last-window-wins, a documented approximation of
+  libass's additive blend); rectangular `\clip`/`\iclip(x1,y1,x2,y2)` via
+  the same `CompositeGroup`+`destination-in`/`-out` mechanism
+  `LottieMobject` uses for masks (vector-drawing-shape `\clip`/`\iclip`
+  is recognized and warned about by name, not silently dropped — it needs
+  v2's drawing parser); `\org(x,y)` explicit rotate/shear pivot (corrects
+  v1's `\frz`-only bbox-center approximation); `\fax`/`\fay` shear;
+  `\be`/`\blur`. **`\kf`/`\K`/`\ko` sweep karaoke**: `\K` is normalized to
+  `\kf` (a documented libass/Aegisub alias for continuous sweep, *not* an
+  instant-swap sibling of lowercase `\k`); the active syllable renders as a
+  secondary-colored base plus a primary-colored overlay clipped to the
+  sampled per-frame sweep fraction, reusing the `\clip` mask mechanism.
+  `\ko` (outline-only sweep) is approximated as an instant color swap
+  rather than a true stroke-only sweep — real-world `\ko` usage is rare
+  enough that a second fill/stroke-split rendering pipeline wasn't worth
+  building at this stage. 7 new synthetic fixtures (`\t`, rect `\clip`/
+  `\iclip`, vector-clip-warns, `\kf`+`\K`-alias, `\ko`, `\org`+shear,
+  `\blur`/`\shad`) + golden-frame tests, plus unit coverage for karaoke
+  `kind` normalization, sweep-fraction math, and `evalClipRect`'s
+  rectangular-vs-vector-form split.
+
+### Fixed
+- **`\bord`/`\shad`/`\blur`/`\be` were scaled into the wrong unit space and
+  rendered imperceptibly (or not at all) at any realistic tag value,
+  including in the already-shipped v1 goldens.** `_buildRunText` converted
+  these PlayRes-pixel tag values through `_k`, the PlayRes→**world-unit**
+  scale used everywhere else on this class (font size, positions) — but
+  `Mobject.strokeWidth`/`.blur()`/`.dropShadow()` and the renderer's
+  `strokeScale()` (`src/renderer/CanvasRenderer.ts`) expect values in a
+  **"roughly px at 1080p"** reference space instead (confirmed against
+  `lottie_mobject.ts`'s `STROKE_PX_PER_WORLD_UNIT = 1080/8` precedent for
+  the same conversion). Routing through `_k` produced world-unit-sized
+  numbers (~0.01) that `strokeScale()` then shrank *again* to a fraction of
+  a device pixel — every v1 fixture's default `Outline`/`Shadow` style
+  columns (all non-zero) were silently rendering with no visible border or
+  shadow at all, and `\blur60` in a smoke test showed zero softening. Found
+  by explicitly rendering `\blur60`/`\shad60` stills and seeing literally no
+  effect, then confirmed independently against a plain (non-ASS) `Text`/
+  `Rectangle` with `.blur()` to rule out a renderer-wide regression before
+  concluding it was this file's own unit-conversion bug. Fixed with a new
+  `_refPx(playResPx)` helper (`playResPx * (1080 / resY)`) used for all
+  three tags; regenerated all 26 affected v1 golden PNGs after visually
+  confirming the corrected renders show a plausible, subtle outline/shadow
+  halo rather than the previous flat, borderless text.
+
 ## 0.11.2 — 2026-07-11
 
 ### Fixed

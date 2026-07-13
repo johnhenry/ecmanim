@@ -52,6 +52,17 @@ const CASES: Case[] = [
   { name: "12-multi-style-layers", fixture: "12-multi-style-layers.ass", waitSeconds: 1, width: 13, frames: { all3: frameAt(0.5) } },
   { name: "13-legacy-ssa", fixture: "13-legacy-ssa.ass", waitSeconds: 1, width: 13, frames: { line: frameAt(0.5) } },
   { name: "14-malformed-tolerant", fixture: "14-malformed-tolerant.ass", waitSeconds: 15, width: 13, frames: { unknownTag: frameAt(1), unterminatedBrace: frameAt(6), missingStyle: frameAt(11) } },
+  // v1.5 (Stage 3): \t transform, rectangular \clip/\iclip, \kf/\K/\ko sweep
+  // karaoke, \org-pivoted rotation/shear, \be/\blur -- see task #29. Times
+  // avoid each dialogue's exact end boundary (cue visibility is [start,end),
+  // so t=durationSeconds itself samples the NEXT/blank state, not a bug).
+  { name: "15-transform-t", fixture: "15-transform-t.ass", waitSeconds: 4, width: 13, frames: { start: frameAt(0), mid: frameAt(2), nearEnd: frameAt(3.9) } },
+  { name: "16-clip-rect", fixture: "16-clip-rect.ass", waitSeconds: 4, width: 13, frames: { clip: frameAt(1), iclip: frameAt(3) } },
+  { name: "17-clip-vector", fixture: "17-clip-vector.ass", waitSeconds: 2, width: 13, frames: { unclipped: frameAt(1) } },
+  { name: "18-karaoke-kf", fixture: "18-karaoke-kf.ass", waitSeconds: 4, width: 10, frames: { sweep25: frameAt(0.5), sweep50: frameAt(1.0), sweep75: frameAt(1.5), kAliasMidSweep: frameAt(2.15) } },
+  { name: "19-karaoke-ko", fixture: "19-karaoke-ko.ass", waitSeconds: 3, width: 10, frames: { syl0: frameAt(0.4), syl1: frameAt(1.4), syl2: frameAt(2.4) } },
+  { name: "20-org-shear", fixture: "20-org-shear.ass", waitSeconds: 4, width: 13, frames: { orgRotation: frameAt(1), orgShear: frameAt(3) } },
+  { name: "21-blur-shadow", fixture: "21-blur-shadow.ass", waitSeconds: 4, width: 13, frames: { blurred: frameAt(1), shadowed: frameAt(3) } },
 ];
 
 for (const c of CASES) {
@@ -72,4 +83,34 @@ for (const c of CASES) {
 // assert that directly too, not just that a snapshot matches.
 test("ass-mobject: malformed input never throws", { skip: !canvasAvailable && "@napi-rs/canvas not available" }, async () => {
   assert.doesNotThrow(() => loadASS(fixtureText("14-malformed-tolerant.ass"), { width: 10 }));
+});
+
+function alphaAt(cap: { data: Uint8ClampedArray; width: number }, x: number, y: number): number {
+  return cap.data[(y * cap.width + x) * 4 + 3];
+}
+
+// Rectangular \clip/\iclip: per the plan's verification guidance, confirm
+// the mask geometry itself (not just eyeball the golden) by sampling alpha=0
+// at a pixel that's unambiguously on the clipped-away side of the 960/1920
+// (PlayResX) split -- \clip(0,0,960,1080) keeps the LEFT half, \iclip(...)
+// keeps the RIGHT half.
+test("ass-mobject: 16-clip-rect masks the correct half (sampled alpha)", { skip: !canvasAvailable && "@napi-rs/canvas not available" }, async () => {
+  const scene = fixtureScene("16-clip-rect.ass", 4, 13);
+  const caps = await captureFrames(scene, [frameAt(1), frameAt(3)], { width: 480, height: 270 });
+  const clipCap = caps.get(frameAt(1))!;
+  const iclipCap = caps.get(frameAt(3))!;
+  assert.equal(alphaAt(clipCap, 400, 135), 0, "\\clip(0,0,960,1080) must hide the right half");
+  assert.equal(alphaAt(iclipCap, 80, 135), 0, "\\iclip(0,0,960,1080) must hide the left half");
+});
+
+// Vector-form \clip/\iclip (a drawing-command shape, not 4 numeric args) is a
+// documented v1.5 non-goal (needs the v2 drawing parser) -- confirm it's
+// recognized and warned about by name, distinctly from "no clip at all", and
+// that the line still renders (unclipped) rather than being dropped.
+test("ass-mobject: 17-clip-vector warns and renders unclipped", { skip: !canvasAvailable && "@napi-rs/canvas not available" }, async () => {
+  const subs = loadASS(fixtureText("17-clip-vector.ass"), { width: 13 });
+  assert.ok(
+    subs.warnings.some((w) => w.includes("vector-drawing shape is not yet implemented")),
+    `expected a vector-clip warning, got: ${JSON.stringify(subs.warnings)}`,
+  );
 });
