@@ -272,6 +272,12 @@ export type { DiagramDiffConfig } from "./animation/diagram_diff.ts";
 // --- Lottie campaign (v0.7.0) ---------------------------------------------------
 export { loadLottie, LottieMobject } from "./mobject/lottie_mobject.ts";
 export { parseLottie, cubicBezierEase, evalProperty } from "./loaders/lottie_loader.ts";
+
+// --- ASS/SSA subtitle campaign ---------------------------------------------------
+export { loadASS, ASSMobject } from "./mobject/ass_mobject.ts";
+export { parseASS, parseAssColor, parseAssTime, tokenizeOverrideText } from "./loaders/ass_loader.ts";
+export type { ASSConfig } from "./mobject/ass_mobject.ts";
+export type { ASSScript, ASSStyle, ASSEvent } from "./loaders/ass_loader.ts";
 export type { NeuralNetworkConfig, ForwardPassConfig } from "./mobject/neural_network.ts";
 export type { DataJoinConfig, DataJoinResult } from "./animation/data_join.ts";
 export type { FbmOptions } from "./core/noise.ts";
