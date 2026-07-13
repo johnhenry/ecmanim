@@ -747,3 +747,181 @@ export function extractKaraokeSyllables(tokens: ASSToken[]): KaraokeSyllable[] {
 export function hasKaraokeTags(tokens: ASSToken[]): boolean {
   return tokens.some((t) => t.type === "tag" && (t.name === "k" || t.name === "K" || t.name === "kf" || t.name === "ko"));
 }
+
+// ---------------------------------------------------------------------------
+// v2: \p<n> vector-drawing mini-language (m/l/b/s/p/c) -- NOT SVG syntax,
+// space-separated commands+numbers. Output shape is deliberately identical
+// to src/mobject/svg_path.ts's parsePathToSubpaths (number[][][], each
+// subpath a flat [start, c1,c2,end, c1,c2,end, ...] cubic point list) so
+// subpathsToVMobject (same file) is reused VERBATIM for \p dialogue lines --
+// zero changes to that file, per the plan.
+// ---------------------------------------------------------------------------
+
+const lerp2D = (a: number[], b: number[], t: number): number[] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 0];
+
+/**
+ * Convert a uniform cubic B-spline (n >= 3 control points, the shape ASS's
+ * \s drawing command builds) to a piecewise-cubic-Bezier flat point list
+ * (`[anchor, c1,c2,end, c1,c2,end, ...]`, ready to append into a subpath's
+ * point list directly).
+ *
+ * Derivation (standard CAGD result, NOT a libass-specific detail -- derived
+ * here from the canonical uniform cubic B-spline blending function so it
+ * doesn't depend on a "remembered spec detail," per the plan's explicit
+ * caution about this conversion): for 4 consecutive spline control points
+ * P0,P1,P2,P3, matching the spline's value AND derivative at t=0 and t=1
+ * against the Bezier form gives
+ *   B0 = (P0 + 4*P1 + P2) / 6        B1 = (2*P1 + P2) / 3
+ *   B3 = (P1 + 4*P2 + P3) / 6        B2 = (P1 + 2*P2) / 3
+ * Consecutive 4-point windows overlap by 3 points, and segment i's B3
+ * algebraically equals segment (i+1)'s B0, so the result is a single
+ * continuous chain -- exactly the flat-list convention this function
+ * returns. n control points (n >= 4) produce n-3 segments.
+ *
+ * n == 3 (the spec's stated minimum) has no 4-point window at all; there's
+ * no confirmed reference for libass's exact behavior in this edge case, so
+ * it's approximated here as a plain quadratic curve through the 3 points
+ * (elevated to cubic via the same quadToCubic used for SVG's Q command) --
+ * smooth and endpoint-exact, but a documented approximation, not a verified
+ * libass match.
+ */
+export function uniformBSplineToBezier(controlPoints: number[][]): number[][] {
+  const n = controlPoints.length;
+  if (n < 3) return [];
+  const P = controlPoints.map((p) => [p[0], p[1], 0]);
+  if (n === 3) {
+    const [p0, q, p2] = P;
+    const c1 = [p0[0] + (2 / 3) * (q[0] - p0[0]), p0[1] + (2 / 3) * (q[1] - p0[1]), 0];
+    const c2 = [p2[0] + (2 / 3) * (q[0] - p2[0]), p2[1] + (2 / 3) * (q[1] - p2[1]), 0];
+    return [p0, c1, c2, p2];
+  }
+  const out: number[][] = [];
+  for (let i = 0; i + 3 < n; i++) {
+    const [p0, p1, p2, p3] = [P[i], P[i + 1], P[i + 2], P[i + 3]];
+    const b0 = [(p0[0] + 4 * p1[0] + p2[0]) / 6, (p0[1] + 4 * p1[1] + p2[1]) / 6, 0];
+    const b1 = [(2 * p1[0] + p2[0]) / 3, (2 * p1[1] + p2[1]) / 3, 0];
+    const b2 = [(p1[0] + 2 * p2[0]) / 3, (p1[1] + 2 * p2[1]) / 3, 0];
+    const b3 = [(p1[0] + 4 * p2[0] + p3[0]) / 6, (p1[1] + 4 * p2[1] + p3[1]) / 6, 0];
+    if (out.length === 0) out.push(b0);
+    out.push(b1, b2, b3);
+  }
+  return out;
+}
+
+/**
+ * Parse an ASS \p<n> drawing-command string (m/l/b/s/p/c) into
+ * parsePathToSubpaths-shaped subpaths. `scaleExponent` is the \p<n> tag's
+ * own n (1 = no scaling; n>=2 divides every coordinate by 2^(n-1), per the
+ * ASS spec's "higher internal precision" convention for drawing scale).
+ */
+export function parseDrawingCommands(raw: string, scaleExponent: number): number[][][] {
+  const div = Math.pow(2, Math.max(1, scaleExponent) - 1);
+  const tokens: Array<{ cmd?: string; num?: number }> = [];
+  const re = /([a-zA-Z])|(-?\d*\.?\d+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    if (m[1]) tokens.push({ cmd: m[1] });
+    else tokens.push({ num: Number(m[2]) / div });
+  }
+
+  const subpaths: number[][][] = [];
+  let current: number[][] | null = null;
+  let cursor: number[] = [0, 0, 0];
+  let splineBuf: number[][] | null = null;
+
+  let i = 0;
+  const hasNum = () => i < tokens.length && tokens[i].num !== undefined;
+  const nextNum = (): number => tokens[i++].num as number;
+  // A dangling odd coordinate (e.g. "l 10" with no y) must not throw -- bail
+  // out with null rather than reading past the token list. x is already
+  // consumed at that point and simply discarded, matching this file's
+  // established "tolerate malformed input, never throw" contract.
+  const nextPoint = (): number[] | null => {
+    if (!hasNum()) return null;
+    const x = nextNum();
+    if (!hasNum()) return null;
+    return [x, nextNum(), 0];
+  };
+
+  const finishSubpath = () => {
+    if (current && current.length >= 1) subpaths.push(current);
+    current = null;
+  };
+  const lineTo = (end: number[]) => {
+    if (!current) { current = [cursor]; }
+    current.push(lerp2D(cursor, end, 1 / 3), lerp2D(cursor, end, 2 / 3), end);
+    cursor = end;
+  };
+  const cubicTo = (c1: number[], c2: number[], end: number[]) => {
+    if (!current) current = [cursor];
+    current.push(c1, c2, end);
+    cursor = end;
+  };
+  const flushSpline = (closeLoop: boolean) => {
+    if (!splineBuf || splineBuf.length < 3) { splineBuf = null; return; }
+    const pts = closeLoop ? [...splineBuf, splineBuf[0], splineBuf[1], splineBuf[2]] : splineBuf;
+    const bez = uniformBSplineToBezier(pts);
+    if (bez.length >= 4) {
+      if (!current) current = [bez[0]];
+      for (let k = 1; k < bez.length; k += 3) cubicTo(bez[k], bez[k + 1], bez[k + 2]);
+    }
+    splineBuf = null;
+  };
+
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    if (tok.cmd === undefined) { i++; continue; } // stray number with no command -- ignore, never throw
+    const cmd = tok.cmd.toLowerCase();
+    i++;
+    switch (cmd) {
+      case "m":
+      case "n": { // \n (move without closing) is treated the same as \m at this scope -- no fill-region tracking here
+        flushSpline(false);
+        finishSubpath();
+        const p = nextPoint();
+        if (p) { cursor = p; current = [cursor]; }
+        break;
+      }
+      case "l":
+        flushSpline(false);
+        while (hasNum()) {
+          const p = nextPoint();
+          if (!p) break;
+          lineTo(p);
+        }
+        break;
+      case "b":
+        flushSpline(false);
+        while (hasNum()) {
+          const c1 = nextPoint(), c2 = c1 && nextPoint(), end = c2 && nextPoint();
+          if (!c1 || !c2 || !end) break;
+          cubicTo(c1, c2, end);
+        }
+        break;
+      case "s":
+        flushSpline(false);
+        splineBuf = [];
+        while (hasNum()) {
+          const p = nextPoint();
+          if (!p) break;
+          splineBuf.push(p);
+        }
+        break;
+      case "p": { // extend the currently-open spline with one more point
+        const p = nextPoint();
+        if (p && splineBuf) splineBuf.push(p); // \p with no open spline -- discard the point, never throw
+        break;
+      }
+      case "c":
+        flushSpline(true);
+        break;
+      default:
+        // Unknown drawing command -- tolerate, matching the tag tokenizer's
+        // "never throw on malformed/unrecognized input" contract.
+        break;
+    }
+  }
+  flushSpline(false);
+  finishSubpath();
+  return subpaths;
+}

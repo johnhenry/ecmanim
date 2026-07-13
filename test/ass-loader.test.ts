@@ -20,6 +20,8 @@ import {
   extractKaraokeSyllables,
   hasKaraokeTags,
   alignmentAnchorFraction,
+  uniformBSplineToBezier,
+  parseDrawingCommands,
 } from "../src/loaders/ass_loader.ts";
 
 const MINIMAL = `[Script Info]
@@ -246,4 +248,87 @@ test("alignmentAnchorFraction: numpad corners/edges/center", () => {
   assert.deepEqual(alignmentAnchorFraction(2), [0.5, 0]); // bottom-center
   assert.deepEqual(alignmentAnchorFraction(5), [0.5, 0.5]); // middle-center
   assert.deepEqual(alignmentAnchorFraction(9), [1, 1]); // top-right
+});
+
+// Hand-computed lock-down for the v2 drawing engine's one genuinely new math
+// primitive (per the plan: verify this BEFORE trusting any golden-frame PNG
+// built on top of it). 4 evenly-spaced COLLINEAR points make the expected
+// output easy to check by hand: a uniform cubic B-spline through collinear
+// points must itself be a straight line, and for P0=(0,0) P1=(3,0) P2=(6,0)
+// P3=(9,0), the derived formulas give exactly-evenly-spaced Bezier points
+// B0=(3,0) B1=(4,0) B2=(5,0) B3=(6,0) (worked by hand in the function's own
+// doc comment).
+test("uniformBSplineToBezier: 4 collinear points -> evenly-spaced Bezier points (hand-computed)", () => {
+  const out = uniformBSplineToBezier([[0, 0], [3, 0], [6, 0], [9, 0]]);
+  assert.equal(out.length, 4); // n=4 -> exactly 1 segment -> [anchor, c1, c2, end]
+  const xs = out.map((p) => p[0]);
+  assert.deepEqual(xs, [3, 4, 5, 6]);
+  for (const p of out) assert.equal(p[1], 0);
+});
+
+test("uniformBSplineToBezier: n control points -> n-3 segments, chained continuously", () => {
+  const pts = [[0, 0], [1, 4], [3, 4], [5, 0], [7, 4], [9, 0]]; // n=6 -> 3 segments
+  const out = uniformBSplineToBezier(pts);
+  assert.equal(out.length, 1 + 3 * (pts.length - 3));
+  // Segment i's B3 (window pts[i..i+3]) must algebraically equal segment
+  // (i+1)'s B0 (window pts[i+1..i+4]) -- the continuity identity the doc
+  // comment claims. Verify by computing each window independently (not just
+  // trusting the single flat-list output) and cross-checking against it.
+  const seg0 = uniformBSplineToBezier(pts.slice(0, 4));
+  const seg1 = uniformBSplineToBezier(pts.slice(1, 5));
+  const seg2 = uniformBSplineToBezier(pts.slice(2, 6));
+  assert.deepEqual(seg0[3], seg1[0]);
+  assert.deepEqual(seg1[3], seg2[0]);
+  // The flat list is exactly the concatenation of each window's own [B1,B2,B3]
+  // appended after a single shared leading anchor (seg0's B0).
+  assert.deepEqual(out, [seg0[0], seg0[1], seg0[2], seg0[3], seg1[1], seg1[2], seg1[3], seg2[1], seg2[2], seg2[3]]);
+});
+
+test("uniformBSplineToBezier: n=3 falls back to a quadratic-elevated cubic through all 3 points", () => {
+  const out = uniformBSplineToBezier([[0, 0], [5, 10], [10, 0]]);
+  assert.equal(out.length, 4);
+  assert.deepEqual([out[0][0], out[0][1]], [0, 0]); // starts exactly at P0
+  assert.deepEqual([out[3][0], out[3][1]], [10, 0]); // ends exactly at P2
+});
+
+test("uniformBSplineToBezier: fewer than 3 points returns empty", () => {
+  assert.deepEqual(uniformBSplineToBezier([[0, 0], [1, 1]]), []);
+});
+
+test("parseDrawingCommands: m/l builds a flat cubic point list (lines as degenerate cubics)", () => {
+  const subpaths = parseDrawingCommands("m 0 0 l 10 0 10 10 0 10", 1);
+  assert.equal(subpaths.length, 1);
+  assert.equal(subpaths[0].length, 1 + 3 * 3); // anchor + 3 line segments: (10,0) (10,10) (0,10)
+  assert.deepEqual([subpaths[0][0][0], subpaths[0][0][1]], [0, 0]);
+  const last = subpaths[0][subpaths[0].length - 1];
+  assert.deepEqual([last[0], last[1]], [0, 10]);
+});
+
+test("parseDrawingCommands: b passes cubic control points straight through, no conversion", () => {
+  const subpaths = parseDrawingCommands("m 0 0 b 1 1 2 2 3 3", 1);
+  assert.equal(subpaths.length, 1);
+  assert.equal(subpaths[0].length, 4);
+  assert.deepEqual([subpaths[0][3][0], subpaths[0][3][1]], [3, 3]);
+});
+
+test("parseDrawingCommands: \\p<n> scale exponent divides coordinates by 2^(n-1)", () => {
+  const n1 = parseDrawingCommands("m 100 200 l 300 400", 1);
+  const n3 = parseDrawingCommands("m 100 200 l 300 400", 3); // divide by 2^(3-1)=4
+  assert.deepEqual([n1[0][0][0], n1[0][0][1]], [100, 200]);
+  assert.deepEqual([n3[0][0][0], n3[0][0][1]], [25, 50]);
+});
+
+test("parseDrawingCommands: s...c closes a spline into a continuous loop without throwing", () => {
+  assert.doesNotThrow(() => {
+    const subpaths = parseDrawingCommands("m 0 0 s 0 0 10 10 20 0 10 -10 c", 1);
+    assert.equal(subpaths.length, 1);
+    assert.ok(subpaths[0].length > 4);
+  });
+});
+
+test("parseDrawingCommands: malformed/truncated input never throws", () => {
+  assert.doesNotThrow(() => parseDrawingCommands("m 0 0 l 10", 1)); // dangling odd coordinate
+  assert.doesNotThrow(() => parseDrawingCommands("z q 1 2", 1)); // unknown commands
+  assert.doesNotThrow(() => parseDrawingCommands("", 1));
+  assert.doesNotThrow(() => parseDrawingCommands("p 1 2", 1)); // \p with no open spline
 });
