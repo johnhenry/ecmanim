@@ -10,9 +10,10 @@ import assert from "node:assert/strict";
 import { WordCaptionTrack } from "../src/captions/caption_track.ts";
 import { createTikTokStyleCaptions } from "../src/captions/captions.ts";
 import type { Caption, CaptionPage } from "../src/captions/captions.ts";
-import { wordCaptionTrackToAss } from "../src/interchange/ass.ts";
-import { parseASS } from "../src/loaders/ass_loader.ts";
+import { wordCaptionTrackToAss, vmobjectToAssDrawing } from "../src/interchange/ass.ts";
+import { parseASS, parseDrawingCommands } from "../src/loaders/ass_loader.ts";
 import { loadASS } from "../src/mobject/ass_mobject.ts";
+import { Rectangle } from "../src/mobject/geometry.ts";
 
 const cap = (text: string, startMs: number, endMs: number): Caption => ({
   text, startMs, endMs, timestampMs: startMs, confidence: null,
@@ -97,4 +98,72 @@ test("wordCaptionTrackToAss: an empty page (all-whitespace tokens) is skipped, n
   const track = new WordCaptionTrack(blankPages);
   const ass = wordCaptionTrackToAss(track);
   assert.equal(ass.split("\n").filter((l) => l.startsWith("Dialogue:")).length, 0);
+});
+
+// vmobjectToAssDrawing --------------------------------------------------------
+
+test("vmobjectToAssDrawing: a rectangle's corners round-trip exactly (hand-verifiable geometry)", () => {
+  const rect = new Rectangle({ width: 4, height: 2, fillColor: "#112233", fillOpacity: 1, strokeWidth: 0 });
+  const ass = vmobjectToAssDrawing(rect, { scale: 100 });
+  const dialogueLine = ass.split("\n").find((l) => l.startsWith("Dialogue:"))!;
+  const drawingMatch = dialogueLine.match(/\\p1\}(.*)\{\\p0\}/);
+  assert.ok(drawingMatch, `expected a \\p1...\\p0 drawing block in: ${dialogueLine}`);
+  const subpaths = parseDrawingCommands(drawingMatch![1], 1);
+  assert.equal(subpaths.length, 1);
+  // Rectangle's own verts are [w/2,h/2],[-w/2,h/2],[-w/2,-h/2],[w/2,-h/2] --
+  // already centered on its own getCenter(), so at scale=100 with Y-flip the
+  // corners should land at exactly (+-200,-+100) in drawing space.
+  const corners = subpaths[0].filter((_, i) => i % 3 === 0).map(([x, y]) => [Math.round(x), Math.round(y)]);
+  for (const [x, y] of corners) {
+    assert.ok(Math.abs(Math.abs(x) - 200) < 1, `expected |x|=200, got ${x}`);
+    assert.ok(Math.abs(Math.abs(y) - 100) < 1, `expected |y|=100, got ${y}`);
+  }
+});
+
+test("vmobjectToAssDrawing: fill/stroke colors and alpha round-trip through parseASS", () => {
+  const rect = new Rectangle({ width: 2, height: 2, fillColor: "#a1b2c3", fillOpacity: 0.5, strokeColor: "#ff0000", strokeWidth: 3 });
+  const ass = vmobjectToAssDrawing(rect);
+  const script = parseASS(ass);
+  const style = script.styles.get("Default")!;
+  assert.ok(Math.abs(style.primaryColor.r - 0xa1 / 255) < 1e-6);
+  assert.ok(Math.abs(style.primaryColor.g - 0xb2 / 255) < 1e-6);
+  assert.ok(Math.abs(style.primaryColor.b - 0xc3 / 255) < 1e-6);
+  assert.ok(Math.abs(style.outlineColor.r - 1) < 1e-6);
+  assert.equal(style.outline, 3);
+  // \alpha on the dialogue line carries the fill opacity (0.5 -> ~0x80 alpha byte).
+  const dialogueLine = ass.split("\n").find((l) => l.startsWith("Dialogue:"))!;
+  assert.match(dialogueLine, /\\alpha&H80&/);
+});
+
+test("vmobjectToAssDrawing: config.pos places the shape, default centers it on PlayRes", () => {
+  const rect = new Rectangle({ width: 1, height: 1 });
+  const defaultAss = vmobjectToAssDrawing(rect, { playResX: 1920, playResY: 1080 });
+  assert.match(defaultAss, /\\pos\(960,540\)/);
+  const customAss = vmobjectToAssDrawing(rect, { pos: [100, 200] });
+  assert.match(customAss, /\\pos\(100,200\)/);
+});
+
+test("vmobjectToAssDrawing: output is a real, loadable .ass file and visually fills the shape (sampled pixel)", async () => {
+  const rect = new Rectangle({ width: 3, height: 3, fillColor: "#00ff00", fillOpacity: 1, strokeWidth: 0 });
+  const ass = vmobjectToAssDrawing(rect, { scale: 100 });
+  assert.doesNotThrow(() => loadASS(ass, { width: 13 }));
+  const subs = loadASS(ass, { width: 13 });
+  const unexpected = subs.warnings.filter((w) => !w.includes("not resolved"));
+  assert.deepEqual(unexpected, []);
+
+  const { Scene } = await import("../src/scene/Scene.ts");
+  const { captureFrames, loadNapiCanvas } = await import("./_snapshot_util.ts");
+  const canvasAvailable = await loadNapiCanvas().then((m: any) => !!m);
+  if (!canvasAvailable) return; // environment has no @napi-rs/canvas -- skip the render-level check
+  class S extends Scene {
+    async construct() {
+      loadASS(ass, { width: 13 }).attachTo(this);
+      await this.wait(1);
+    }
+  }
+  const caps = await captureFrames(S, [7], { width: 480, height: 270, fps: 15 });
+  const cap = caps.get(7)!;
+  const centerIdx = (135 * 480 + 240) * 4;
+  assert.ok(cap.data[centerIdx + 1] > 150, `expected green fill at frame center, got rgba=${cap.data.slice(centerIdx, centerIdx + 4)}`);
+  assert.ok(cap.data[centerIdx] < 100, `expected low red at frame center, got rgba=${cap.data.slice(centerIdx, centerIdx + 4)}`);
 });

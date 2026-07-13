@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-ASS/SSA subtitle campaign: v1 + v1.5 + v2 import, plus the first half of
-the export direction (`wordCaptionTrackToAss`; `vmobjectToAssDrawing` is
-still to come). Mirrors the Lottie campaign's shape: a pure-parsing loader
-(`src/loaders/ass_loader.ts`) + a pure-function-of-time mobject player
-(`src/mobject/ass_mobject.ts`), "never throw, degrade + warn" contract.
+ASS/SSA subtitle campaign, complete: v1 + v1.5 + v2 import, and both export
+directions (`wordCaptionTrackToAss`, `vmobjectToAssDrawing`). Mirrors the
+Lottie campaign's shape: a pure-parsing loader (`src/loaders/ass_loader.ts`)
++ a pure-function-of-time mobject player (`src/mobject/ass_mobject.ts`),
+"never throw, degrade + warn" contract. Remaining work is documentation/CI
+integration only (skill doc, `docs/subtitles.md`, gallery + CI wiring).
 
 ### Added
 - **v1 core tags** (previously landed without a changelog entry — recorded
@@ -78,6 +79,28 @@ still to come). Mirrors the Lottie campaign's shape: a pure-parsing loader
   round-trips through this campaign's own `parseASS`/`loadASS` cleanly (no
   tag-parsing warnings) and a rendered still of the round-tripped file shows
   the correct instant-swap karaoke sweep matching the source timing.
+- **Export: `vmobjectToAssDrawing(shape, config?)`** (same file) serializes
+  a single static `VMobject` (a title card, an icon, a simple logo) to a
+  standalone `\p1` drawing-mode `.ass` file. `VMobject.getSubpaths()`
+  already returns the exact same flat cubic-point-list shape
+  `parseDrawingCommands`/`parsePathToSubpaths` use, so this is directly the
+  *inverse* serializer of v2's own parser (`m`/`b` commands only — no
+  `\s` b-spline emission, since round-tripping an arbitrary cubic path
+  through a lossy uniform-B-spline fit isn't attempted). Geometry is
+  centered on the shape's own `getCenter()` before scaling (so `\pos`
+  places the shape's visual center, the same convention most real `\p`
+  content authors by hand) and Y-flipped (ecmanim world space is Y-up, ASS
+  drawing space is Y-down). Fill/stroke/opacity come directly from the
+  `VMobject`'s own `fillColor`/`strokeColor`/`strokeWidth`/`fillOpacity`.
+  Explicitly scoped to a **single static shape** — ASS interpolates tag
+  parameters (affine transforms of one fixed path), never vertex-by-vertex
+  path morphing, so this is not an "export any ecmanim animation" tool
+  (same `interchange/lottie.ts`-style disclaimer as `wordCaptionTrackToAss`
+  above). Verified with hand-computed corner geometry (a rectangle's 4
+  corners land at the exact expected scaled/flipped coordinates), a color/
+  alpha round-trip through `parseASS`, and a rendered-still pixel sample
+  confirming the exported drawing actually fills the expected color at the
+  frame center — not just that the string looks plausible.
 
 ### Fixed
 - **`\bord`/`\shad`/`\blur`/`\be` were scaled into the wrong unit space and

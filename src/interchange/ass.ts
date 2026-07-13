@@ -23,10 +23,24 @@
 // instances, fontSize) as public fields, so this module's own
 // AssExportConfig carries the export-time style choices instead of reading
 // them off the track.
+//
+// vmobjectToAssDrawing(shape, config?): extends the same "static-geometry,
+// not general animation" scope to a single static VMobject (a title card,
+// an icon, a simple logo) -- mirrors vmobjectToLottieShapes's role almost
+// exactly (same subpath walk via VMobject.getSubpaths(), which happens to
+// already be in the EXACT flat-point-list shape parseDrawingCommands/
+// parsePathToSubpaths use, so this is the inverse serializer of that same
+// shape), just producing ASS \p-mode drawing-command text instead of a
+// Lottie shape object. Explicitly NOT "export any ecmanim animation" --
+// ASS interpolates TAG PARAMETERS (affine transforms of one fixed path),
+// never vertex-by-vertex path morphing, so only a single static shape
+// round-trips; anything using PointCloud/TransformMatchingAuto morphing
+// has no ASS equivalent at all.
 
 import { Color } from "../core/color.ts";
 import type { ColorLike } from "../core/types.ts";
 import type { WordCaptionTrack } from "../captions/caption_track.ts";
+import type { VMobject } from "../mobject/VMobject.ts";
 
 export interface AssExportConfig {
   /** [Script Info] resolution the exported Dialogue coordinates are relative to (default 1920x1080). */
@@ -115,5 +129,87 @@ export function wordCaptionTrackToAss(track: WordCaptionTrack, config: AssExport
     lines.push(`Dialogue: 0,${formatAssTime(startMs)},${formatAssTime(endMs)},${styleName},,0,0,0,,${body}`);
   }
 
+  return lines.join("\n") + "\n";
+}
+
+export interface AssDrawingExportConfig {
+  playResX?: number;
+  playResY?: number;
+  /** PlayRes pixels per ecmanim world unit (default 100). */
+  scale?: number;
+  /** Where the shape's own center lands, in PlayRes pixels (default: PlayRes center). */
+  pos?: [number, number];
+  /** How long the drawing's Dialogue line is shown, in ms (default 5000). */
+  durationMs?: number;
+  styleName?: string;
+  fontName?: string;
+}
+
+// Serialize a VMobject's cubic-Bezier subpaths (VMobject.getSubpaths(),
+// already in the exact flat [anchor, c1,c2,end, ...] shape
+// parseDrawingCommands/parsePathToSubpaths use) to ASS \p drawing-command
+// text: "m x y" for each subpath's anchor, "b c1x c1y c2x c2y ex ey" for
+// each cubic segment. No explicit close command -- ASS (like SVG) fills a
+// subpath as implicitly closed, the same convention _renderDrawing's own
+// import path already relies on.
+function subpathsToDrawingCommands(subpaths: number[][][], scale: number, flipY: boolean): string {
+  const sy = flipY ? -scale : scale;
+  const n = (v: number): string => String(Math.round(v * 100) / 100);
+  const parts: string[] = [];
+  for (const sp of subpaths) {
+    if (sp.length < 1) continue;
+    parts.push(`m ${n(sp[0][0] * scale)} ${n(sp[0][1] * sy)}`);
+    const nc = Math.floor((sp.length - 1) / 3);
+    if (nc > 0) {
+      const bez: string[] = [];
+      for (let k = 0; k < nc; k++) {
+        const c1 = sp[3 * k + 1], c2 = sp[3 * k + 2], end = sp[3 * k + 3];
+        bez.push(`${n(c1[0] * scale)} ${n(c1[1] * sy)} ${n(c2[0] * scale)} ${n(c2[1] * sy)} ${n(end[0] * scale)} ${n(end[1] * sy)}`);
+      }
+      parts.push(`b ${bez.join(" ")}`);
+    }
+  }
+  return parts.join(" ");
+}
+
+/**
+ * Serialize a single static VMobject to a standalone `\p1` drawing-mode
+ * `.ass` file: fill from the shape's own `fillColor`, stroke from
+ * `strokeColor`+`strokeWidth`, centered in drawing-space on the shape's own
+ * `getCenter()` (so `\pos` places the shape's visual center, matching how
+ * most real \p content is authored) and Y-flipped (ecmanim world space is
+ * Y-up, ASS drawing space is Y-down like SVG).
+ */
+export function vmobjectToAssDrawing(shape: VMobject, config: AssDrawingExportConfig = {}): string {
+  const {
+    playResX = 1920, playResY = 1080, scale = 100,
+    pos = [playResX / 2, playResY / 2],
+    durationMs = 5000, styleName = "Default", fontName = "Arial",
+  } = config;
+
+  const center = shape.getCenter();
+  const subpaths = shape.getSubpaths().map((sp) => sp.map((p) => [p[0] - center[0], p[1] - center[1], 0]));
+  const drawing = subpathsToDrawingCommands(subpaths, scale, true);
+
+  const fillColor = formatAssColorBGR(shape.fillColor);
+  const fillAlphaByte = Math.round((1 - shape.fillOpacity) * 255).toString(16).padStart(2, "0").toUpperCase();
+  const outlineColor = formatAssColorBGR(shape.strokeColor);
+  const borderWidth = Math.max(0, shape.strokeWidth);
+
+  const lines = [
+    "[Script Info]",
+    "ScriptType: v4.00+",
+    `PlayResX: ${playResX}`,
+    `PlayResY: ${playResY}`,
+    "WrapStyle: 0",
+    "",
+    "[V4+ Styles]",
+    "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+    `Style: ${styleName},${fontName},50,${fillColor},&H0000FFFF&,${outlineColor},&H00000000,0,0,0,0,100,100,0,0,1,${borderWidth},0,7,10,10,10,1`,
+    "",
+    "[Events]",
+    "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    `Dialogue: 0,${formatAssTime(0)},${formatAssTime(durationMs)},${styleName},,0,0,0,,{\\pos(${pos[0]},${pos[1]})\\an7\\alpha&H${fillAlphaByte}&\\p1}${drawing}{\\p0}`,
+  ];
   return lines.join("\n") + "\n";
 }
