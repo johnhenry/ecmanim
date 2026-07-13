@@ -198,6 +198,7 @@ Render any of these with `node examples/<name>.ts` (writes to `examples/out/`):
 | `examples/voiceover.ts` | TTS-synced narration with `<bookmark>` cues ([docs/voiceover.md](docs/voiceover.md)) |
 | `examples/diagram.ts` | diagram-as-code + animated board transition via auto-matching ([docs/animation-presentation.md](docs/animation-presentation.md)) |
 | `examples/interchange.ts` | watermarked render + `.otio` + Lottie export ([docs/interchange.md](docs/interchange.md)) |
+| [`examples/ass-parity/`](examples/ass-parity/) | real ASS/SSA subtitle import (`loadASS`) + karaoke/shape `.ass` export ([docs/subtitles.md](docs/subtitles.md)) |
 | `examples/physics.ts` | analytic E-field + pendulum + bouncing rigid bodies ([docs/physics.md](docs/physics.md)) |
 | `examples/authoring.ts` | Format lifecycle → real render + plan-IR dry-run ([docs/authoring-studio.md](docs/authoring-studio.md)) |
 | `examples/browser/index.html` | browser Canvas-2D backend (live + WebM export) |

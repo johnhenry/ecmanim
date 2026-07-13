@@ -63,6 +63,8 @@ jobs:
             demos: "03-flocking-boids 05-l-system 06-game-of-life"
           - suite: reveal-slidev-parity
             demos: "01-markdown-deck 02-auto-animate-pair 03-code-walkthrough"
+          - suite: ass-parity
+            demos: "01-karaoke-sweep 02-drawing-sign 03-export-roundtrip"
     steps:
       - uses: actions/checkout@v4
 
