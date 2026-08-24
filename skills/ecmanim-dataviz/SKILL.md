@@ -19,7 +19,7 @@ before asserting an API shape not covered here. Everything below is exported
 from the top-level `ecmanim` package (no separate subpath):
 
 ```ts
-import { scaleLinear, forceSimulation, hierarchy, dataJoin, RadarChart, FourierPath } from "ecmanim";
+import { scaleLinear, forceSimulation, hierarchy, dataJoin, RadarChart, FourierPath } from "@johnhenry/ecmanim";
 ```
 
 ## Scales (`src/core/scales.ts`)

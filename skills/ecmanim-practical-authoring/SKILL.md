@@ -34,7 +34,7 @@ get to writing a scene:
   rather than assuming the working directory is.
 - Once installed, **sanity-check before writing any scene code**:
   ```bash
-  npx ecmanim checkhealth
+  npx -p @johnhenry/ecmanim ecmanim checkhealth
   ```
   This is also step zero in the root skill's loop — repeating it here because
   skipping it is the single most common false start: a missing `ffmpeg`/font
@@ -82,7 +82,7 @@ own `RasterText`/`Text` box-building calls the *same* function internally,
 so there's exactly one formula, not a maintained copy:
 
 ```ts
-import { estimateTextSize } from "ecmanim/node";
+import { estimateTextSize } from "@johnhenry/ecmanim/node";
 const { width, height } = estimateTextSize(myString, fontSize); // fast, approximate
 ```
 
@@ -109,7 +109,7 @@ eagerly instead of on first use, call `loadVectorFont()` (or its synchronous
 sibling `loadVectorFontSync()`) yourself:
 
 ```ts
-import { loadVectorFont, estimateTextSize } from "ecmanim/node";
+import { loadVectorFont, estimateTextSize } from "@johnhenry/ecmanim/node";
 await loadVectorFont("monospace"); // force a specific font pattern up front
 ```
 

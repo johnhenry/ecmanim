@@ -6,7 +6,7 @@ ecmanim delegates a number of jobs to things outside the package — system
 programs, optional npm packages, network APIs, a WASM module, system fonts.
 The pattern is the same everywhere: **probe lazily at the moment a feature
 needs the capability, fall back gracefully where a fallback exists**. This page
-is the index of every instance. Run `npx ecmanim checkhealth` for an eager
+is the index of every instance. Run `npx -p @johnhenry/ecmanim ecmanim checkhealth` for an eager
 all-at-once report of what your machine has.
 
 ## System programs (shelled out to; npm does not provide these)

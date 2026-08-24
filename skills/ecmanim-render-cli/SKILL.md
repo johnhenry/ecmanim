@@ -152,7 +152,7 @@ backends consume the same backend-agnostic `mobjects[]` tree.
   output isn't bit-reproducible across drivers) and capture is throttled to
   real wall-clock `fps`, so it takes at least as long as the scene's
   `runTime` to capture — not something to reach for on a fast inner loop.
-  Called from code (`import { renderGL } from "ecmanim/node"`), not from the
+  Called from code (`import { renderGL } from "@johnhenry/ecmanim/node"`), not from the
   `ecmanim` CLI. On trycooy specifically, `renderGL`/CDP Chrome is a
   shared machine-wide instance — take the `~/gpu.lock` convention before
   driving it (see the root skill / system CLAUDE.md).

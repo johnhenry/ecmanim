@@ -8,7 +8,7 @@ dependency-free; rigid-body uses a built-in engine by default (pluggable).
 ## Electromagnetic fields (analytic)
 
 ```js
-import { ElectricField, MagneticField } from "ecmanim";
+import { ElectricField, MagneticField } from "@johnhenry/ecmanim";
 scene.add(new ElectricField([
   { position: [-2, 0, 0], magnitude: 1 },   // + charge
   { position: [2, 0, 0], magnitude: -1 },    // − charge
@@ -23,7 +23,7 @@ is wanted.
 ## Waves
 
 ```js
-import { LinearWave, StandingWave } from "ecmanim";
+import { LinearWave, StandingWave } from "@johnhenry/ecmanim";
 scene.add(new LinearWave({ amplitude: 1, wavelength: 3, frequency: 1 }));   // y = A·sin(kx − ωt)
 scene.add(new StandingWave({ amplitude: 1, wavelength: 4 }));               // y = A·sin(kx)·cos(ωt)
 ```
@@ -34,7 +34,7 @@ sets it explicitly.
 ## Rigid-body
 
 ```js
-import { physics, Pendulum } from "ecmanim";
+import { physics, Pendulum } from "@johnhenry/ecmanim";
 const engine = physics(scene, { gravity: [0, -9.8, 0], floor: -3, restitution: 0.6 });
 engine.addBody(ball, { velocity: [1, 0, 0] });   // falls + bounces off the floor
 scene.add(new Pendulum({ length: 2, initialAngle: 0.9 })); // ODE-integrated each frame
@@ -67,7 +67,7 @@ npm i @dimforge/rapier2d-compat
 ```
 
 ```js
-import { rapier2d } from "ecmanim/physics/rapier2d";
+import { rapier2d } from "@johnhenry/ecmanim/physics/rapier2d";
 const engine = await rapier2d(scene, { gravity: [0, -9.8, 0], floor: -3 });
 engine.addBody(box, { velocity: [1, 0, 0], angularVelocity: 2 });
 ```
@@ -84,7 +84,7 @@ npm i @dimforge/rapier3d-compat
 ```
 
 ```js
-import { rapier3d } from "ecmanim/physics/rapier3d";
+import { rapier3d } from "@johnhenry/ecmanim/physics/rapier3d";
 const engine = await rapier3d(scene, { gravity: [0, -9.8, 0], floor: -3 });
 engine.addBody(cube, { velocity: [1, 0, 0], angularVelocity: [0, 2, 0] });
 ```

@@ -29,7 +29,7 @@ Exports a scene's `play()`/`wait()` segments as a frame-exact OTIO timeline
 EDL, or AAF via OTIO's own adapters, for conforming a rendered cut in an NLE.
 
 ```ts
-import { sceneToOtioString } from "ecmanim";
+import { sceneToOtioString } from "@johnhenry/ecmanim";
 import { writeFileSync } from "node:fs";
 
 // scene is a Scene instance that has already been render()ed (playRecords
@@ -63,7 +63,7 @@ same frame in, same world geometry out, in any call order — scrub-safe and
 render-cache-safe.
 
 ```ts
-import { loadLottie } from "ecmanim";
+import { loadLottie } from "@johnhenry/ecmanim";
 
 const anim = loadLottie(lottieJson, { width: 6, loop: true, speed: 1 });
 anim.attachTo(scene);           // adds a dt-driven clock updater + scene.add()
@@ -103,7 +103,7 @@ the `loadLottie` name; if you see `loadLottie` returning a bare `VMobject`/
 `VGroup` in older code or docs, that's this function under its old name.
 
 ```ts
-import { vmobjectToLottieJSON, loadLottieShapes } from "ecmanim";
+import { vmobjectToLottieJSON, loadLottieShapes } from "@johnhenry/ecmanim";
 
 const doc = vmobjectToLottieJSON(shape, { width: 512, height: 512, fps: 30 });
 // doc is a full Lottie animation document (write it out as .json)
@@ -142,7 +142,7 @@ Burns a text or image watermark into a rendered video via an ffmpeg filter,
 either as a `render()` option or as a standalone post-process step. Node-only.
 
 ```ts
-import { render } from "ecmanim/node";
+import { render } from "@johnhenry/ecmanim/node";
 
 await render(MyScene, {
   watermark: { text: "@channel", position: "bottom-right", opacity: 0.7 },
@@ -153,7 +153,7 @@ await render(MyScene, {
 
 ```ts
 // or apply to an already-rendered file, in place:
-import { applyWatermark } from "ecmanim/node";
+import { applyWatermark } from "@johnhenry/ecmanim/node";
 await applyWatermark("v.mp4", { text: "DRAFT", position: "center", opacity: 0.5 });
 ```
 
@@ -175,7 +175,7 @@ inspecting the output frame, not just the exit code. Image watermarks
 ## Real-TeX (dvisvgm) math backend
 
 ecmanim's default math backend (`MathTex`/`Tex`, `import { MathTex, Tex,
-initMathTex } from "ecmanim"`) renders LaTeX via **MathJax** (`mathjax-full`
+initMathTex } from "@johnhenry/ecmanim"`) renders LaTeX via **MathJax** (`mathjax-full`
 in Node's lite-DOM) — pure JS, zero system dependencies, and this remains the
 default for a reason: it works everywhere. For publication-grade output
 (full package support, `align` environments, exotic macros, or kerning that
@@ -183,7 +183,7 @@ must match real LaTeX exactly), an **opt-in** Node-only backend shells out to
 an actual TeX toolchain instead:
 
 ```ts
-import { mathTexDvisvgmOrFallback } from "ecmanim/node";
+import { mathTexDvisvgmOrFallback } from "@johnhenry/ecmanim/node";
 
 // Tries latex/pdflatex -> dvi/pdf -> dvisvgm --no-fonts -> SVG -> VMobjects.
 // Falls back to MathTex (MathJax) automatically if the toolchain is missing
@@ -197,7 +197,7 @@ await this.play(new Write(eq));
 Lower-level pieces, also from `"ecmanim/node"`:
 - `detectDvisvgmToolchain()` — probes PATH for `latex`/`pdflatex` and
   `dvisvgm`, returns `{ latex, pdflatex, dvisvgm, available }`. Check this
-  (or run `npx ecmanim checkhealth`, which reports the same) before assuming
+  (or run `npx -p @johnhenry/ecmanim ecmanim checkhealth`, which reports the same) before assuming
   the real backend will actually be used.
 - `texToSVGViaDvisvgm(tex, config)` — the raw string-to-SVG step; **throws** a
   descriptive "TeX toolchain not found" error if unavailable (does not

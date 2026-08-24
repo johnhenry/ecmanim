@@ -18,7 +18,7 @@ All physics mobjects are exported from the top-level `ecmanim` package (not a
 separate subpath):
 
 ```ts
-import { ElectricField, MagneticField, LinearWave, StandingWave, physics, Pendulum } from "ecmanim";
+import { ElectricField, MagneticField, LinearWave, StandingWave, physics, Pendulum } from "@johnhenry/ecmanim";
 ```
 
 ## Electromagnetic fields (analytic, dependency-free)
@@ -146,7 +146,7 @@ underlying engine's world and syncs positions back onto your mobjects, then
 hand an instance of it anywhere a `PhysicsEngineLike` is expected (e.g. drive
 it from the same carrier-updater pattern `SimpleEngine.attach()` uses, or step
 it manually inside your own `Scene.construct()` loop). There is no
-`import { PlanckEngine } from "ecmanim"` — check `docs/physics.md` and
+`import { PlanckEngine } from "@johnhenry/ecmanim"` — check `docs/physics.md` and
 `src/physics/rigid.ts`'s `PhysicsEngineLike`/`PhysicsEngineOptions` types
 before assuming otherwise.
 
@@ -158,7 +158,7 @@ self-advancing `Mobject` whose `.step(dt, ...)` you call yourself (typically
 from `addUpdater`), not something `physics()`'s carrier-updater auto-attaches.
 
 ```ts
-import { BoidsFlock, SoftBody } from "ecmanim";
+import { BoidsFlock, SoftBody } from "@johnhenry/ecmanim";
 
 const flock = new BoidsFlock({ count: 30, seed: 1, boidSize: 0.15 }); // Reynolds separation/alignment/cohesion
 scene.add(flock);

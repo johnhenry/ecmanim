@@ -19,7 +19,7 @@ to narration. Full reference: [../../docs/voiceover.md](../../docs/voiceover.md)
 ## Quickstart
 
 ```ts
-import { render, Scene, voiceover, Create, FadeIn } from "ecmanim/node";
+import { render, Scene, voiceover, Create, FadeIn } from "@johnhenry/ecmanim/node";
 
 class Narrated extends Scene {
   async construct() {
@@ -93,7 +93,7 @@ To tighten sync:
 ## Provider abstraction
 
 ```ts
-import { resolveTTSProvider, registerTTSProvider, getTTSProvider, listTTSProviders } from "ecmanim/node";
+import { resolveTTSProvider, registerTTSProvider, getTTSProvider, listTTSProviders } from "@johnhenry/ecmanim/node";
 ```
 
 A `TTSProvider` is `{ name, available(), synthesize(text, opts?) }`, where
@@ -122,7 +122,7 @@ narration text is a no-op after the first synthesis.
 ### Registering a custom provider
 
 ```ts
-import { registerTTSProvider } from "ecmanim/node";
+import { registerTTSProvider } from "@johnhenry/ecmanim/node";
 
 registerTTSProvider({
   name: "piper",
@@ -154,7 +154,7 @@ these are wired in — they're all "register your own provider" territory.
   the fallback chain and lands on `silent`, which needs no key and no
   binary except ffmpeg for the actual clip. Narration *pacing* (bookmarks,
   `vt.duration`) still works with `silent`; the rendered video is just mute.
-  Run `npx ecmanim checkhealth` to see what's actually available before
+  Run `npx -p @johnhenry/ecmanim ecmanim checkhealth` to see what's actually available before
   assuming a failure is a code bug.
 - **`silent` degrades again if ffmpeg is missing**: it still returns
   `{ file, durationSeconds }` with the *estimated* duration, but `file` won't

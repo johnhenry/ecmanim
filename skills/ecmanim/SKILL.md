@@ -39,7 +39,7 @@ Everything below applies regardless of which child skill is also in play.
 ## Quickstart
 
 ```ts
-import { render, Scene, Circle, Square, Transform, Create, BLUE, GREEN } from "ecmanim/node";
+import { render, Scene, Circle, Square, Transform, Create, BLUE, GREEN } from "@johnhenry/ecmanim/node";
 
 class Demo extends Scene {
   async construct() {
@@ -67,7 +67,7 @@ for `docs/primitives.md`).
 Before anything else, sanity-check the environment once per session:
 
 ```bash
-npx ecmanim checkhealth
+npx -p @johnhenry/ecmanim ecmanim checkhealth
 ```
 
 This reports Node/ffmpeg/ffprobe/canvas/fonts (required) plus system TTS, TeX,

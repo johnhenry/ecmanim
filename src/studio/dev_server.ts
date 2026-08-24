@@ -37,21 +37,21 @@ export interface StudioOptions {
 export function buildStudioHarness(opts: { sceneModuleUrl: string; sceneExport: string; browserUrl: string; studioUrl: string; quality: string; background: string; interactive: boolean; waveform?: boolean; props?: boolean }): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ecmanim Studio</title>
 <style>body{margin:0;background:#0b0d12;color:#cdd6f4;font:14px system-ui;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px}manim-player{max-width:96vw;box-shadow:0 4px 30px #0008}#bar{opacity:.7}</style>
-<script type="importmap">{"imports":{"ecmanim/browser":"${opts.browserUrl}","ecmanim/studio":"${opts.studioUrl}"}}</script></head>
+<script type="importmap">{"imports":{"@johnhenry/ecmanim/browser":"${opts.browserUrl}","@johnhenry/ecmanim/studio":"${opts.studioUrl}","ecmanim/browser":"${opts.browserUrl}","ecmanim/studio":"${opts.studioUrl}"}}</script></head>
 <body>
 <div id="bar">ecmanim Studio — editing <code>${opts.sceneExport}</code> · saves hot-reload${opts.interactive ? " · drag to pan/orbit, scroll to zoom" : ""}</div>
 <manim-player id="p" quality="${opts.quality}" background="${opts.background}" controls></manim-player>
 ${opts.waveform ? `<canvas id="waveform" style="display:block;margin-top:4px"></canvas>` : ""}
 ${opts.props ? `<div id="props" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px"></div>` : ""}
 <script type="module">
-  import { defineManimPlayer } from "ecmanim/browser";
+  import { defineManimPlayer } from "@johnhenry/ecmanim/browser";
   defineManimPlayer();
   const el = document.getElementById("p");
   ${opts.interactive ? `
   let detachInteractive = null;
   el.addEventListener("ready", async () => {
     detachInteractive?.detach();
-    const { attachInteractiveCamera } = await import("ecmanim/studio");
+    const { attachInteractiveCamera } = await import("@johnhenry/ecmanim/studio");
     const player = el.player;
     if (!player?.canvas || !player.camera) return;
     detachInteractive = attachInteractiveCamera(player.canvas, player.camera, {
@@ -72,7 +72,7 @@ ${opts.props ? `<div id="props" style="display:flex;flex-wrap:wrap;gap:10px;marg
     wctx.clearRect(0, 0, width, height);
     if (!player || !scene?.sounds?.length) return;
     const { getAudioData, getWaveformPortion } = await import("ecmanim/browser");
-    const { renderWaveform, timeToPixel } = await import("ecmanim/studio");
+    const { renderWaveform, timeToPixel } = await import("@johnhenry/ecmanim/studio");
     const axis = { duration: player.duration, pixelWidth: width };
     for (const sound of scene.sounds) {
       let audioData = waveformCache.get(sound.file);
@@ -144,7 +144,7 @@ ${opts.props ? `<div id="props" style="display:flex;flex-wrap:wrap;gap:10px;marg
     currentSchema = schema;
     propsPanel.innerHTML = "";
     if (!schema) return;
-    const { schemaToControls } = await import("ecmanim/studio");
+    const { schemaToControls } = await import("@johnhenry/ecmanim/studio");
     const defaults = schema.safeParse({});
     const values = defaults.ok ? defaults.value : {};
     for (const c of schemaToControls(schema)) {

@@ -28,7 +28,7 @@ npm run gallery:render-missing -- --limit 5              # try a few first, e.g.
 It renders sequentially at low quality (fast-ish, still 196 demos worth of
 work for a full run), keeps going past any single demo's failure, and skips
 anything that already has a video — safe to re-run, safe to interrupt with
-`^C` and resume later. If a demo fails, run `npx ecmanim checkhealth` first
+`^C` and resume later. If a demo fails, run `npx -p @johnhenry/ecmanim ecmanim checkhealth` first
 to rule out a missing system dependency (ffmpeg, `@napi-rs/canvas`, fonts) —
 see [docs/external-tools.md](../../docs/external-tools.md).
 

@@ -22,7 +22,7 @@ all) leaves children exactly where they were before, which usually means
 stacked on top of each other at whatever position they were constructed at.
 
 ```js
-import { FlexGroup, Square } from "ecmanim";
+import { FlexGroup, Square } from "@johnhenry/ecmanim";
 
 const row = new FlexGroup({
   direction: "row",

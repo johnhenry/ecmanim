@@ -26,7 +26,7 @@ for the richer, tag-based format specifically.
 ## Quickstart: import
 
 ```ts
-import { loadASS } from "ecmanim";
+import { loadASS } from "@johnhenry/ecmanim";
 import { readFileSync } from "node:fs";
 
 const subs = loadASS(readFileSync("movie.ass", "utf8"), { width: 13 });
@@ -92,7 +92,7 @@ karaoke `.ass` file — a soft-subtitle deliverable ecmanim doesn't otherwise
 have (burned-in captions are the only option without this):
 
 ```ts
-import { wordCaptionTrackToAss } from "ecmanim";
+import { wordCaptionTrackToAss } from "@johnhenry/ecmanim";
 import { writeFileSync } from "node:fs";
 
 const ass = wordCaptionTrackToAss(track, {

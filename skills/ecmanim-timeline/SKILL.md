@@ -27,7 +27,7 @@ pacing — overlapping entrances, a beat labeled and referenced later, or a
 "start 0.2s after the last thing ends" gap.
 
 ```ts
-import { Timeline } from "ecmanim";
+import { Timeline } from "@johnhenry/ecmanim";
 
 const tl = new Timeline({ defaults: { runTime: 0.6 } }); // fps? too, rarely needed
 tl.add(new Create(circle));
@@ -72,7 +72,7 @@ input** (no `Date.now`/`Math.random`), so they're safe to sample out of order
 under scrubbing or the render cache.
 
 ```ts
-import { wiggle, remap, ramp, compose } from "ecmanim";
+import { wiggle, remap, ramp, compose } from "@johnhenry/ecmanim";
 
 const bob = wiggle(0.3, 2.5, /* seed */ 7);      // amplitude, frequency(Hz), seed
 mob.addUpdater(() => mob.moveTo([0, bob(scene.time), 0]));
@@ -129,7 +129,7 @@ per-cell delay, **sort the mobjects by it**, then hand the sorted array to
 *order*, `LaggedStartMap`'s `lagRatio` supplies the even time-spacing:
 
 ```ts
-import { staggerGrid, LaggedStartMap, FadeIn } from "ecmanim";
+import { staggerGrid, LaggedStartMap, FadeIn } from "@johnhenry/ecmanim";
 
 function orderByStaggerGrid<T>(items: T[], grid: [number, number], from: "center" | "edges" | "random") {
   const delayOf = staggerGrid({ grid, from });
@@ -171,7 +171,7 @@ individually animatable per digit — from
 `src/mobject/vector_value_tracker.ts`.
 
 ```ts
-import { VectorDecimalNumber } from "ecmanim";
+import { VectorDecimalNumber } from "@johnhenry/ecmanim";
 
 const n = new VectorDecimalNumber(0, { numDecimalPlaces: 0, fontSize: 0.8 });
 counter.addUpdater(() => n.setValue(tracker.getValue())); // edge stays pinned
@@ -198,7 +198,7 @@ From `src/core/presets.ts`, consumed by `render()`/`renderStill()` in
 `ecmanim/node`:
 
 ```ts
-import { render } from "ecmanim/node";
+import { render } from "@johnhenry/ecmanim/node";
 await render(MyScene, { style: "3b1b-dark", aspectRatio: "9:16", quality: "high" });
 ```
 
@@ -232,7 +232,7 @@ specific beat without a full video render — prefer it over full renders during
 iteration (per the root skill's Render step):
 
 ```ts
-import { renderStill } from "ecmanim/node";
+import { renderStill } from "@johnhenry/ecmanim/node";
 await renderStill(MyScene, { output: "poster.png", time: 1.5 }); // or { frame: 45 }
 ```
 
@@ -245,7 +245,7 @@ The composition registry (`src/scene/compositions.ts`) lets tooling enumerate
 renderable scenes, similar to Remotion's `<Composition>` list:
 
 ```ts
-import { registerComposition, compositionsToJSON, getComposition, listCompositions } from "ecmanim";
+import { registerComposition, compositionsToJSON, getComposition, listCompositions } from "@johnhenry/ecmanim";
 
 registerComposition("intro", IntroScene, { fps: 30, width: 1920, height: 1080 });
 compositionsToJSON(); // -> [{ name, description, fps, width, height, durationInFrames, schema, defaultParams }]

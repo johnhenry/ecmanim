@@ -11,7 +11,7 @@ to OTIO JSON — round-trips to DaVinci Resolve / Premiere / FCPXML / EDL / AAF 
 OTIO's adapters.
 
 ```js
-import { sceneToOtioString, sceneToOtio, toOtioJSON, fromOtioJSON } from "ecmanim";
+import { sceneToOtioString, sceneToOtio, toOtioJSON, fromOtioJSON } from "@johnhenry/ecmanim";
 writeFileSync("out.otio", sceneToOtioString(scene, { name: "demo", mediaUrl: "out.mp4" }));
 ```
 
@@ -26,7 +26,7 @@ not a full project interchange.
 ## Lottie import/export
 
 ```js
-import { vmobjectToLottieJSON, loadLottie } from "ecmanim";
+import { vmobjectToLottieJSON, loadLottie } from "@johnhenry/ecmanim";
 const doc = vmobjectToLottieJSON(shape, { width: 512, height: 512 });  // -> a .json Lottie
 const mob = loadLottie(existingLottieJson);                            // -> a VMobject
 ```
@@ -48,10 +48,10 @@ is negated on export/import.
 ## Watermark
 
 ```js
-import { render } from "ecmanim/node";
+import { render } from "@johnhenry/ecmanim/node";
 await render(MyScene, { watermark: { text: "@channel", position: "bottom-right", opacity: 0.7 } });
 // or an image logo: { image: "logo.png", position: "top-left", opacity: 0.9 }
-// or standalone: import { applyWatermark } from "ecmanim/node"; await applyWatermark("v.mp4", {...});
+// or standalone: import { applyWatermark } from "@johnhenry/ecmanim/node"; await applyWatermark("v.mp4", {...});
 ```
 
 Positions: `top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`.

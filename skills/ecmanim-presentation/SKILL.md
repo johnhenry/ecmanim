@@ -27,7 +27,7 @@ Author two independent mobject states (don't try to mutate one into the
 other yourself) and let the engine pair up pieces and tween the deltas:
 
 ```js
-import { TransformMatchingAuto } from "ecmanim";
+import { TransformMatchingAuto } from "@johnhenry/ecmanim";
 
 circle.matchId = "hero";
 bigCircle.matchId = "hero";   // same id across states = "same element"
@@ -134,7 +134,7 @@ GSAP-parity gap-fill) drive playback from page scroll position instead of
 real time — a small subset of GSAP ScrollTrigger's scrub/pin core:
 
 ```js
-import { bindPlayerToScroll } from "ecmanim"; // isomorphic export; throws if called outside a browser
+import { bindPlayerToScroll } from "@johnhenry/ecmanim"; // isomorphic export; throws if called outside a browser
 
 const binding = bindPlayerToScroll(player, {
   trigger: document.querySelector("#scroll-spacer"),
@@ -182,7 +182,7 @@ browser entry points.
 ## 3. Diagram-as-code
 
 ```js
-import { diagram, parseDiagram, buildBoard, TransformMatchingAuto } from "ecmanim";
+import { diagram, parseDiagram, buildBoard, TransformMatchingAuto } from "@johnhenry/ecmanim";
 
 const board = diagram(`
   A[Start]
@@ -249,7 +249,7 @@ FLIP animates the SAME mobjects between two of their own states, not two
 independent constructed states matched by id:
 
 ```js
-import { flipGetState, flipFrom } from "ecmanim";
+import { flipGetState, flipFrom } from "@johnhenry/ecmanim";
 
 const state = flipGetState([card1, card2, card3]);  // capture BEFORE the jump
 // ...make the instant change: card1.moveTo(newSlot), card2.scale(2), etc.
@@ -276,7 +276,7 @@ layout switching; a leading `---`-delimited frontmatter block is skipped,
 not parsed).
 
 ```js
-import { deckFromMarkdown, render } from "ecmanim/node"; // deckFromMarkdown itself is isomorphic, exported from root "ecmanim" too
+import { deckFromMarkdown, render } from "@johnhenry/ecmanim/node"; // deckFromMarkdown itself is isomorphic, exported from root "ecmanim" too
 
 const construct = deckFromMarkdown(markdownSource, {
   autoAnimate: true,       // Scene.autoAnimateToNextSection() between slides instead of a hard cut (default false)
