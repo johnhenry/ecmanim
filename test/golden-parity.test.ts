@@ -1,4 +1,4 @@
-// Golden-frame regression checks for the 33 CI-representative parity-campaign
+// Golden-frame regression checks for the CI-representative parity-campaign
 // demos (see golden-parity-demos.ts). Unlike snapshot.test.ts, this never
 // renders anything itself -- it only compares an ALREADY-RENDERED demo's mp4
 // against a committed golden frame, and skips (not fails) any demo that

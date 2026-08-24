@@ -38,8 +38,8 @@ class Demo extends Scene {
     sq.moveTo([3, -0.5, 0]);
     await this.play(new Create(poly), new Create(sq));
     await this.play(
-      Rotate(poly, Math.PI),
-      Transform(sq, new Circle({ radius: 1.3, color: RED, fillColor: RED, fillOpacity: 0.4 }).moveTo([3, -0.5, 0])),
+      new Rotate(poly, Math.PI),
+      new Transform(sq, new Circle({ radius: 1.3, color: RED, fillColor: RED, fillOpacity: 0.4 }).moveTo([3, -0.5, 0])),
     );
     await this.wait(0.4);
     await this.play(new FadeOut(poly), new FadeOut(sq), new FadeOut(title));
@@ -48,7 +48,26 @@ class Demo extends Scene {
 
 const canvas = document.getElementById('stage');
 const run = () => play(Demo, { canvas, quality: 'medium', background: '#0d1117' });
-run();
+
+// Loop: the scene ends on a FadeOut, so a single pass leaves an empty
+// canvas for anyone who arrives a few seconds late. Re-running keeps the
+// homepage demo showing something. `loop` guards against overlapping runs
+// if a manual replay lands mid-cycle.
+let looping = false;
+const loop = async () => {
+  if (looping) return;
+  looping = true;
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      await run();
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+  } finally {
+    looping = false;
+  }
+};
+loop();
 document.getElementById('replay').addEventListener('click', run);
 document.getElementById('download').addEventListener('click', async () => {
   const blob = await record(Demo, { quality: 'high', background: '#0d1117' });

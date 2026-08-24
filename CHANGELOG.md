@@ -1,5 +1,137 @@
 # Changelog
 
+## Unreleased
+
+ASS/SSA subtitle campaign, complete: v1 + v1.5 + v2 import, and both export
+directions (`wordCaptionTrackToAss`, `vmobjectToAssDrawing`). Mirrors the
+Lottie campaign's shape: a pure-parsing loader (`src/loaders/ass_loader.ts`)
++ a pure-function-of-time mobject player (`src/mobject/ass_mobject.ts`),
+"never throw, degrade + warn" contract. Remaining work is documentation/CI
+integration only (skill doc, `docs/subtitles.md`, gallery + CI wiring).
+
+### Added
+- **v1 core tags** (previously landed without a changelog entry — recorded
+  here for the record): `[Script Info]`/`[V4+ Styles]` + legacy `[V4 Styles]`
+  (SSA) alignment remap, `\pos`, `\move`, `\an`(+legacy `\a`)+margins, `\fad`,
+  `\fade`, `\c`/`\1c`-`\4c`+`\alpha`/`\1a`-`\4a`, `\fscx`/`\fscy`/`\fs`/`\fn`
+  (fallback+warn), `\b`/`\i`/`\u`/`\s`, `\frz`/`\fr` (bbox-center pivot),
+  `\bord`/`\shad`, `\k` (instant karaoke), `\r`/`\r[Name]`, `\N`/`\n`+
+  WrapStyle, greedy word-wrap. 14 synthetic fixtures + golden-frame tests,
+  20 loader unit tests.
+- **v1.5: time-varying composition.** `\t(t1,t2[,accel],tags)` transform
+  composition (numeric/color fields; overlapping windows on the same
+  property compose last-window-wins, a documented approximation of
+  libass's additive blend); rectangular `\clip`/`\iclip(x1,y1,x2,y2)` via
+  the same `CompositeGroup`+`destination-in`/`-out` mechanism
+  `LottieMobject` uses for masks (vector-drawing-shape `\clip`/`\iclip`
+  is recognized and warned about by name, not silently dropped — it needs
+  v2's drawing parser); `\org(x,y)` explicit rotate/shear pivot (corrects
+  v1's `\frz`-only bbox-center approximation); `\fax`/`\fay` shear;
+  `\be`/`\blur`. **`\kf`/`\K`/`\ko` sweep karaoke**: `\K` is normalized to
+  `\kf` (a documented libass/Aegisub alias for continuous sweep, *not* an
+  instant-swap sibling of lowercase `\k`); the active syllable renders as a
+  secondary-colored base plus a primary-colored overlay clipped to the
+  sampled per-frame sweep fraction, reusing the `\clip` mask mechanism.
+  `\ko` (outline-only sweep) is approximated as an instant color swap
+  rather than a true stroke-only sweep — real-world `\ko` usage is rare
+  enough that a second fill/stroke-split rendering pipeline wasn't worth
+  building at this stage. 7 new synthetic fixtures (`\t`, rect `\clip`/
+  `\iclip`, vector-clip-warns, `\kf`+`\K`-alias, `\ko`, `\org`+shear,
+  `\blur`/`\shad`) + golden-frame tests, plus unit coverage for karaoke
+  `kind` normalization, sweep-fraction math, and `evalClipRect`'s
+  rectangular-vs-vector-form split.
+- **v2: vector-drawing engine.** `parseDrawingCommands(raw, scaleExponent)`
+  tokenizes ASS's `\p<n>` drawing mini-language (`m`/`l`/`b`/`s`/`p`/`c`,
+  space-separated — NOT SVG syntax) into the same `number[][][]` subpath
+  shape `svg_path.ts`'s `parsePathToSubpaths` emits, so `subpathsToVMobject`
+  (same file) is reused **verbatim** for `\p` dialogue lines — zero changes
+  to that file. `uniformBSplineToBezier` (the one genuinely new math
+  primitive `\s`/`p` b-spline commands need) is derived from the canonical
+  uniform-cubic-B-spline blending function — not a remembered libass
+  detail — and locked down with a hand-computed collinear-control-points
+  unit test *before* any golden-frame PNG was built on top of it, per the
+  plan's explicit caution. `\p<n>` drawing-mode dialogue lines now render
+  as a `VMobject` (fill from `\c`/PrimaryColour, stroke from `\3c`/
+  `OutlineColour`+`\bord`, rotation/shear/blur reusing the same
+  `_applyOrgTransform`/`Mobject.blur()` machinery text runs use); a
+  drawing's own `(0,0)` origin maps directly to the line's `\pos`/alignment
+  anchor point (a documented simplification of the real alignment-vs-bbox
+  interaction libass uses — most real `\p` content pairs `\an7`+`\pos` for
+  exactly this top-left-origin placement anyway). 2 new synthetic fixtures
+  (a positioned/rotated drawing "sign"; a closed b-spline blob) + golden-
+  frame tests, plus loader-level unit coverage for the tokenizer, the
+  scale-exponent conversion, and `uniformBSplineToBezier`'s segment count/
+  continuity/n=3-fallback/n<3-empty behavior.
+- **Export: `wordCaptionTrackToAss(track, config?)`** (`src/interchange/ass.ts`)
+  serializes a `WordCaptionTrack`'s word-timed pages to a karaoke `.ass`
+  file — one `Dialogue:` line per page, one `\k<centiseconds>` syllable per
+  token, using the track's own per-token `{fromMs, toMs, text}` timing
+  directly (ms→centiseconds, hex color BGR-reorder — no new animation math).
+  Scoped honestly as a caption/typography-layer interchange, not a general
+  ecmanim-scene exporter (same disclaimer `interchange/lottie.ts`'s header
+  already states for its own "static geometry" scope) — ASS's animation
+  vocabulary has no equivalent for spring dynamics, custom rate functions,
+  or point-correspondence morphing, so only caption timing/color/text round-
+  trips. Produces a real soft-subtitle deliverable (plays over the raw,
+  unburned mp4 in any libass-capable player) that ecmanim didn't have before
+  (captions were burn-in only), and hands off cleanly to Aegisub for manual
+  polish. Verified end-to-end, not just structurally: the exported string
+  round-trips through this campaign's own `parseASS`/`loadASS` cleanly (no
+  tag-parsing warnings) and a rendered still of the round-tripped file shows
+  the correct instant-swap karaoke sweep matching the source timing.
+- **Export: `vmobjectToAssDrawing(shape, config?)`** (same file) serializes
+  a single static `VMobject` (a title card, an icon, a simple logo) to a
+  standalone `\p1` drawing-mode `.ass` file. `VMobject.getSubpaths()`
+  already returns the exact same flat cubic-point-list shape
+  `parseDrawingCommands`/`parsePathToSubpaths` use, so this is directly the
+  *inverse* serializer of v2's own parser (`m`/`b` commands only — no
+  `\s` b-spline emission, since round-tripping an arbitrary cubic path
+  through a lossy uniform-B-spline fit isn't attempted). Geometry is
+  centered on the shape's own `getCenter()` before scaling (so `\pos`
+  places the shape's visual center, the same convention most real `\p`
+  content authors by hand) and Y-flipped (ecmanim world space is Y-up, ASS
+  drawing space is Y-down). Fill/stroke/opacity come directly from the
+  `VMobject`'s own `fillColor`/`strokeColor`/`strokeWidth`/`fillOpacity`.
+  Explicitly scoped to a **single static shape** — ASS interpolates tag
+  parameters (affine transforms of one fixed path), never vertex-by-vertex
+  path morphing, so this is not an "export any ecmanim animation" tool
+  (same `interchange/lottie.ts`-style disclaimer as `wordCaptionTrackToAss`
+  above). Verified with hand-computed corner geometry (a rectangle's 4
+  corners land at the exact expected scaled/flipped coordinates), a color/
+  alpha round-trip through `parseASS`, and a rendered-still pixel sample
+  confirming the exported drawing actually fills the expected color at the
+  frame center — not just that the string looks plausible.
+
+### Fixed
+- **`\bord`/`\shad`/`\blur`/`\be` were scaled into the wrong unit space and
+  rendered imperceptibly (or not at all) at any realistic tag value,
+  including in the already-shipped v1 goldens.** `_buildRunText` converted
+  these PlayRes-pixel tag values through `_k`, the PlayRes→**world-unit**
+  scale used everywhere else on this class (font size, positions) — but
+  `Mobject.strokeWidth`/`.blur()`/`.dropShadow()` and the renderer's
+  `strokeScale()` (`src/renderer/CanvasRenderer.ts`) expect values in a
+  **"roughly px at 1080p"** reference space instead (confirmed against
+  `lottie_mobject.ts`'s `STROKE_PX_PER_WORLD_UNIT = 1080/8` precedent for
+  the same conversion). Routing through `_k` produced world-unit-sized
+  numbers (~0.01) that `strokeScale()` then shrank *again* to a fraction of
+  a device pixel — every v1 fixture's default `Outline`/`Shadow` style
+  columns (all non-zero) were silently rendering with no visible border or
+  shadow at all, and `\blur60` in a smoke test showed zero softening. Found
+  by explicitly rendering `\blur60`/`\shad60` stills and seeing literally no
+  effect, then confirmed independently against a plain (non-ASS) `Text`/
+  `Rectangle` with `.blur()` to rule out a renderer-wide regression before
+  concluding it was this file's own unit-conversion bug. Fixed with a new
+  `_refPx(playResPx)` helper (`playResPx * (1080 / resY)`) used for all
+  three tags; regenerated all 26 affected v1 golden PNGs after visually
+  confirming the corrected renders show a plausible, subtle outline/shadow
+  halo rather than the previous flat, borderless text.
+- **`parseDrawingCommands` crashed on a dangling odd coordinate** (e.g. a
+  truncated `l 10` with no `y`) instead of tolerating it — found while
+  writing the "never throw on malformed input" unit tests this file's other
+  parsing functions already have. Fixed by having the point reader bail
+  with `null` (discarding the dangling number) rather than reading past the
+  token list.
+
 ## 0.11.2 — 2026-07-11
 
 ### Fixed

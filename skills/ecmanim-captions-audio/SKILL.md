@@ -15,6 +15,13 @@ karaoke) and **audio-reactive** visuals (`@remotion/media-utils`-style FFT).
 Full detail: [../../docs/captions-audio.md](../../docs/captions-audio.md) —
 read it before asserting an API shape; this file only orients you.
 
+**Looking for the richer tag-based ASS/SSA format instead** (fansub-style
+typesetting: per-run position/rotation/color/karaoke-sweep override tags,
+a vector-drawing mini-language for sign/logo redraws) — either playing back
+a real `.ass`/`.ssa` file or exporting ecmanim captions/shapes *to* one? See
+`ecmanim-subtitles` — this skill's own `CaptionTrack`/`WordCaptionTrack` are
+plain-timing (SRT-level fidelity), not a tag-language player.
+
 ## Captions
 
 Everything lives in `src/captions/` and is exported from the package root:

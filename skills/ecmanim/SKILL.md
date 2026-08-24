@@ -23,6 +23,7 @@ or the target project's `.claude/skills/`.
 |---|---|
 | Sequencing/timing grammar, expression-driven properties (wiggle/remap), GSAP-style stagger distributions + text word/line splitting, a vector-glyph number counter, style/aspect-ratio presets, rendering a single still frame | `ecmanim-timeline` |
 | Burned-in or overlay captions (SRT, karaoke, TikTok-style), audio-reactive visuals (FFT/waveform) | `ecmanim-captions-audio` |
+| Importing/playing a real `.ass`/`.ssa` subtitle file (fansub-style typesetting: positioning, karaoke sweep, drawing-mode signs), or exporting ecmanim captions/shapes *to* `.ass` | `ecmanim-subtitles` |
 | Narration: `voiceover()`, bookmarks, TTS providers | `ecmanim-voiceover` |
 | Auto shared-element transforms between states (incl. GSAP-style FLIP), slide/section presenter controls, markdown-authored decks, diagram-as-code (a small custom DSL, plus a real headless-Mermaid loader) | `ecmanim-presentation` |
 | Playing back a real animated Lottie file, or a static Lottie shape import/export bridge, exporting OTIO timelines, real-TeX (LaTeX) math, watermarking | `ecmanim-interchange` |

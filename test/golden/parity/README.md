@@ -1,11 +1,21 @@
 # Parity-campaign golden frames
 
 One PNG per demo in [`../../golden-parity-demos.ts`](../../golden-parity-demos.ts)
-(the same 33 demos `.github/workflows/ci.yml`'s `demo-smoke` matrix already
+(the same demos `.github/workflows/ci.yml`'s `demo-smoke` matrix already
 renders — 3 per campaign). Each is a single frame (50% through the demo's
 duration) extracted from that demo's real rendered `.mp4`, checked by
 [`../../golden-parity.test.ts`](../../golden-parity.test.ts) via
 [`../../_parity_snapshot_util.ts`](../../_parity_snapshot_util.ts).
+
+**`ass-parity`'s 3 goldens are lower-risk than the rest of this directory**:
+none of its fixtures name a font this environment (or CI's `fonts-dejavu-core`)
+actually resolves, so every one of them falls back to ecmanim's own bundled
+default *vector* font — the same deterministic path the tight-tolerance
+`test/golden/ass/` goldens already use, not real system-font
+hinting/antialiasing. If CI's font stack ever does resolve one of these
+fixtures' font names, that demo's rendering (and tolerance needs) would
+change — re-baseline it the same way as any other drift, per the procedure
+below.
 
 ## Why this exists
 

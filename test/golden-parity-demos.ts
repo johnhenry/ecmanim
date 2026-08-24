@@ -48,4 +48,7 @@ export const GOLDEN_PARITY_DEMOS: ParityDemoRef[] = [
   { suite: "reveal-slidev-parity", demo: "01-markdown-deck" },
   { suite: "reveal-slidev-parity", demo: "02-auto-animate-pair" },
   { suite: "reveal-slidev-parity", demo: "03-code-walkthrough" },
+  { suite: "ass-parity", demo: "01-karaoke-sweep" },
+  { suite: "ass-parity", demo: "02-drawing-sign" },
+  { suite: "ass-parity", demo: "03-export-roundtrip" },
 ];
