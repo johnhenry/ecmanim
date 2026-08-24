@@ -1,6 +1,6 @@
 {
   "name": "@johnhenry/ecmanim",
-  "version": "0.12.0",
+  "version": "0.0.0",
   "description": "A JavaScript port of manim (Mathematical Animation Engine). Runs in Node (renders to MP4 via ffmpeg) and in the browser (live canvas + WebM export).",
   "type": "module",
   "repository": {
