@@ -26,7 +26,7 @@ purely delegating to that class's existing named method
 `SVGRenderer.renderToString`, all unchanged and still the primary API):
 
 ```js
-import { CanvasRenderer, SVGRenderer } from "ecmanim";
+import { CanvasRenderer, SVGRenderer } from "@johnhenry/ecmanim";
 
 function drawWith(renderer, mobjects) {
   renderer.renderFrame(mobjects); // works the same across all three backends
@@ -83,7 +83,7 @@ editable.
 ### Node (`format: "svg"`)
 
 ```js
-import { render } from "ecmanim/node";
+import { render } from "@johnhenry/ecmanim/node";
 
 // A single final frame -> one .svg
 await render(MyScene, { output: "out.svg", format: "svg", saveLastFrame: true });
@@ -97,7 +97,7 @@ await render(MyScene, { output: "out.svg", format: "svg" });
 Available from the core entry (works in Node and the browser):
 
 ```js
-import { Camera, SVGRenderer, mobjectsToSVG } from "ecmanim";
+import { Camera, SVGRenderer, mobjectsToSVG } from "@johnhenry/ecmanim";
 
 const camera = new Camera({ pixelWidth: 1920, pixelHeight: 1080 });
 const svg = new SVGRenderer(camera, { precision: 2, background: "#0d1117" });
@@ -138,7 +138,7 @@ browser is used only as a WebGL host.
 ### Usage
 
 ```js
-import { renderGL } from "ecmanim/node";
+import { renderGL } from "@johnhenry/ecmanim/node";
 
 const res = await renderGL({
   sceneModule: "scenes/my-gl-scene.ts", // browser-importable ES module (runs in the page)

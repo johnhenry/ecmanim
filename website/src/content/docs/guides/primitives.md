@@ -14,7 +14,7 @@ Pure, deterministic (order-independent) functions of time — drive any property
 from an updater. `wiggle` is value-noise, safe under scrubbing.
 
 ```js
-import { wiggle, remap, ramp, compose } from "ecmanim";
+import { wiggle, remap, ramp, compose } from "@johnhenry/ecmanim";
 const bob = wiggle(0.3, 2.5, /*seed*/ 7);      // ±0.3, ~2.5 Hz
 mob.addUpdater(() => mob.moveTo([0, bob(scene.time), 0]));
 const toScale = remap(0, 100, 0.5, 1.5);        // map a value range → scale
@@ -26,7 +26,7 @@ Place animations with a compact grammar, then `build()` one animation for
 `scene.play()` — no manual `t` bookkeeping.
 
 ```js
-import { Timeline } from "ecmanim";
+import { Timeline } from "@johnhenry/ecmanim";
 const tl = new Timeline({ defaults: { runTime: 0.6 } });
 tl.add(new Create(circle));
 tl.add(new Create(square), "<");      // start together with the previous
@@ -47,7 +47,7 @@ end), `"<"`/`"<n"`/`"<-n"` (previous start ± offset), `">"`/`">n"`/`">-n"`
 reaching into internals):
 
 ```js
-import { Repeat } from "ecmanim";
+import { Repeat } from "@johnhenry/ecmanim";
 await scene.play(new Repeat(new Indicate(circle), { count: 3, yoyo: true, repeatDelay: 0.2 }));
 ```
 
@@ -60,7 +60,7 @@ model) — `count: Infinity` throws.
 for `LaggedStartMap`'s `(mobject, index, total)` factory signature:
 
 ```js
-import { cycle, staggerRange, LaggedStartMap } from "ecmanim";
+import { cycle, staggerRange, LaggedStartMap } from "@johnhenry/ecmanim";
 const colorOf = cycle(["#E8833A", "#58C4DD", "#83C167"]);
 const delayOf = staggerRange(0, 1);
 scene.play(new LaggedStartMap(
@@ -77,7 +77,7 @@ scene.play(new LaggedStartMap(
 optionally, a suggested `runTime` — an explicit `config.runTime` always wins:
 
 ```js
-import { crossFade, springTiming, linearTiming } from "ecmanim";
+import { crossFade, springTiming, linearTiming } from "@johnhenry/ecmanim";
 await scene.play(crossFade(a, b, { timing: springTiming(), fps: scene.fps }));
 await scene.play(crossFade(a, b, { timing: linearTiming(smooth) })); // == today's default
 ```
@@ -92,7 +92,7 @@ Unlike every other easing tool here (which compiles to an opaque function),
 keyframes directly and `valueAt(t)` reflects it immediately.
 
 ```js
-import { KeyframeTrack, PlayKeyframeTrack, animateSignal } from "ecmanim";
+import { KeyframeTrack, PlayKeyframeTrack, animateSignal } from "@johnhenry/ecmanim";
 
 const track = new KeyframeTrack([
   { t: 0, value: 1 },
@@ -119,7 +119,7 @@ coordinate system, reusing the exact construction `Axes.plot()` uses so
 fidelity matches a curve plotted directly against the target:
 
 ```js
-import { Axes, PolarPlane, Transform, reprojectCurve } from "ecmanim";
+import { Axes, PolarPlane, Transform, reprojectCurve } from "@johnhenry/ecmanim";
 const curve = axes.plot((x) => x * x); // stamps a hidden _domainSamples tag
 const onPolar = reprojectCurve(curve, polarPlane); // reads the tag automatically
 await scene.play(new Transform(curve.copy(), onPolar));
@@ -134,7 +134,7 @@ A live number as crisp vector glyph outlines (SVG-friendly, digits individually
 animatable), mirroring `DecimalNumber` formatting + edge-fix.
 
 ```js
-import { VectorDecimalNumber } from "ecmanim";
+import { VectorDecimalNumber } from "@johnhenry/ecmanim";
 const n = new VectorDecimalNumber(0, { numDecimalPlaces: 0, fontSize: 0.8 });
 counter.addUpdater(() => n.setValue(tracker.getValue())); // edge stays pinned
 ```
@@ -142,7 +142,7 @@ counter.addUpdater(() => n.setValue(tracker.getValue())); // edge stays pinned
 ## Style + aspect-ratio presets
 
 ```js
-import { render } from "ecmanim/node";
+import { render } from "@johnhenry/ecmanim/node";
 await render(MyScene, { style: "3b1b-dark", aspectRatio: "9:16", quality: "high" });
 ```
 
@@ -155,7 +155,7 @@ dimensions. Explicit `background`/`pixelWidth`/… still win. `resolveStyle` /
 Register your own named preset the same way plugins register colors/rate-functions/mobjects:
 
 ```js
-import { registerStylePreset } from "ecmanim";
+import { registerStylePreset } from "@johnhenry/ecmanim";
 registerStylePreset("my-brand", {
   name: "my-brand",
   background: "#0d1117",
@@ -170,10 +170,10 @@ await render(MyScene, { style: "my-brand" });
 ## renderStill + composition registry
 
 ```js
-import { renderStill } from "ecmanim/node";
+import { renderStill } from "@johnhenry/ecmanim/node";
 await renderStill(MyScene, { output: "poster.png", time: 1.5 }); // or { frame: 45 }
 
-import { registerComposition, compositionsToJSON } from "ecmanim";
+import { registerComposition, compositionsToJSON } from "@johnhenry/ecmanim";
 registerComposition("intro", IntroScene, { fps: 30, width: 1920, height: 1080 });
 // compositionsToJSON() -> enumerable renderable scenes (with params schema)
 ```

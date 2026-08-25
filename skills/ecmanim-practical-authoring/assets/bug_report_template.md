@@ -2,7 +2,7 @@
 title: "Bug: <one-line symptom, in backticks where it's a literal error/API name>"
 labels: []
 severity: "" # blocking (no workaround found) | major (workaround exists, but affects a documented happy path) | minor (narrow/cosmetic)
-version: "" # `npx ecmanim checkhealth` or `require("ecmanim/package.json").version`
+version: "" # `npx -p @johnhenry/ecmanim ecmanim checkhealth` or `require("ecmanim/package.json").version`
 regression: "" # "yes, worked in <version>" | "no, first time this path was exercised" | "unknown"
 ---
 

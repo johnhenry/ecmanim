@@ -5,7 +5,7 @@ title: "Voiceover / TTS-synced narration"
 Phase-3 adoption (manim-voiceover style). Exported from `ecmanim/node`.
 
 ```js
-import { render, voiceover, Scene, Circle, Square, Create, FadeIn } from "ecmanim/node";
+import { render, voiceover, Scene, Circle, Square, Create, FadeIn } from "@johnhenry/ecmanim/node";
 
 class Narrated extends Scene {
   async construct() {

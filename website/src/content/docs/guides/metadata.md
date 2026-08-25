@@ -23,7 +23,7 @@ Every function takes a `VideoMetaInput` — supply what you have; unknown fields
 are omitted. A Node `render()` result carries most of it:
 
 ```js
-import { render, toVideoObject, toIIIFManifest } from "ecmanim/node";
+import { render, toVideoObject, toIIIFManifest } from "@johnhenry/ecmanim/node";
 
 const r = await render(MyScene, { output: "demo.mp4", fps: 30 });
 // r = { output, frames, fps, pixelWidth, pixelHeight, sections, ... }
@@ -50,7 +50,7 @@ const jsonld = toVideoObject(input);
 //   contentUrl, width, height, hasPart:[{ "@type":"Clip", … }], creator:{…}, … }
 
 // or a ready-to-embed <script> tag:
-import { toVideoObjectScript } from "ecmanim";
+import { toVideoObjectScript } from "@johnhenry/ecmanim";
 page.head += toVideoObjectScript(input);
 ```
 
@@ -88,7 +88,7 @@ object, or a URL with `{ iiif: true }` — resolves the video body URL, and
 attaches the manifest's chapters to the returned mobject:
 
 ```js
-import { loadVideo } from "ecmanim/node";       // or "ecmanim/browser"
+import { loadVideo } from "@johnhenry/ecmanim/node";       // or "ecmanim/browser"
 
 const clip = await loadVideo(manifest, { fps: 30 });          // object form
 const clip2 = await loadVideo(manifestUrl, { iiif: true });   // fetch + parse

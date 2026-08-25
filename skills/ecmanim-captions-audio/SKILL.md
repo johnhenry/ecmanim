@@ -27,8 +27,8 @@ plain-timing (SRT-level fidelity), not a tag-language player.
 Everything lives in `src/captions/` and is exported from the package root:
 
 ```ts
-import { parseSrt, serializeSrt, createTikTokStyleCaptions, captionAt, CaptionTrack } from "ecmanim";
-import type { Caption, CaptionToken, CaptionPage } from "ecmanim";
+import { parseSrt, serializeSrt, createTikTokStyleCaptions, captionAt, CaptionTrack } from "@johnhenry/ecmanim";
+import type { Caption, CaptionToken, CaptionPage } from "@johnhenry/ecmanim";
 ```
 
 - **`parseSrt(srt: string): Caption[]`** — one `Caption` per SRT cue:
@@ -88,8 +88,8 @@ Everything lives in `src/audio/` (`analyze.ts` for decode + audio-domain
 math, `fft.ts` for the raw transform) and is exported from the package root:
 
 ```ts
-import { getAudioData, visualizeAudio, getWaveformPortion, createSmoothSvgPath } from "ecmanim";
-import { fftInPlace, magnitudeSpectrum, nextPow2 } from "ecmanim"; // low-level, rarely needed directly
+import { getAudioData, visualizeAudio, getWaveformPortion, createSmoothSvgPath } from "@johnhenry/ecmanim";
+import { fftInPlace, magnitudeSpectrum, nextPow2 } from "@johnhenry/ecmanim"; // low-level, rarely needed directly
 ```
 
 - **`getAudioData(src, { sampleRate?, channels? }): Promise<AudioData>`** —
@@ -141,7 +141,7 @@ throws.
 - **Node audio decode needs `ffmpeg` on `PATH`.** `getAudioData` in Node
   spawns `ffmpeg` directly (not ffprobe); if it's missing you'll get an
   `ffmpeg pcm decode exited <code>` rejection, not a graceful fallback. Run
-  `npx ecmanim checkhealth` first if audio decode fails mysteriously.
+  `npx -p @johnhenry/ecmanim ecmanim checkhealth` first if audio decode fails mysteriously.
 - **Node vs. browser decode are different code paths.** Sample-accurate output
   can differ slightly between ffmpeg's resampling and `AudioContext.decodeAudioData`'s
   browser-native resampling — don't assume byte-identical waveforms across

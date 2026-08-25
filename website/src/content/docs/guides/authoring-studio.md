@@ -10,7 +10,7 @@ Phase-7 adoption. Two opt-in subpath entries (`ecmanim/authoring`,
 ### Plan IR + dry-run
 
 ```js
-import { toPlanIR } from "ecmanim/authoring";
+import { toPlanIR } from "@johnhenry/ecmanim/authoring";
 const plan = await toPlanIR(MyScene, { fps: 30, width: 1920, height: 1080, promise: "motion-led" });
 // { version, config, segments[], chapters[], estimatedFrames, durationSeconds, quality }
 ```
@@ -20,7 +20,7 @@ Harvests structure **without rendering** (dry-runs `construct()`). CLI:
 ### Quality gates
 
 ```js
-import { runQualityGates, slideshowRisk } from "ecmanim/authoring";
+import { runQualityGates, slideshowRisk } from "@johnhenry/ecmanim/authoring";
 const report = runQualityGates(ctx);           // { ok, slideshowRisk, results[] }
 ```
 `slideshowRisk` scores how static the output is; `checkDeliveryPromise` asserts the
@@ -47,7 +47,7 @@ sections); every format has a deterministic fallback.
 | `title-card` | `title?`, `bullets?` | the original minimal example. |
 
 ```js
-import { runFormat, manimRenderProvider } from "ecmanim/authoring";
+import { runFormat, manimRenderProvider } from "@johnhenry/ecmanim/authoring";
 
 const res = await runFormat("explainer", {
   params: {
@@ -69,7 +69,7 @@ const res = await runFormat("explainer", {
 ### Live-preview dev server
 
 ```js
-import { startStudio } from "ecmanim/studio";
+import { startStudio } from "@johnhenry/ecmanim/studio";
 const studio = await startStudio({ sceneModule: "scenes/demo.js", root: process.cwd() });
 console.log(studio.url); // open it; edit the scene file → the browser hot-reloads
 // studio.close() when done
@@ -99,7 +99,7 @@ in-page eval REPL.
 ### Props panel + parameter-only re-render
 
 ```js
-import { startStudio } from "ecmanim/studio";
+import { startStudio } from "@johnhenry/ecmanim/studio";
 await startStudio({ sceneModule: "scenes/demo.js", props: true });
 ```
 When the scene exports a `static schema` (via `defineSchema`), the harness
@@ -130,7 +130,7 @@ mechanism.
 
 For a draggable editor UI:
 ```js
-import { attachKeyframeTimelineEditor, renderKeyframeTimeline } from "ecmanim/studio";
+import { attachKeyframeTimelineEditor, renderKeyframeTimeline } from "@johnhenry/ecmanim/studio";
 
 const axis = { duration: player.duration, pixelWidth: canvas.width };
 function redraw() {
@@ -153,7 +153,7 @@ triggers one re-record on release, not one per pointer-move tick.
 ### Interactive camera (pan/zoom/orbit/pick)
 
 ```js
-import { attachInteractiveCamera } from "ecmanim/studio";
+import { attachInteractiveCamera } from "@johnhenry/ecmanim/studio";
 
 const handle = attachInteractiveCamera(canvas, camera, {
   render: () => renderer.renderScene(mobjects), // called after every camera mutation
@@ -179,12 +179,12 @@ which keeps it usable by any renderer/mobject-store combination, including
 
 ```html
 <script type="module">
-  import { defineManimChart } from "ecmanim/studio";
+  import { defineManimChart } from "@johnhenry/ecmanim/studio";
   defineManimChart(); // registers <manim-chart>
 </script>
 <manim-chart width="800" height="450"></manim-chart>
 <script type="module">
-  import { Axes } from "ecmanim";
+  import { Axes } from "@johnhenry/ecmanim";
   const chart = document.querySelector("manim-chart");
   chart.graph = () => {
     const axes = new Axes({ xRange: [-3, 3], yRange: [-2, 2] });
@@ -204,7 +204,7 @@ in `detail`. `disconnectedCallback` detaches the camera listeners.
 ### Schema → props controls
 
 ```js
-import { schemaToControls } from "ecmanim/studio";
+import { schemaToControls } from "@johnhenry/ecmanim/studio";
 const controls = schemaToControls(MyScene.schema); // [{ name, control, min, max, options, ... }]
 ```
 Turns a `defineSchema` spec into control descriptors for a props panel. This is

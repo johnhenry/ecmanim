@@ -19,7 +19,7 @@ this codebase follows.
 ## Import: `loadASS`
 
 ```ts
-import { loadASS } from "ecmanim";
+import { loadASS } from "@johnhenry/ecmanim";
 import { readFileSync } from "node:fs";
 
 const subs = loadASS(readFileSync("movie.ass", "utf8"), { width: 13 });
@@ -168,7 +168,7 @@ drawing-mode line are silently skipped.
 ### `wordCaptionTrackToAss` — karaoke captions
 
 ```ts
-import { wordCaptionTrackToAss } from "ecmanim";
+import { wordCaptionTrackToAss } from "@johnhenry/ecmanim";
 import { writeFileSync } from "node:fs";
 
 const ass = wordCaptionTrackToAss(track, {
@@ -203,7 +203,7 @@ is representable, so that's all this function ever attempts.
 ### `vmobjectToAssDrawing` — a static shape/icon/title card
 
 ```ts
-import { vmobjectToAssDrawing } from "ecmanim";
+import { vmobjectToAssDrawing } from "@johnhenry/ecmanim";
 import { writeFileSync } from "node:fs";
 
 const ass = vmobjectToAssDrawing(star, {

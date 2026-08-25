@@ -19,7 +19,7 @@ Frames are extracted with **ffmpeg** into a content-hash-keyed decode cache, the
 pre-decoded into memory so per-frame lookup is a synchronous index.
 
 ```js
-import { render, loadVideo, Scene, Text, Write } from "ecmanim/node";
+import { render, loadVideo, Scene, Text, Write } from "@johnhenry/ecmanim/node";
 
 class Clip extends Scene {
   async construct() {
@@ -60,7 +60,7 @@ await render(Clip, { output: "out.mp4", fps: 30 });
 ## Browser (`ecmanim/browser`)
 
 ```js
-import { loadVideo, play } from "ecmanim/browser";
+import { loadVideo, play } from "@johnhenry/ecmanim/browser";
 
 const video = await loadVideo("clip.mp4", { fps: 30, width: 7 }); // mode: "auto"
 // ...add to a Scene and play()/record() as usual.

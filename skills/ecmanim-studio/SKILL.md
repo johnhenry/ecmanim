@@ -39,7 +39,7 @@ for; just don't describe it as an existing Studio capability.
 ## Live-preview dev server (`startStudio`)
 
 ```ts
-import { startStudio } from "ecmanim/studio";
+import { startStudio } from "@johnhenry/ecmanim/studio";
 
 const studio = await startStudio({
   sceneModule: "scenes/demo.js",   // browser-importable ES module, relative to `root`
@@ -81,8 +81,8 @@ Node-only (`node:http` + `node:fs.watch`, zero dependencies). Mechanics:
 ## Schema → props controls (`schemaToControls`)
 
 ```ts
-import { schemaToControls } from "ecmanim/studio";
-import { defineSchema } from "ecmanim"; // core/schema.ts — see ecmanim/SKILL.md's primitives doc
+import { schemaToControls } from "@johnhenry/ecmanim/studio";
+import { defineSchema } from "@johnhenry/ecmanim"; // core/schema.ts — see ecmanim/SKILL.md's primitives doc
 
 const MyScene = { schema: defineSchema({
   title: { type: "string", default: "Hello" },

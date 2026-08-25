@@ -50,7 +50,7 @@ The shipped example registers a `Heart` VMobject, a `Heartbeat` animation, a
 `thump` rate function, and a `brandPink` color:
 
 ```ts
-import type { Plugin, Registry } from "ecmanim";   // (or ../../src/plugins/registry.ts)
+import type { Plugin, Registry } from "@johnhenry/ecmanim";   // (or ../../src/plugins/registry.ts)
 
 const heartPlugin: Plugin = {
   name: "ecmanim-heart",
@@ -96,7 +96,7 @@ export default heartPlugin;
 Use it:
 
 ```ts
-import { use, registry, Scene, Create } from "ecmanim";
+import { use, registry, Scene, Create } from "@johnhenry/ecmanim";
 import heartPlugin from "./examples/plugins/heart-plugin.ts";
 
 use(heartPlugin);
@@ -170,7 +170,7 @@ variadic `min`/`max`. Any undeclared name, unknown function, or wrong arity is a
 ### Loading in ecmanim — `examples/plugins/cyberpunk.manifest.json`
 
 ```ts
-import { loadManifest, loadManifestFromFile, registry } from "ecmanim";
+import { loadManifest, loadManifestFromFile, registry } from "@johnhenry/ecmanim";
 import cyberpunk from "./examples/plugins/cyberpunk.manifest.json" with { type: "json" };
 
 const summary = loadManifest(cyberpunk);
@@ -218,7 +218,7 @@ are consumed from JavaScript and Python, so both engines compute identically.
 ### From JavaScript
 
 ```ts
-import { loadWasm, isWasmLoaded, bezierEvalWasm, earclipWasm, mat3VecWasm } from "ecmanim";
+import { loadWasm, isWasmLoaded, bezierEvalWasm, earclipWasm, mat3VecWasm } from "@johnhenry/ecmanim";
 
 const ok = await loadWasm();        // Node reads the .wasm via fs, browser via fetch
 if (isWasmLoaded()) {

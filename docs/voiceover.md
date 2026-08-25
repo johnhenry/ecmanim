@@ -3,7 +3,7 @@
 Phase-3 adoption (manim-voiceover style). Exported from `ecmanim/node`.
 
 ```js
-import { render, voiceover } from "ecmanim/node";
+import { render, voiceover } from "@johnhenry/ecmanim/node";
 
 class Narrated extends Scene {
   async construct() {

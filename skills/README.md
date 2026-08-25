@@ -22,7 +22,7 @@ npx skills-npm
 ```
 
 This is a command *you* run — nothing installs automatically as a side effect
-of `npm install ecmanim`. See the `skills-npm` README for config (`agents`,
+of `npm install @johnhenry/ecmanim`. See the `skills-npm` README for config (`agents`,
 `include`/`exclude`, a `prepare`-script setup mode, etc).
 
 ### Option B: copy/symlink manually

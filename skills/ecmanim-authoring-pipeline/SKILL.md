@@ -49,7 +49,7 @@ a separate skill, `ecmanim-studio`).
 ## Plan IR + dry-run
 
 ```js
-import { toPlanIR } from "ecmanim/authoring";
+import { toPlanIR } from "@johnhenry/ecmanim/authoring";
 
 const plan = await toPlanIR(MyScene, { fps: 30, width: 1920, height: 1080, promise: "motion-led" });
 // { version, scene, config, segments[], chapters[], estimatedFrames, durationSeconds, quality }
@@ -87,7 +87,7 @@ the JSON to stdout or writes it to `--output` if given.
 ## Quality gates
 
 ```js
-import { runQualityGates, slideshowRisk, checkDeliveryPromise } from "ecmanim/authoring";
+import { runQualityGates, slideshowRisk, checkDeliveryPromise } from "@johnhenry/ecmanim/authoring";
 
 const report = runQualityGates(ctx);   // { ok, slideshowRisk, results[] }
 ```
@@ -179,7 +179,7 @@ passed straight through to the `render` provider's `invoke({ options })`
 ### Working example (verbatim)
 
 ```js
-import { runFormat, manimRenderProvider } from "ecmanim/authoring";
+import { runFormat, manimRenderProvider } from "@johnhenry/ecmanim/authoring";
 
 const res = await runFormat("explainer", {
   params: {

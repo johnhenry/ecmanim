@@ -11,7 +11,7 @@ Author two states; the engine pairs pieces by **identity** and tweens the delta
 element still matches).
 
 ```js
-import { TransformMatchingAuto } from "ecmanim";
+import { TransformMatchingAuto } from "@johnhenry/ecmanim";
 circle.matchId = "hero"; bigCircle.matchId = "hero";   // explicit id (best)
 await scene.play(new TransformMatchingAuto(stateA, stateB));
 ```
@@ -80,7 +80,7 @@ pair naturally with sections — see
 position across a full page navigation:
 
 ```js
-import { enablePageTransitionResume } from "ecmanim/browser";
+import { enablePageTransitionResume } from "@johnhenry/ecmanim/browser";
 
 const handle = enablePageTransitionResume(document.querySelector("manim-player"));
 // on pagehide: saves { time: player.currentTime } to sessionStorage
@@ -110,7 +110,7 @@ yourself from your own `pagehide`/lifecycle hooks instead.
 ## Diagram-as-code
 
 ```js
-import { diagram, parseDiagram, buildBoard, TransformMatchingAuto } from "ecmanim";
+import { diagram, parseDiagram, buildBoard, TransformMatchingAuto } from "@johnhenry/ecmanim";
 
 const board = diagram(`
   A[Start]

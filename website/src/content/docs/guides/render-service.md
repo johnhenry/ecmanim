@@ -92,7 +92,7 @@ X-Ecmanim-Signature: t=1700000000,v1=<hex hmac-sha256 of "t.body">
 Verify with the exported helper (constant-time, 5-minute replay window):
 
 ```ts
-import { verifyWebhook } from "ecmanim/service";
+import { verifyWebhook } from "@johnhenry/ecmanim/service";
 
 http.createServer((req, res) => {
   let raw = "";
@@ -129,7 +129,7 @@ service means choosing `--host 0.0.0.0` **and** setting tokens.
 ## S3 artifacts
 
 ```ts
-import { startCoordinator, createS3Storage } from "ecmanim/service";
+import { startCoordinator, createS3Storage } from "@johnhenry/ecmanim/service";
 
 await startCoordinator({
   projectDir: "./my-scenes",

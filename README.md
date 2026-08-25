@@ -10,7 +10,7 @@ Mathematical Animation Engine popularized by 3Blue1Brown — that renders the sa
 (live Canvas-2D playback + WebM, plus an optional WebGL/Three.js backend).
 
 ```js
-import { render, Scene, Circle, Square, Transform, Create, BLUE, GREEN } from "ecmanim/node";
+import { render, Scene, Circle, Square, Transform, Create, BLUE, GREEN } from "@johnhenry/ecmanim/node";
 
 class Demo extends Scene {
   async construct() {
@@ -48,10 +48,14 @@ await render(Demo, { output: "demo.mp4", quality: "high" });
 ```bash
 npm install            # pulls @napi-rs/canvas + three + harfbuzzjs + yoga-layout as optional deps
 # ffmpeg (and ffprobe) must be on PATH for Node video output
+
+> Previously published as `ecmanim` (last unscoped release: 0.11.x, now
+> deprecated). The scoped package restarts its version line at 0.0.0 — a new
+> address and era, not a maturity signal: this is the same tested 0.11.x code.
 ```
 
 `@napi-rs/canvas` ships prebuilt binaries — **no system Cairo required**, so it
-works on NixOS out of the box. Run `npx ecmanim checkhealth` to verify node,
+works on NixOS out of the box. Run `npx -p @johnhenry/ecmanim ecmanim checkhealth` to verify node,
 ffmpeg, ffprobe, canvas, and fonts — plus the optional tools (system TTS, TeX,
 headless Chrome). ecmanim shells out to a few system programs rather than
 bundling them; see [docs/external-tools.md](docs/external-tools.md) for the
@@ -62,7 +66,7 @@ full list and what degrades when each is missing.
 ### Node (render to a file)
 
 ```js
-import { render, Scene, Circle, Text, Create, YELLOW, BLUE } from "ecmanim/node";
+import { render, Scene, Circle, Text, Create, YELLOW, BLUE } from "@johnhenry/ecmanim/node";
 
 class Intro extends Scene {
   async construct() {
@@ -79,7 +83,7 @@ await render(Intro, { output: "intro.mp4", quality: "medium" });   // low | medi
 Or from the CLI (see [docs/cli.md](docs/cli.md)):
 
 ```bash
-npx ecmanim render intro.ts Intro -q high -o intro.mp4
+npx -p @johnhenry/ecmanim ecmanim render intro.ts Intro -q high -o intro.mp4
 ```
 
 ### Browser (live playback + WebM)
@@ -87,7 +91,7 @@ npx ecmanim render intro.ts Intro -q high -o intro.mp4
 ```html
 <canvas id="stage" width="1280" height="720"></canvas>
 <script type="module">
-  import { play, record, Scene, Circle, Create } from "ecmanim/browser";
+  import { play, record, Scene, Circle, Create } from "@johnhenry/ecmanim/browser";
 
   class Demo extends Scene {
     async construct() { await this.play(new Create(new Circle({ radius: 2 }))); }
@@ -133,14 +137,14 @@ Two **alternate render targets** share the same scene graph — see
 ## CLI
 
 ```bash
-npx ecmanim render scene.ts MyScene -q high -o out.mp4
-npx ecmanim render scene.ts --scene IntroScene --format webm
-npx ecmanim render scene.ts -s            # just the final frame as PNG
-npx ecmanim render scene.ts -n 2,5        # only play() indices 2..5
-npx ecmanim cfg --write                   # write manim.config.json
-npx ecmanim init scene.ts                 # scaffold a starter scene
-npx ecmanim plugins                       # list registered mobjects/animations/…
-npx ecmanim checkhealth                   # node / ffmpeg / canvas / fonts
+npx -p @johnhenry/ecmanim ecmanim render scene.ts MyScene -q high -o out.mp4
+npx -p @johnhenry/ecmanim ecmanim render scene.ts --scene IntroScene --format webm
+npx -p @johnhenry/ecmanim ecmanim render scene.ts -s            # just the final frame as PNG
+npx -p @johnhenry/ecmanim ecmanim render scene.ts -n 2,5        # only play() indices 2..5
+npx -p @johnhenry/ecmanim ecmanim cfg --write                   # write manim.config.json
+npx -p @johnhenry/ecmanim ecmanim init scene.ts                 # scaffold a starter scene
+npx -p @johnhenry/ecmanim ecmanim plugins                       # list registered mobjects/animations/…
+npx -p @johnhenry/ecmanim ecmanim checkhealth                   # node / ffmpeg / canvas / fonts
 ```
 
 Full flag and subcommand reference, config-file format, caching, and sections:
@@ -164,7 +168,7 @@ tools' example suites rather than authoring guidance.
 Extend the engine three ways — see [docs/plugins.md](docs/plugins.md):
 
 ```js
-import { use, loadManifest, loadWasm } from "ecmanim";
+import { use, loadManifest, loadWasm } from "@johnhenry/ecmanim";
 import heartPlugin from "./examples/plugins/heart-plugin.ts";
 import cyberpunk from "./examples/plugins/cyberpunk.manifest.json" with { type: "json" };
 
