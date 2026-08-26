@@ -122,6 +122,43 @@ test("startStudio defaults to a loopback-only bind (127.0.0.1), not reachable fr
   }
 });
 
+test("startStudio's static file guard rejects a sibling directory whose name extends root's basename (path-traversal boundary)", async () => {
+  // Regression for a startsWith(root)-without-separator boundary bug: a
+  // request that resolves to `${root}-other/...` (a SIBLING directory, not
+  // a child of root) must NOT be served, even though the string
+  // `${root}-other` starts with the string `root`.
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+  const os = await import("node:os"); const path = await import("node:path");
+  const base = mkdtempSync(path.join(os.tmpdir(), "mjs-studio-"));
+  const dir = path.join(base, "proj");
+  const sibling = path.join(base, "proj-other"); // extends "proj" as a string
+  mkdirSync(dir);
+  mkdirSync(sibling);
+  writeFileSync(path.join(dir, "scene.js"), "export default class {}\n");
+  writeFileSync(path.join(sibling, "secret.txt"), "should not be servable");
+  const studio = await startStudio({ sceneModule: "scene.js", root: dir, port: 0 });
+  try {
+    // Path traversal out of `dir` into the sibling `proj-other`. Sent via
+    // raw node:http (not fetch/URL) so the literal "/../" survives on the
+    // wire instead of being dot-segment-normalized away by the WHATWG URL
+    // parser before the request is even made.
+    const http = await import("node:http");
+    const u = new URL(studio.url);
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        { host: u.hostname, port: u.port, path: "/../proj-other/secret.txt", method: "GET" },
+        (res) => { res.resume(); res.on("end", () => resolve(res.statusCode ?? 0)); },
+      );
+      req.on("error", reject);
+      req.end();
+    });
+    assert.equal(status, 404, "a sibling directory that merely extends root's name as a string must not be reachable");
+  } finally {
+    studio.close();
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test("startStudio({ host: '0.0.0.0' }) reports every reachable address (loopback + LAN)", async () => {
   const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
   const os = await import("node:os"); const path = await import("node:path");

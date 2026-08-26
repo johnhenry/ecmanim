@@ -9,7 +9,7 @@ import { Text } from "./Text.ts";
 import type { TextConfig } from "./Text.ts";
 import { Rectangle, Dot } from "../geometry.ts";
 import * as V from "../../core/math/vector.ts";
-import { Transform, Animation } from "../../animation/Animation.ts";
+import { Transform, Animation, FadeOut } from "../../animation/Animation.ts";
 import type { AnimationConfig } from "../../animation/Animation.ts";
 import { AnimationGroup } from "../../animation/composition.ts";
 import { TransformMatchingAuto } from "../../animation/auto_matching.ts";
@@ -383,13 +383,69 @@ export class Code extends VGroup {
    * untracked scene members. Fade out `other` too (in addition to `this`)
    * to fully clear the diff's result -- same pattern real manim's
    * `TransformMatchingTex` callers already have to follow.
+   *
+   * FadeOut-vs-nested-token bug (found via extracted golden-parity frames,
+   * showcase-parity/01-hackreels -- was mistaken at first glance for a pure
+   * positioning issue, since it also happened to coincide with a real
+   * positioning bug fixed above): `FadeOut.finish()` (Animation.ts)
+   * deliberately RESTORES a faded mobject's original opacity once its
+   * animation completes, on the documented assumption that "the mobject has
+   * left the scene, so this is invisible" -- true for a top-level
+   * `scene.play(new FadeOut(mob))`, where `Scene.remove()` actually strips
+   * `mob` from the scene. It's FALSE here: `buildMatchingFromKeyed()` (used
+   * by `TransformMatchingAuto` above) `FadeOut`s individual TOKENS nested
+   * inside `this.codeTokens`, but only the whole `Code` (`this`) is ever a
+   * top-level scene member -- `Scene.remove(token)` on a non-top-level
+   * mobject is a no-op. So right as the diff's animation completes,
+   * `finish()` silently un-fades every unmatched token back to full
+   * opacity, and it STAYS that way (not just during the crossfade) for as
+   * long as `this` remains in the scene -- old and new content stay
+   * permanently double-exposed. Undone below by re-zeroing those specific
+   * tokens' opacity after the group's own `finish()` runs.
    */
   diffTo(other: Code, config: AutoMatchingConfig = {}): AnimationGroup {
+    // Anchor `other` to `this`'s top-left corner before matching -- same
+    // technique `edit()` already uses when it builds its own `target`
+    // (above). Both Code instances self-center in their own constructor, so
+    // if the caller positions `before`/`after` by moving each to the SAME
+    // center point (the natural thing to do), a before/after pair with a
+    // DIFFERENT line count ends up with mismatched line-to-y mappings: e.g.
+    // a 4-line `before` and a 6-line `after` centered on one point put their
+    // lines at different absolute y-coordinates per line index. Unmatched
+    // tokens (inserted/removed lines -- see the class-level doc comment
+    // above for why they can't morph) are faded in/out IN PLACE, so without
+    // this anchoring step they can land at nearly the same y as an unrelated
+    // line from the other side purely by coincidence of the two blocks'
+    // differing heights, rendering as overlapping/ghosted text. Anchoring
+    // both to the same top-left corner keeps line 0 (and everything above
+    // the first divergence) visually stable and makes inserted/removed
+    // lines push later content down/up from a consistent reference point,
+    // like a real editor diff.
+    const myUL = this.getCorner(V.UL);
+    const otherUL = other.getCorner(V.UL);
+    other.shift(V.sub(myUL, otherUL));
+
     this._seedMatchIds();
     other._seedMatchIds();
     const tokenAnims = new TransformMatchingAuto(this.codeTokens, other.codeTokens, config).animations;
     const bg = new Transform(this.background, other.background);
-    return new AnimationGroup([...tokenAnims, bg]);
+    const group = new AnimationGroup([...tokenAnims, bg]);
+
+    // See the FadeOut-vs-nested-token bug in this method's doc comment
+    // above: force the unmatched-source tokens back to invisible once the
+    // group is done, undoing FadeOut.finish()'s scene-level "it was removed"
+    // assumption, which doesn't hold for these nested tokens.
+    const fadeOutTokens = tokenAnims.filter((a: any) => a instanceof FadeOut).map((a: any) => a.mobject);
+    const baseFinish = group.finish.bind(group);
+    group.finish = (): AnimationGroup => {
+      baseFinish();
+      for (const tok of fadeOutTokens) {
+        const fam = typeof tok.getFamily === "function" ? tok.getFamily() : [tok];
+        for (const m of fam) { m.fillOpacity = 0; m.strokeOpacity = 0; if (m.opacity != null) m.opacity = 0; }
+      }
+      return group;
+    };
+    return group;
   }
 
   // --- MC3: tagged-template edits -----------------------------------------

@@ -30,6 +30,10 @@ export interface PhysicsEngineOptions {
 
 export interface PhysicsEngineLike { step(dt: number): void; }
 
+// Bodies that already warned about a non-finite velocity, so a corrupted
+// body doesn't spam a warning every single frame thereafter.
+const warnedNonFinite = new WeakSet<object>();
+
 /** Dependency-free semi-implicit Euler engine. */
 export class SimpleEngine implements PhysicsEngineLike {
   bodies: PhysicsBody[] = [];
@@ -60,7 +64,27 @@ export class SimpleEngine implements PhysicsEngineLike {
     for (const b of this.bodies) {
       if (b.static) continue;
       // Semi-implicit Euler: integrate velocity then position.
-      b.velocity = V.add(b.velocity, V.scale(this.gravity, dt));
+      const nextVelocity = V.add(b.velocity, V.scale(this.gravity, dt));
+      // Unlike the Rapier adapters (which merely no-op on NaN because a
+      // truthy guard treats NaN like 0), SimpleEngine had NO guard at all --
+      // a non-finite velocity (e.g. set directly by a caller, or produced by
+      // some other updater) would flow straight into `b.mob.shift(delta)`,
+      // writing NaN into the mobject's point data (silent corruption, not a
+      // freeze). Detect it before it reaches velocity/position and halt the
+      // body instead: reset velocity to zero and skip this step's
+      // shift/rotate/floor-collision for it, so corruption can't propagate.
+      if (!nextVelocity.every(Number.isFinite)) {
+        if (!warnedNonFinite.has(b)) {
+          warnedNonFinite.add(b);
+          console.warn(
+            "[ecmanim physics] SimpleEngine produced a non-finite (NaN/Infinity) velocity for a body -- " +
+            "resetting its velocity to zero and skipping this step's update to avoid corrupting its mobject's point data.",
+          );
+        }
+        b.velocity = [0, 0, 0];
+        continue;
+      }
+      b.velocity = nextVelocity;
       const delta = V.scale(b.velocity, dt);
       b.mob.shift(delta);
       // Torque-free spin about the body's own center. Collisions do NOT couple

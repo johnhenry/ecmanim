@@ -80,3 +80,68 @@ test("ThreeRenderer uses an orthographic camera for a 2D scene", () => {
   r.render([new Circle({ radius: 1, fillColor: "#58C4DD", fillOpacity: 1 })]);
   assert.ok(r.group.children.some((c) => c.isMesh));
 });
+
+// Regression: blur()/glow()/dropShadow()/colorAdjust()/noise() and
+// ParticleSystem render on Canvas-2D/SVG but have zero implementation in
+// ThreeRenderer -- previously this was entirely silent, so a caller
+// exporting via WebGL got no signal that content was being dropped.
+test("ThreeRenderer warns (once, not per-frame) when a mobject has an unsupported effect", async () => {
+  const THREE = mockTHREE();
+  const r = new ThreeRenderer(THREE, { camera: new Camera({ pixelWidth: 640, pixelHeight: 360 }), canvas: {} });
+  const circle = new Circle({ radius: 1, fillColor: "#58C4DD", fillOpacity: 1 }).blur(4);
+
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    r.render([circle]);
+    r.render([circle]); // a second frame with the same mobject must not re-warn
+  } finally {
+    console.warn = origWarn;
+  }
+
+  assert.equal(warnings.length, 1, `should warn exactly once, not once per frame, got: ${JSON.stringify(warnings)}`);
+  assert.match(warnings[0], /blur/i);
+  assert.match(warnings[0], /ThreeRenderer|WebGL/i);
+});
+
+test("ThreeRenderer warns when a ParticleSystem is rendered (unsupported on WebGL)", async () => {
+  const { ParticleSystem } = await import("../src/mobject/particles.ts");
+  const THREE = mockTHREE();
+  const r = new ThreeRenderer(THREE, { camera: new Camera({ pixelWidth: 640, pixelHeight: 360 }), canvas: {} });
+  const ps = new ParticleSystem({});
+
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    // Call the warning check directly rather than through the full render()
+    // pipeline: ParticleSystem isn't a VMobject (no getSubpaths()), and
+    // collectBuffers()'s generic fill/stroke path assumes one -- a
+    // separate, pre-existing gap in WebGL's geometry pipeline (not part of
+    // this fix's scope, which is only the missing warning signal).
+    r._warnUnsupported([ps]);
+  } finally {
+    console.warn = origWarn;
+  }
+
+  assert.equal(warnings.length, 1, `should warn exactly once, got: ${JSON.stringify(warnings)}`);
+  assert.match(warnings[0], /ParticleSystem/i);
+});
+
+test("ThreeRenderer does NOT warn for an ordinary mobject with no effects", () => {
+  const THREE = mockTHREE();
+  const r = new ThreeRenderer(THREE, { camera: new Camera({ pixelWidth: 640, pixelHeight: 360 }), canvas: {} });
+  const circle = new Circle({ radius: 1, fillColor: "#58C4DD", fillOpacity: 1 });
+
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    r.render([circle]);
+  } finally {
+    console.warn = origWarn;
+  }
+
+  assert.deepEqual(warnings, []);
+});

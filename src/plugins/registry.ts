@@ -64,10 +64,29 @@ export class Registry {
   has(kind: RegistryKind, name: string): boolean { return this.mapFor(kind).has(name); }
   list(kind: RegistryKind): string[] { return [...this.mapFor(kind).keys()]; }
 
-  /** Install a plugin (or bare install function). Chainable. */
+  /** Install a plugin (or bare install function). Chainable.
+   *
+   *  `install()` runs inside a try/catch: previously an uncaught throw
+   *  propagated straight out with no indication of WHICH plugin failed --
+   *  opaque, especially once several plugins are use()'d in sequence, and a
+   *  throw took down the whole registration (any plugins after it in the
+   *  same call chain never installed either). The failure is now
+   *  attributed to the specific plugin (by name when the plugin provides
+   *  one) and re-thrown as a new, clearer error -- fail LOUD rather than
+   *  silently skip, since a plugin that can't install usually means real
+   *  functionality is missing, and a caller deserves to know synchronously
+   *  rather than discover it later as a mysterious "unknown mobject/
+   *  animation" error far from the actual cause. */
   use(plugin: PluginLike): this {
     const p: Plugin = typeof plugin === "function" ? { install: plugin } : plugin;
-    p.install(this);
+    const label = p.name ? `"${p.name}"` : "(unnamed plugin)";
+    try {
+      p.install(this);
+    } catch (err: any) {
+      const message = `Plugin ${label} failed to install: ${err?.message ?? err}`;
+      console.error(`[ecmanim plugins] ${message}`);
+      throw new Error(message, { cause: err });
+    }
     this.plugins.push(p);
     return this;
   }

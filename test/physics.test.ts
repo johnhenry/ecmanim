@@ -85,6 +85,39 @@ test("Pendulum swings and roughly conserves energy", () => {
   assert.ok(Math.abs(e1 - e0) / Math.abs(e0) < 0.1, `energy conserved within 10%: ${e0} -> ${e1}`);
 });
 
+test("SimpleEngine: a non-finite velocity warns once, resets to zero, and never corrupts the mobject's point data", () => {
+  // Regression: SimpleEngine.step() had no guard at all against a non-finite
+  // velocity (e.g. set directly by a caller, or produced by some other
+  // updater) -- it flowed straight into `b.mob.shift(delta)`, writing NaN
+  // into the mobject's point data. This is worse than the Rapier adapters'
+  // bug (which merely freeze silently): here the corruption is silent AND
+  // permanent, since NaN point data can't be un-NaN'd by further shifts.
+  const eng = new SimpleEngine({ gravity: [0, -9.8, 0] });
+  const d = new Dot({ point: [0, 5, 0] });
+  const body = eng.addBody(d, { velocity: [NaN, 0, 0] });
+  const before = d.points.map((p: any) => p.slice());
+
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    eng.step(0.1);
+    // Corrupt it again on a later frame -- still only ONE warning total for
+    // this body (no per-frame log spam once a body is known-bad).
+    body.velocity = [NaN, 0, 0];
+    eng.step(0.1);
+  } finally {
+    console.warn = origWarn;
+  }
+
+  assert.equal(warnings.length, 1, `should warn exactly once, not once per frame, got: ${JSON.stringify(warnings)}`);
+  assert.match(warnings[0], /non-finite/i);
+  assert.deepEqual(body.velocity, [0, 0, 0], "a non-finite velocity should be reset to zero, not left NaN");
+  for (let i = 0; i < before.length; i++) {
+    assert.ok(d.points[i].every((v: number, j: number) => v === before[i][j]), "point data must be untouched, never NaN-corrupted");
+  }
+});
+
 test("SimpleEngine: angularVelocity spins a body kinematically", () => {
   const eng = new SimpleEngine({ gravity: [0, 0, 0] });
   const sq = new Square({ sideLength: 2 });

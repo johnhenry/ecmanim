@@ -37,6 +37,39 @@ maybe("rapier2d: a body rests on the floor without sinking", async () => {
   assert.ok(bottom < 0.2, `bottom should not float above the floor, got ${bottom}`);
 });
 
+// Regression: step() used a truthy guard (`if (dp[0] || ...)`) that treats
+// NaN exactly like 0 (`Boolean(NaN) === false`), so a non-finite solver
+// output silently no-op'd forever with no signal anything was wrong -- and
+// `lastPos`/`lastAngle` were still overwritten with NaN unconditionally,
+// permanently poisoning every later frame's delta too. Stub the underlying
+// Rapier rigid body to simulate exactly that (a diverging/ill-conditioned
+// solve), and confirm it now warns once and leaves the mobject untouched.
+maybe("rapier2d: a non-finite (NaN) solver output warns once and doesn't corrupt the mobject's points", async () => {
+  const eng = await Rapier2DEngine.create({ gravity: [0, -9.8, 0], rapier: RAPIER });
+  const box = new Square({ sideLength: 1 }).moveTo([0, 5, 0]);
+  const body = eng.addBody(box, {});
+  const before = box.points.map((p: any) => p.slice());
+
+  body.rb.translation = () => ({ x: NaN, y: NaN });
+  body.rb.rotation = () => NaN;
+
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    eng.step(1 / 60);
+    eng.step(1 / 60); // a second NaN frame from the same body must not re-warn
+  } finally {
+    console.warn = origWarn;
+  }
+
+  assert.equal(warnings.length, 1, `should warn exactly once, not once per frame, got: ${JSON.stringify(warnings)}`);
+  assert.match(warnings[0], /non-finite/i);
+  for (let i = 0; i < before.length; i++) {
+    assert.ok(box.points[i].every((v: number, j: number) => v === before[i][j]), "point data must be untouched, never NaN-corrupted");
+  }
+});
+
 // (c) Scalar angular velocity rotates the body's points about its center.
 maybe("rapier2d: angular velocity rotates the body's points about its center", async () => {
   const eng = await Rapier2DEngine.create({ gravity: [0, 0, 0], rapier: RAPIER });

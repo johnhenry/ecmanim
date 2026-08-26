@@ -14,7 +14,7 @@
 
 import * as V from "../core/math/vector.ts";
 import type { PhysicsEngineLike } from "./rigid.ts";
-import { type RapierBodyOptions, inferShape, attachStepper } from "./rapier-common.ts";
+import { type RapierBodyOptions, inferShape, attachStepper, warnNonFiniteRapierOutput } from "./rapier-common.ts";
 
 export interface Rapier2DEngineOptions {
   gravity?: number[];   // default [0, -9.8, 0]; only x, y are used
@@ -112,6 +112,15 @@ export class Rapier2DEngine implements PhysicsEngineLike {
       const t = b.rb.translation();   // {x, y}
       const angle = b.rb.rotation();  // scalar radians about Z
       const pos = [t.x, t.y, 0];
+
+      // A NaN/Infinity solver output must not reach `b.mob.shift()`/`.rotate()`
+      // (would corrupt the mobject's point data) NOR `b.lastPos`/`b.lastAngle`
+      // (would permanently poison next frame's delta too) -- bail before
+      // touching either, once we've warned.
+      if (!Number.isFinite(pos[0]) || !Number.isFinite(pos[1]) || !Number.isFinite(angle)) {
+        warnNonFiniteRapierOutput(b, "Rapier2D");
+        continue;
+      }
 
       // Rotate by the delta about the OLD center, then translate (same ordering
       // rationale as the 3D adapter).

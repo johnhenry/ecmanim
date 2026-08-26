@@ -53,6 +53,9 @@ export class ThreeRenderer {
   lit: boolean;
   private _post: BuiltComposer | null = null;
   private _postConfig?: PostProcessingConfig;
+  // Mobjects already warned about (see _warnUnsupported() below) -- a WeakSet
+  // so a long render doesn't log the same warning once per frame.
+  private _warnedUnsupported = new WeakSet<object>();
 
   constructor(THREE: any, opts: ThreeRendererOptions = {}) {
     this.THREE = THREE;
@@ -134,6 +137,7 @@ export class ThreeRenderer {
   }
 
   render(mobjects: any[], dt = 1 / 60): void {
+    this._warnUnsupported(mobjects);
     const buf = collectBuffers(mobjects);
     this._clearGroup();
 
@@ -366,6 +370,39 @@ export class ThreeRenderer {
     threeMesh.matrixAutoUpdate = false;
     threeMesh.matrix.set(...(mob.transform as number[]));
     return threeMesh;
+  }
+
+  // Per-mobject effects (blur/glow/dropShadow/colorAdjust/noise, added via
+  // Mobject.addEffect()/blur()/glow()/etc. -- see Mobject.ts's "visual
+  // effects" doc comment) and ParticleSystem instances render on the
+  // Canvas-2D and SVG backends but have no implementation in this WebGL
+  // backend at all (docs/renderers.md's renderer support table is the only
+  // place this was previously documented). Without a runtime signal, a
+  // caller exporting a scene through ThreeRenderer silently loses that
+  // content with no error, no warning, nothing. Warn once per mobject
+  // (WeakSet-deduped) so it's at least visible instead of silent.
+  _warnUnsupported(mobjects: any[]): void {
+    for (const root of mobjects) {
+      const family = typeof root?.getFamily === "function" ? root.getFamily() : [root];
+      for (const m of family) {
+        if (!m || this._warnedUnsupported.has(m)) continue;
+        if (m._isParticles) {
+          this._warnedUnsupported.add(m);
+          console.warn(
+            "[ecmanim] ThreeRenderer (WebGL): ParticleSystem is not supported and will not render " +
+            "(see docs/renderers.md). Use the Canvas-2D or SVG backend for particle effects.",
+          );
+        } else if (m.effects && m.effects.length) {
+          this._warnedUnsupported.add(m);
+          const types = m.effects.map((e: any) => e.type).join(", ");
+          console.warn(
+            `[ecmanim] ThreeRenderer (WebGL): unsupported effect(s) [${types}] on a ${m.constructor?.name ?? "mobject"} ` +
+            "will not render (see docs/renderers.md). Use the Canvas-2D or SVG backend, or this renderer's own " +
+            "post-processing pipeline (enablePostProcessing()), instead.",
+          );
+        }
+      }
+    }
   }
 
   _clearGroup(): void {

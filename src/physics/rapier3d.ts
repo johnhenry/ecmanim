@@ -13,7 +13,7 @@
 
 import * as V from "../core/math/vector.ts";
 import type { PhysicsEngineLike } from "./rigid.ts";
-import { type RapierBodyOptions, inferShape, attachStepper } from "./rapier-common.ts";
+import { type RapierBodyOptions, inferShape, attachStepper, warnNonFiniteRapierOutput } from "./rapier-common.ts";
 
 export interface Rapier3DEngineOptions {
   gravity?: number[];   // default [0, -9.8, 0]
@@ -117,6 +117,15 @@ export class Rapier3DEngine implements PhysicsEngineLike {
       // Convert to ecmanim quaternion order [w, x, y, z] AT THE BOUNDARY, once.
       const q = [rq.w, rq.x, rq.y, rq.z];
       const pos = [t.x, t.y, t.z];
+
+      // A NaN/Infinity solver output must not reach `b.mob.shift()`/`.rotate()`
+      // (would corrupt the mobject's point data) NOR `b.lastPos`/`b.lastQuat`
+      // (would permanently poison next frame's delta too) -- bail before
+      // touching either, once we've warned.
+      if (!pos.every(Number.isFinite) || !q.every(Number.isFinite)) {
+        warnNonFiniteRapierOutput(b, "Rapier3D");
+        continue;
+      }
 
       // Mobjects have no settable orientation — only in-place point rotation. So
       // apply the *delta* rotation (from last frame's orientation to this one)
