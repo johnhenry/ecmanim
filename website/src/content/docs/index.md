@@ -1,5 +1,6 @@
 ---
 title: "ecmanim"
+description: "A TypeScript port of manim — the Mathematical Animation Engine — that renders the same Scene code to video in Node via ffmpeg and live in the browser via Canvas-2D or WebGL, with near-complete manim API parity."
 ---
 
 <picture>
@@ -7,6 +8,16 @@ title: "ecmanim"
   <source media="(prefers-color-scheme: light)" srcset="/assets/ecmanim-logo-light.png">
   <img alt="ecmanim" src="/assets/ecmanim-logo-light.png" width="450">
 </picture>
+
+> Previously published as `ecmanim` (last unscoped release 0.11.1). Renamed to
+> `@johnhenry/ecmanim` and restarted at 0.0.0 on import — a new address and
+> era, not a maturity signal.
+
+```bash
+npm install @johnhenry/ecmanim
+```
+
+Source: [github.com/johnhenry/ecmanim](https://github.com/johnhenry/ecmanim)
 
 ## Live in your browser
 
@@ -122,9 +133,13 @@ await render(Demo, { output: "demo.mp4", quality: "high" });
 ## Install
 
 ```bash
-npm install            # pulls @napi-rs/canvas + three + harfbuzzjs + yoga-layout as optional deps
+npm install @johnhenry/ecmanim
 # ffmpeg (and ffprobe) must be on PATH for Node video output
 ```
+
+(Working from a clone of the repo instead, a plain `npm install` pulls
+`@napi-rs/canvas` + `three` + `harfbuzzjs` + `yoga-layout` as optional
+dependencies.)
 
 `@napi-rs/canvas` ships prebuilt binaries — **no system Cairo required**, so it
 works on NixOS out of the box. Run `npx -p @johnhenry/ecmanim ecmanim checkhealth` to verify node,
@@ -434,6 +449,27 @@ Deeper module map, rendering pipeline, and registry mechanics:
 - **Python side of manifest/WASM needs its own runtimes.** Loading a manifest into
   Python manim requires `manim` installed (`manim-portable-plugins[manim]`), and
   calling the WASM core from Python requires `wasmtime`.
+
+## Status
+
+- **`@johnhenry/ecmanim` is at 0.0.0** — the first release cycle under the
+  new scope (see the provenance note at the top); the codebase carries the full
+  history of the unscoped `ecmanim` releases through 0.11.1.
+- **Stable:** the core mobject/animation/scene API, the Node Canvas-2D → ffmpeg
+  video pipeline, the browser Canvas-2D backend, plugins, and the CLI — covered
+  by the ~850-test `node --test` suite (110+ files), including headless
+  render integration tests.
+- **Newer / opt-in:** the adoption layers (authoring/Studio, render service,
+  physics, interchange, voiceover, FlexGroup) and the non-deterministic GPU
+  paths (`browser-three`, `renderGL`) are functional but younger than the
+  core.
+- **In progress on `main`:** ASS/SSA subtitle import/export (see the
+  CHANGELOG's Unreleased section) — not yet released or documented here.
+
+## Source
+
+- Repository: [github.com/johnhenry/ecmanim](https://github.com/johnhenry/ecmanim)
+- Issues: [github.com/johnhenry/ecmanim/issues](https://github.com/johnhenry/ecmanim/issues)
 
 ## Testing
 

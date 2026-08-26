@@ -1,5 +1,6 @@
 ---
 title: "Primitives (expressions · timeline · vector numbers · presets · stills)"
+description: "Isomorphic building blocks: expression drivers like wiggle, a GSAP-style Timeline, KeyframeTrack, timing presets, VectorDecimalNumber, style and aspect-ratio presets, and renderStill."
 ---
 
 Phase-1 adoption additions. All isomorphic and dependency-free; exported from

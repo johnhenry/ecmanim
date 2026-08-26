@@ -1,5 +1,6 @@
 ---
 title: "Authoring layer & Studio"
+description: "The ecmanim/authoring entry — plan-IR dry-runs, quality gates, and a Format lifecycle with pluggable llm/tts/render providers — and the ecmanim/studio hot-reloading preview server."
 ---
 
 Phase-7 adoption. Two opt-in subpath entries (`ecmanim/authoring`,

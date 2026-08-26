@@ -1,5 +1,6 @@
 ---
 title: "Architecture"
+description: "How the isomorphic core, the backend entry points, the rendering pipeline, the plugin registry, and the TypeScript build fit together — plus the cross-language packages."
 ---
 
 ecmanim is a TypeScript port of ManimCommunity manim built around one principle:

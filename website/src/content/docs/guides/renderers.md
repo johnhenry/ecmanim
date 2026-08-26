@@ -1,5 +1,6 @@
 ---
 title: "Renderers"
+description: "The render targets sharing one scene graph: CPU Canvas-2D (the deterministic default), SVG/vector output, browser WebGL via Three.js, and opt-in headless GPU rendering through a CDP Chrome."
 ---
 
 ecmanim's scene graph is backend-agnostic: every renderer consumes the same

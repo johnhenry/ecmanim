@@ -1,5 +1,6 @@
 ---
 title: "Interchange & fidelity (OTIO · Lottie · watermark · real-TeX)"
+description: "Exchanging work with other tools: frame-exact OpenTimelineIO export, static-geometry Lottie import/export, render watermarking, and the real-TeX (dvisvgm) math backend."
 ---
 
 Phase-5 adoption additions.

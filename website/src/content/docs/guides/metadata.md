@@ -1,5 +1,6 @@
 ---
 title: "Video metadata (schema.org · IIIF · provenance)"
+description: "Emitting schema.org VideoObject JSON-LD and IIIF Presentation 3.0 manifests — with chapters derived from nextSection() — straight from a render result, plus provenance markers and IIIF ingest."
 ---
 
 ecmanim knows a video's structure at render time — duration, dimensions, and
