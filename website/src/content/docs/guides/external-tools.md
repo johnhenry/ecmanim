@@ -1,5 +1,6 @@
 ---
 title: "External tools & optional capabilities"
+description: "Every external capability ecmanim delegates to — ffmpeg, system TTS, TeX, headless Chrome, optional npm packages, network TTS APIs — and what degrades when each is missing."
 ---
 
 ecmanim delegates a number of jobs to things outside the package — system

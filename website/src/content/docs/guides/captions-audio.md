@@ -1,5 +1,6 @@
 ---
 title: "Captions & audio-reactive"
+description: "SRT caption parsing with karaoke-style CaptionTrack overlays, and dependency-free FFT audio analysis via getAudioData and visualizeAudio for audio-reactive scenes."
 ---
 
 Phase-2 adoption additions (from Remotion's `@remotion/captions` and

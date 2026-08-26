@@ -1,5 +1,6 @@
 ---
 title: "Render service"
+description: "Scale-out rendering with an HTTP coordinator — SQLite job queue, artifact store, signed webhooks — and pull-model workers: quickstart, job JSON, security model, and honest gaps."
 ---
 
 Scale-out rendering: a **coordinator** (HTTP API + SQLite job queue + artifact

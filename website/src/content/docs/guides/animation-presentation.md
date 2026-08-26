@@ -1,5 +1,6 @@
 ---
 title: "Auto-matching · presenter · diagram-as-code"
+description: "Identity-keyed automatic element matching with TransformMatchingAuto, Code.diffTo token morphs, presenter mode with resumable playback, and diagram-as-code board transitions."
 ---
 
 Phase-4 adoption additions.

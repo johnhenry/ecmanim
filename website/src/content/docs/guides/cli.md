@@ -1,5 +1,6 @@
 ---
 title: "CLI reference"
+description: "Full reference for the ecmanim command: render options, the cfg/init/plugins/checkhealth subcommands, the config-file format, partial-movie caching, and sections."
 ---
 
 The `ecmanim` command (`bin/ecmanim.ts`) is a JavaScript port of manim's

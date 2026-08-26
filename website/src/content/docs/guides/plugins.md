@@ -1,5 +1,6 @@
 ---
 title: "Plugins"
+description: "The three extension mechanisms — native use() plugins, portable JSON manifests that also load into Python manim, and the shared Rust-to-WASM math core — and when to use each."
 ---
 
 ecmanim is extensible three ways, each aimed at a different portability level:

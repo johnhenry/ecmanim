@@ -1,5 +1,6 @@
 ---
 title: "VideoMobject — external-video ingestion"
+description: "VideoMobject ingests an external clip with frame-accurate decoding — ffmpeg in Node, WebCodecs or seek-and-capture in the browser — so it plays in-scene in sync with scene time."
 ---
 
 `VideoMobject` places an external video clip inside a scene: it is an

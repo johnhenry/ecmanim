@@ -1,5 +1,6 @@
 ---
 title: "Physics"
+description: "Analytic electric and magnetic fields, linear and standing waves, a built-in rigid-body engine with Pendulum, and optional Rapier2D/Rapier3D integrations."
 ---
 
 Phase-6 adoption (manim-physics-inspired). Analytic fields/waves are

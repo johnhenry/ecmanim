@@ -1,5 +1,6 @@
 ---
 title: "FlexGroup — opt-in Yoga-backed Flexbox layout"
+description: "FlexGroup, an opt-in Yoga-backed (WASM) Flexbox layout container for mobjects: container and per-child config, coordinate mapping, and the async layout() requirement."
 ---
 
 `FlexGroup` lays out its direct children using real Flexbox semantics, powered

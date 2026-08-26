@@ -1,5 +1,6 @@
 ---
 title: "Voiceover / TTS-synced narration"
+description: "TTS-synced narration via voiceover(): system, OpenAI, ElevenLabs, and silent providers, bookmark cues with a tracker API, and notes on bookmark timing accuracy."
 ---
 
 Phase-3 adoption (manim-voiceover style). Exported from `ecmanim/node`.
