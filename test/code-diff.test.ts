@@ -2,6 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { Code } from "../src/mobject/text/code.ts";
 import { Transform, FadeIn, FadeOut } from "../src/animation/Animation.ts";
+import * as V from "../src/core/math/vector.ts";
 
 // Code.diffTo(): morphs one Code snapshot into another via
 // TransformMatchingAuto over the flat codeTokens group (Code-Surfer-style
@@ -67,6 +68,59 @@ test("a line inserted at the top fades unrelated content below it (known, docume
   assert.ok(fadeOuts.some((f: any) => f.mobject === firstTok), "'first' from `a` should fade out");
   assert.ok(fadeIns.length > 0, "the shifted 'first' (and the new 'inserted' line) in `b` should fade in");
 });
+
+test(
+  "diffTo() anchors before/after by top-left when line counts differ, so mismatched lines don't visually collide " +
+  "(showcase-parity/01-hackreels regression: a real rendering defect, not the documented fade-vs-morph limitation)",
+  () => {
+    // The exact before/after pair from examples/showcase-parity/01-hackreels.ts
+    // (4 lines -> 6 lines: an inserted parameter plus a wrapped/inserted body
+    // line). The demo positions both by moveTo()-ing them to the SAME center
+    // point, which is the natural thing to do and is exactly what exposed
+    // the bug: two independently-self-centered Code blocks of different
+    // heights don't share a line-to-y mapping, so an unmatched (inserted/
+    // removed) token from one side could fade in/out at nearly the same
+    // y-position as an unrelated unmatched token from the other side --
+    // rendering as overlapping/ghosted text, confirmed via an actual
+    // extracted golden-parity frame.
+    const before = new Code(
+      "function fib(n) {\n  if (n < 2) return n;\n  return fib(n - 1) + fib(n - 2);\n}",
+      { language: "js", fontSize: 0.36, lineNumbers: false },
+    );
+    const after = new Code(
+      "function fib(n, memo = {}) {\n  if (n < 2) return n;\n  memo[n] ??= fib(n - 1, memo)\n    + fib(n - 2, memo);\n  return memo[n];\n}",
+      { language: "js", fontSize: 0.36, lineNumbers: false },
+    );
+    before.moveTo([0, -0.4, 0]);
+    after.moveTo([0, -0.4, 0]);
+    const beforeUL = before.getCorner(V.UL);
+
+    before.diffTo(after);
+
+    // `after` must now be anchored to `before`'s ORIGINAL top-left corner --
+    // this is what keeps line 0 (and everything above the first divergence)
+    // visually stable, instead of letting the two blocks' different total
+    // heights put same-index lines at different y's (or, as in the actual
+    // bug, put UNRELATED lines at the same y).
+    const afterUL = after.getCorner(V.UL);
+    assert.ok(
+      V.distance(beforeUL, afterUL) < 1e-9,
+      `after's top-left should be anchored to before's original top-left; before=${beforeUL} after=${afterUL}`,
+    );
+
+    // Concretely reproduce the observed collision: `before`'s line 2
+    // ("return fib(n - 1) + fib(n - 2);", unmatched -> fades out at its own
+    // position) must NOT land at the same y as `after`'s line 3
+    // ("+ fib(n - 2, memo);", unmatched -> fades in at its own position) --
+    // that exact pairing is what rendered as ghosted/superimposed text.
+    const beforeLine2Y = before.codeLines.submobjects[2].getCenter()[1];
+    const afterLine3Y = after.codeLines.submobjects[3].getCenter()[1];
+    assert.ok(
+      Math.abs(beforeLine2Y - afterLine3Y) > 0.05,
+      `before's line 2 and after's line 3 must not visually collide; before=${beforeLine2Y} after=${afterLine3Y}`,
+    );
+  },
+);
 
 test("diffTo includes a Transform for the background rectangle", () => {
   const a = new Code("x", { language: "js", lineNumbers: false });

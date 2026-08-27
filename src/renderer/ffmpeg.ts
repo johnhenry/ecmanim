@@ -22,6 +22,18 @@ function tempSuffix(): string {
   return `pid${process.pid}-t${threadId}-${_tempFileCounter++}`;
 }
 
+// The temp path a caller should write to before renameSync()-ing into
+// `outPath` (see encodeFrames() below for why: atomic rename is what makes
+// concurrent readers only ever see "doesn't exist yet" or "fully written").
+// Shared so every writer of a `outPath`-shaped file -- not just
+// encodeFrames() -- can use the same safe write pattern instead of writing
+// straight to the real output path.
+export function tempPathFor(outPath: string): string {
+  const ext = extname(outPath);
+  const stem = basename(outPath, ext);
+  return join(dirname(outPath), `${stem}.tmp-${tempSuffix()}${ext}`);
+}
+
 // Start an ffmpeg process reading PNGs from stdin (image2pipe) and encoding to
 // `outPath`. Codec/pixel-format is chosen by `format` ("webm" | "gif" | "mov" |
 // otherwise mp4/h264). `transparent` is accepted for signature compatibility but
@@ -88,9 +100,7 @@ export async function encodeFrames(frames: any[], opts: any): Promise<void> {
   // suffix must land BEFORE it (`seg.tmp-xyz.mp4`), not after
   // (`seg.mp4.tmp-xyz`), or ffmpeg can't tell what container to write and
   // exits with "Unable to choose an output format."
-  const ext = extname(outPath);
-  const stem = basename(outPath, ext);
-  const tempPath = join(dirname(outPath), `${stem}.tmp-${tempSuffix()}${ext}`);
+  const tempPath = tempPathFor(outPath);
   const ff = startFfmpeg({ ...opts, outPath: tempPath });
   try {
     for (const buf of frames) await writeToStream(ff.stdin, buf);

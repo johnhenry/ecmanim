@@ -214,7 +214,12 @@ export async function startStudio(options: StudioOptions): Promise<StudioHandle>
     }
     // static
     const p = path.normalize(path.join(root, url));
-    if (!p.startsWith(root) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); res.end("not found"); return; }
+    // Plain startsWith(root) is a string-prefix check with no separator
+    // boundary: a sibling directory whose name merely extends root's
+    // basename (e.g. root="/tmp/proj", p="/tmp/proj-other/x") would pass
+    // despite being outside root (CWE-22). Require an exact match or a
+    // path.sep boundary right after root.
+    if ((p !== root && !p.startsWith(root + path.sep)) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); res.end("not found"); return; }
     res.writeHead(200, { "content-type": MIME[path.extname(p)] ?? "application/octet-stream" });
     res.end(fs.readFileSync(p));
   });

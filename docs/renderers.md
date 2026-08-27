@@ -233,7 +233,11 @@ render differently per backend:
    the whole 3D frame instead.
 2. ThreeRenderer ignores per-mobject effects entirely — its equivalents are
    the GPU post-processing pipeline (bloom / LUT color grading / film grain /
-   custom shader passes; see the post-processing section).
+   custom shader passes; see the post-processing section). It DOES warn
+   (once per mobject, via `console.warn`) when it encounters one of these
+   effects or a `ParticleSystem`, so a WebGL export at least surfaces a
+   signal instead of silently dropping the content — see `ThreeRenderer.
+   _warnUnsupported()`.
 3. Glow and drop shadow deliberately ride CSS `filter: drop-shadow(...)`
    rather than the `shadowBlur`/`shadowColor` context properties:
    `@napi-rs/canvas` (Skia) ignores the shadow properties on `drawImage`
@@ -255,7 +259,10 @@ CanvasRenderer rasterizes each live particle directly (`drawParticles`), in
 (seed, index, time) — scrubbing, backward seeks, and the render cache all
 work unmodified, and per-mobject effects compose with it (the offscreen
 effects path draws particles too). SVGRenderer and ThreeRenderer skip
-particle systems (same silent-skip convention as Mesh3D on the CPU tier).
+particle systems (same silent-skip convention as Mesh3D on the CPU tier) --
+ThreeRenderer additionally warns once (via `console.warn`) the first time it
+sees a `ParticleSystem`, so a WebGL export doesn't silently drop it with no
+signal.
 
 ## GPU post-processing (ThreeRenderer)
 

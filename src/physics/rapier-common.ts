@@ -80,3 +80,26 @@ export function attachStepper(engine: { step(dt: number): void }, scene: any): v
   carrier.addUpdater((_m: any, dt: number) => engine.step(dt));
   scene.add(carrier);
 }
+
+// Bodies that already warned about a non-finite solver output, so a stuck
+// solver doesn't spam a warning every single frame thereafter.
+const warnedNonFinite = new WeakSet<object>();
+
+/**
+ * Warn (once per body) when a Rapier step produces a non-finite
+ * (NaN/Infinity) position or rotation. A naive truthy guard (e.g.
+ * `if (dp[0] || dp[1] || dp[2])`) treats NaN exactly like 0 -- `Boolean(NaN)`
+ * is `false` -- so without this, a NaN solver output silently no-ops
+ * forever: the mobject just freezes with no error or warning ever surfaced.
+ * Callers should `continue` past the rest of that body's per-frame update
+ * (and leave its tracked lastPos/lastAngle/lastQuat untouched) after calling
+ * this, so NaN never gets written into state that feeds next frame's delta.
+ */
+export function warnNonFiniteRapierOutput(body: object, engineName: "Rapier2D" | "Rapier3D"): void {
+  if (warnedNonFinite.has(body)) return;
+  warnedNonFinite.add(body);
+  console.warn(
+    `[ecmanim physics] ${engineName} produced a non-finite (NaN/Infinity) position or rotation for a body -- ` +
+    "skipping this step's update for it to avoid corrupting its mobject's point data. This body will no longer move.",
+  );
+}
