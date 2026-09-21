@@ -4,6 +4,12 @@
   <img alt="ecmanim" src="docs/assets/ecmanim-logo-light.png" width="450">
 </picture>
 
+[![npm version](https://img.shields.io/npm/v/%40johnhenry%2Fecmanim.svg)](https://www.npmjs.com/package/@johnhenry/ecmanim)
+[![CI](https://github.com/johnhenry/ecmanim/actions/workflows/ci.yml/badge.svg)](https://github.com/johnhenry/ecmanim/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/%40johnhenry%2Fecmanim.svg)](LICENSE)
+
+Full documentation: [opensource.johnhenry.me/ecmanim](https://opensource.johnhenry.me/ecmanim/)
+
 A **TypeScript** port of [manim](https://github.com/ManimCommunity/manim) — the
 Mathematical Animation Engine popularized by 3Blue1Brown — that renders the same
 `Scene` code in **Node** (MP4/WebM/GIF/MOV/PNG via ffmpeg) and in the **browser**
@@ -23,6 +29,23 @@ class Demo extends Scene {
 
 await render(Demo, { output: "demo.mp4", quality: "high" });
 ```
+
+## Contents
+
+- [What makes it different](#what-makes-it-different)
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [Backends](#backends)
+- [CLI](#cli)
+- [Claude Code skills](#claude-code-skills)
+- [Plugins](#plugins)
+- [Examples](#examples)
+- [Parity campaigns](#parity-campaigns)
+- [Architecture](#architecture)
+- [API parity with manim](#api-parity-with-manim)
+- [Testing](#testing)
+- [Building](#building)
+- [License](#license)
 
 ## What makes it different
 
