@@ -9,6 +9,13 @@ Lottie campaign's shape: a pure-parsing loader (`src/loaders/ass_loader.ts`)
 "never throw, degrade + warn" contract. Remaining work is documentation/CI
 integration only (skill doc, `docs/subtitles.md`, gallery + CI wiring).
 
+### Documentation
+
+- Added root `AGENTS.md` (with `CLAUDE.md` symlinked to it) — previously
+  this repo had none, as part of the ecosystem-cohesion documentation
+  retrofit. Badges, the `Full documentation:` line, `## Contents`, and the
+  provenance note were already present and unchanged.
+
 ### Added
 - **v1 core tags** (previously landed without a changelog entry — recorded
   here for the record): `[Script Info]`/`[V4+ Styles]` + legacy `[V4 Styles]`
