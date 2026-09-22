@@ -9,31 +9,28 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - run: npm ci
-
-      - run: npm run type-check
-
-      - run: npm test
-
-      - run: npm run build
+    uses: johnhenry/workflows/.github/workflows/ci.yml@v1
+    with:
+      node-versions: '["24"]'
+      os: '["ubuntu-latest"]'
+      # ffmpeg is a system dependency the JS test/build suite needs; folded
+      # into install-command since the reusable workflow's install step is
+      # the only hook that runs before the gate.
+      install-command: sudo apt-get update && sudo apt-get install -y ffmpeg && npm ci
+      gate-commands: |
+        npm run type-check
+        npm test
+        npm run build
 
   demo-smoke:
     # Three representative demos per parity suite, rendered end-to-end at
     # low quality — a real net over render()/ffmpeg/fonts that unit tests
     # can't cast. One matrix job per suite (roadmap policy: consolidate
     # smoke jobs into a matrix once there are more than four suites).
+    #
+    # Kept as its own job rather than folded into the reusable ci.yml call:
+    # its per-suite matrix, custom render/verify steps, and artifact upload
+    # don't fit the reusable workflow's os/node-version matrix shape.
     runs-on: ubuntu-latest
     permissions:
       contents: read
