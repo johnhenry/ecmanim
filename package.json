@@ -95,6 +95,9 @@
     "bezier"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "optionalDependencies": {
     "@dimforge/rapier2d-compat": "^0.19.3",
     "@dimforge/rapier3d-compat": "^0.19.3",
