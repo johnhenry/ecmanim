@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Added
+
+- **`TextList`** (`src/mobject/text/text_list.ts`): a bulleted/numbered list
+  mobject for plain `Text`, with nested sub-lists and depth-aware markers as
+  first-class concepts — the plain-`Text` counterpart to `BulletedList`
+  (which is Tex/MathJax-only). Items are a plain nested array
+  (`["Point A", ["sub 1", "sub 2"], "Point B"]`); `marker` accepts a string
+  or an `(index, depth) => string` function (e.g. `(i) => \`${i + 1}.\`` for
+  an ordered list), defaulting to a depth-cycled bullet (•, ◦, ▪).
+  Every row is positioned via `nextTo`/`alignTo` with `align: 'left'` on
+  each `Text`, not by estimating a string's rendered width — this matters
+  even when no vector font is loaded, since `Text`'s raster fallback sizes
+  its box from a rough per-character estimate rather than real glyph
+  metrics: `align: 'left'` anchors the canvas render at the box's left edge
+  (which `alignTo` sets as a rigid shift, independent of whether the box's
+  width is accurate), rather than the box's center (where any width error
+  feeds directly into where the render actually lands). Motivated by a
+  downstream consumer (orrery's ecmanim demo) hand-rolling bullet-list
+  positioning with raw `point` math and hitting exactly this center-anchor
+  drift.
+
 ASS/SSA subtitle campaign, complete: v1 + v1.5 + v2 import, and both export
 directions (`wordCaptionTrackToAss`, `vmobjectToAssDrawing`). Mirrors the
 Lottie campaign's shape: a pure-parsing loader (`src/loaders/ass_loader.ts`)

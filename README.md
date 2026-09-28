@@ -313,10 +313,11 @@ src/
     value_tracker.ts   ValueTracker, DecimalNumber, Integer, alwaysRedraw
     complex_value_tracker.ts  ComplexValueTracker
     text/Text.ts       Text/MarkupText (Canvas glyphs, .chars, t2c) + RasterText
-    text/paragraph.ts  Paragraph, Title
+    text/paragraph.ts  Paragraph
     text/code.ts       Code (syntax-highlighted listings)
     text/variable.ts   Variable (label = tracked DecimalNumber)
-    text/tex_extras.ts Tex text-mode helpers
+    text/tex_extras.ts Tex text-mode helpers (BulletedList, Title)
+    text/text_list.ts  TextList — bulleted/numbered lists w/ nesting, plain-Text counterpart to BulletedList
     vectorized_text.ts VText — real glyph outlines as Béziers (opentype.js)
     mathtex.ts         MathTex / Tex / SingleStringMathTex — LaTeX via MathJax → Bézier glyphs (token/part model)
     svg_path.ts        SVG path `d` → cubic-Bézier subpaths (powers MathTex/VText)
@@ -390,6 +391,7 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | Markup | MarkupText | ✅ `MarkupText` | inline color/style spans |
 | LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex`, `SingleStringMathTex` | **MathJax → SVG → Béziers, no LaTeX binary**; token/part model, text-mode `Tex` |
 | Code / prose | Code, Paragraph, Title, Variable | ✅ same | syntax-highlighted `Code`, `Paragraph`, `Title`, tracked `Variable` |
+| Lists | `BulletedList` (Tex only) | ✅ `BulletedList` + `TextList` | `TextList` is the plain-`Text` counterpart, with nested sub-lists and depth-aware markers |
 | Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)` |
 | Axes helpers | area, Riemann rects, secant/tangent, labels | ✅ same | `get_area`, Riemann rectangles, secant/tangent lines, axis labels |
 | Planes | PolarPlane, ComplexPlane, LogBase | ✅ same | polar/complex planes, log-scaled axes |
