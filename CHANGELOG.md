@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.0 — 2026-09-28
+
+First release since the `@johnhenry/ecmanim` scope restart at 0.0.0. Adds
+`TextList` and completes the ASS/SSA subtitle import/export campaign below.
+
 ### Added
 
 - **`TextList`** (`src/mobject/text/text_list.ts`): a bulleted/numbered list
