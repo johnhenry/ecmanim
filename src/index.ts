@@ -54,6 +54,7 @@ export * from "./mobject/graph.ts";
 export { Text, MarkupText, RasterText, CHAR_ASPECT, estimateTextSize, fontSizePt } from "./mobject/text/Text.ts";
 export * from "./mobject/text/paragraph.ts";
 export * from "./mobject/text/tex_extras.ts";
+export * from "./mobject/text/text_list.ts";
 export * from "./mobject/text/code.ts";
 export * from "./mobject/text/variable.ts";
 export { ChangingDecimal, ChangeDecimalToValue } from "./animation/numbers.ts";
