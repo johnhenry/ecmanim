@@ -113,3 +113,6 @@ jobs:
           name: golden-parity-actuals-${{ matrix.suite }}
           path: test/golden/parity/${{ matrix.suite }}/*.actual.png
           if-no-files-found: ignore
+
+  workflow-lint:
+    uses: johnhenry/workflows/.github/workflows/workflow-lint.yml@v1
