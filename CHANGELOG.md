@@ -99,6 +99,15 @@ compatibility rules" section of `AGENTS.md`.
   clock, `hashExtra` cache salting, optional `isolate` layer. See
   `docs/skeletal.md`.
 
+- **Stick Nodes import** (epic #61, #73): `loadStickNodes(bytes, config)` and
+  the pure `parseStickNodes(bytes)` in `@johnhenry/ecmanim/skeletal` read
+  `.nodes` figures (raw and zlib-wrapped, version-aware) into a `Skeleton`,
+  a `PoseLibrary` (`pose` / `default`), a one-key pose track and metadata with
+  an explicit `warnings` list for unsupported features. Layout follows
+  MIT sticknodes-rs (attribution in `THIRD_PARTY_NOTICES.md`); includes a small
+  dependency-free sync zlib inflate. Projects/movieclips are not supported.
+  See `docs/skeletal.md`.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL

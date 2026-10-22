@@ -252,6 +252,66 @@ registered by `registerBuiltins()` like the other mobjects.
 Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
 `VMobject` geometry but are not separately pinned.
 
+## Importing Stick Nodes figures (`loadStickNodes`)
+
+```ts
+import { loadStickNodes } from "@johnhenry/ecmanim/skeletal";
+
+const bytes = new Uint8Array(await (await fetch("figure.nodes")).arrayBuffer()); // or fs.readFileSync
+const { skeleton, track, poses, meta } = loadStickNodes(bytes, { unitsPerPixel: 0.01 });
+scene.add(skeleton);
+await scene.play(poses.tween(skeleton, "default"));   // saved pose -> the file's default pose
+console.log(meta.warnings);                            // everything read but not represented
+```
+
+`parseStickNodes(bytes)` is the pure half: `Uint8Array` in, plain `StickNodesFigure`
+data out (sync, no I/O, no `node:` imports, no mobjects). `loadStickNodes` is
+sync and pure of I/O like `loadLottie`: read the file yourself.
+
+- **Formats.** `.nodes` figures: raw big-endian (versions 160-423) and
+  zlib-wrapped little-endian files, via a small built-in synchronous inflate
+  (`DecompressionStream` is async; no dependency added). Per-version/build
+  field differences follow sticknodes-rs up to Stick Nodes 4.2.3 build 72;
+  newer files are read best-effort with a warning. Malformed input throws
+  `StickNodesParseError`.
+- **Mapping.** Each non-root node becomes a bone `n<drawIndex>` (parent = the
+  parent node; children of the root are root bones). Node angles (degrees,
+  relative, summed down the chain) become bone angles; the root node's angle
+  becomes the skeleton's `rotation`. `length * unitsPerPixel` is the bone
+  length; `thickness` becomes the stroke width; draw index is the bone's
+  z offset; the figure colour (and per-segment colours/alpha) style the bones.
+- **Result.** `skeleton`; `poses` (`"pose"` = the saved pose, `"default"` = the
+  file's default angles/lengths); `track` (a one-key `KeyframeTrack<Pose>` at
+  `t = 0`; `skeleton.bindPoseTrack(track)` + `setTime`); `meta` (version,
+  build, `boneIdByDrawIndex`, the full parsed figure, `warnings`).
+- **Provenance.** The layout follows MIT-licensed
+  [sticknodes-rs](https://github.com/vinceTheProgrammer/sticknodes-rs); see
+  `THIRD_PARTY_NOTICES.md`. Test fixtures are built by a test-only encoder
+  (`test/helpers/sticknodes_encoder.ts`); no third-party sample files are
+  committed.
+
+### Stick Nodes import: honest divergences
+
+- **Figures only, one pose.** sticknodes-rs documents `.nodes`; project
+  (`.stknds`) and movieclip (`.nodemc`) files are listed there as future work,
+  so animation frames are **not** imported (a zip container is rejected with a
+  clear error). `track` has a single key.
+- **Not simulated** (listed in `meta.warnings` with draw indices; the stored
+  pose is kept): smart stretch, floaty motion, stretchy/static flags, angle
+  locks, drag locks, connectors, per-segment scale.
+- **Shapes.** Circle, triangle, ellipse, trapezoid and polygon nodes are drawn
+  as plain bones; gradients, curve radius and polyfills are not rendered
+  (polyfill data stays in `meta.figure.polyfills`). Compressed files' polyfill
+  and connector-end tables are not read (as in sticknodes-rs); trailing bytes
+  are reported.
+- **Orientation/units.** The reference does not specify Stick Nodes' axis
+  orientation: angles import as-is (CCW, y-up); pass `flipY: true` to mirror.
+  The header `scale` is recorded in `meta.figure` but not applied.
+- **Per-bone styling** (segment colour, alpha) is set on the bone mobjects at
+  load and, like all Skeleton styles, is not interpolated by `interpolate()`.
+  Renderer matrix: the result is an ordinary `Skeleton`, so Canvas-2D, SVG and
+  WebGL behave as for any Skeleton.
+
 ## Honest divergences / limits
 
 - 2D only (z is dropped; the model is x/y).
@@ -272,5 +332,5 @@ Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
   exactness); `once-hide` detaches children while hidden, so code holding the
   clip must not rely on `clip.submobjects` being populated then; `Clip` is not
   golden-frame tested (it adds no drawing of its own).
-- Pose operators work on whole poses (no per-bone filter, no easing curve on the amount, unlike Blender's Graph Editor). Stick Nodes import, studio overlays and rig
+- Pose operators work on whole poses (no per-bone filter, no easing curve on the amount, unlike Blender's Graph Editor). studio overlays and rig
   constraints are separate follow-ups (epic #61).

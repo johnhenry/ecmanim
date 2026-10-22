@@ -69,7 +69,8 @@
     "src",
     "bin",
     "packages",
-    "skills"
+    "skills",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsc && tsc -p tsconfig.bin.json",
