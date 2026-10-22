@@ -3173,6 +3173,18 @@
         "verifyWebhook": "function"
       }
     },
+    "./skeletal": {
+      "exports": {
+        "PoseLibrary": "function",
+        "PoseTween": "function",
+        "ROOT_JOINT": "string",
+        "Skeleton": "function",
+        "SkeletonModel": "function",
+        "lerpPose": "function",
+        "poseTrack": "function",
+        "wrapAngle": "function"
+      }
+    },
     "./studio": {
       "exports": {
         "ManimChartElement": "function",
