@@ -9,6 +9,13 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **`Clip`** (epic #61, #72; `@johnhenry/ecmanim/skeletal`): a `Group` that
+  evaluates its content (children with `setTime(t)` -- `Skeleton`, particle
+  presets, nested `Clip`s -- or builder functions) at a local clock with modes
+  `loop | once-hold | once-hide | single-frame`, `speed`, `startOffset`,
+  `duration`; pure `localTime(t)` / `seek(t)`, `copy()` with an independent
+  clock, `hashExtra` cache salting, optional `isolate` layer. See
+  `docs/skeletal.md`.
 - **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
   subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
   bone hierarchy with stable ids, forward kinematics, joint world positions

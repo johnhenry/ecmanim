@@ -8,3 +8,5 @@ export { Skeleton } from "./mobject/skeleton.ts";
 export type { SkeletonConfig, HeadSpec, FillSpec } from "./mobject/skeleton.ts";
 export { PoseTween, PoseLibrary, poseTrack } from "./animation/pose.ts";
 export type { PoseTarget } from "./animation/pose.ts";
+export { Clip } from "./mobject/clip.ts";
+export type { ClipConfig, ClipMode, ClipContent, ClipBuilder } from "./mobject/clip.ts";

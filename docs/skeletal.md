@@ -95,12 +95,65 @@ valid. Options: `joints`, `heads: [{ joint, radius, ... }]`,
   `interpolate` option set to `lerpPose`). Use with `setTime`, or
   `new PlayKeyframeTrack(skeleton, track, (m, p) => m.setPose(p))`.
 
+## Clip: nested animation with its own clock (`Clip extends Group`)
+
+```ts
+import { Clip } from "@johnhenry/ecmanim/skeletal";
+
+fig.bindPoseTrack(walkCycle);                       // a Skeleton with a pose track
+const walker = new Clip(fig, { mode: "loop", duration: 1.2, speed: 1.5 });
+this.add(walker);
+await this.wait(6);                                 // walker.update(dt) advances its own clock
+
+walker.seek(0.3);                                   // pure: same t in, same frame out
+const ghost = walker.copy().seek(0.3 + 0.1);        // independent clock (onion skin)
+```
+
+Content is any child exposing `setTime(t)` (a `Skeleton` with a bound pose
+track, particle presets, other `Clip`s) or a builder `(t, clip) => void`.
+Children without `setTime` are left alone (they keep normal `update` recursion).
+
+| Mode | Local time for `raw = t * speed + startOffset` |
+|---|---|
+| `loop` (default) | `raw` wrapped into `[0, duration)` (negative speed works) |
+| `once-hold` | `raw` clamped to `[0, duration]` (holds the last frame) |
+| `once-hide` | as `once-hold` inside `[0, duration]`; **renders nothing** outside it (content is detached, not evaluated, while hidden) |
+| `single-frame` | always `startOffset` (a pinned still) |
+
+Without `duration` there is nothing to wrap or hide against: local time is
+`raw` (clamped at 0 for the `once-*` modes).
+
+- `localTime(t)` and `isVisibleAt(t)` are pure; `setTime(t)` / `seek(t)` set the
+  clip's clock and evaluate deterministically (any order, any `t`).
+- Live play: `update(dt)` advances the clock by `dt` (scaling by `speed` happens
+  in the time model, never by feeding children a scaled `dt`) and does **not**
+  recurse into time-driven children, which would otherwise receive the scene's
+  unscaled `dt`. For fully scene-clock-locked playback you can instead drive it
+  yourself: `clip.clearUpdaters(); clip.addUpdater(() => clip.setTime(scene.time - t0))`.
+- **`play()` suspends updaters** on the animated mobject, so a Clip's clock
+  pauses during `play(clip.animate...)`/`FadeIn(clip)` unless the animation sets
+  `suspendMobjectUpdating: false`. `seek()` still works while suspended.
+- **`copy()`** gives an independent clock and re-arms the driver (plain
+  `Mobject.copy()` would drop the updater and freeze the copy); builders are shared.
+- `wait()` fingerprints include the clip's mode/speed/offset/clock via an updater `hashExtra`.
+- `isolate: true` renders the content into its own offscreen layer
+  (`CompositeGroup` semantics: blend modes apply among siblings only; Canvas
+  backends, degrades to unscoped drawing elsewhere).
+
+**Why `./skeletal` and not the root `.`:** `Clip` is fully generic (duck-typed on
+`setTime`, no skeleton imports), but the epic's packaging plan keeps the root
+barrel (~390 exports) and bundle stable, and moving an export from a subpath into
+`.` later is additive whereas the reverse would be a break. It is also
+registered by `registerBuiltins()` like the other mobjects.
+
 ## Renderer support
 
 | Feature | Canvas-2D (Node/browser) | SVG | WebGL (Three) |
 |---|---|---|---|
 | Bones (line/arc), joints, heads, fills | yes (golden-tested) | yes (plain `VMobject`s) | yes (plain `VMobject`s) |
 | Pose tweening / `setTime` | yes (model-level, renderer-independent) | same | same |
+| `Clip` modes / speed / seek | yes (model-level, renderer-independent) | same | same |
+| `Clip` `isolate: true` | offscreen layer | children drawn unscoped | children drawn unscoped |
 
 Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
 `VMobject` geometry but are not separately pinned.
@@ -116,5 +169,10 @@ Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
   geometry but cannot be represented in the model's placement (root, rotation,
   uniform scale), so the next pose change snaps back.
 - Head radius and joint-dot size are fixed at construction (not part of a Pose).
-- IK, pose operators, clips, Stick Nodes import, studio overlays and rig
+- `Clip`: the clock is a float accumulator under live `update(dt)` (drift
+  ~1e-16/frame, irrelevant in practice; use `seek`/a scene-time updater for
+  exactness); `once-hide` detaches children while hidden, so code holding the
+  clip must not rely on `clip.submobjects` being populated then; `Clip` is not
+  golden-frame tested (it adds no drawing of its own).
+- IK, pose operators, Stick Nodes import, studio overlays and rig
   constraints are separate follow-ups (epic #61).

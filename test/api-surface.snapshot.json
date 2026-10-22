@@ -3175,6 +3175,7 @@
     },
     "./skeletal": {
       "exports": {
+        "Clip": "function",
         "PoseLibrary": "function",
         "PoseTween": "function",
         "ROOT_JOINT": "string",
