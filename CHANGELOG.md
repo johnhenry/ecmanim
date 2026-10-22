@@ -9,6 +9,14 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **Studio onion-skin and motion-path overlays** (epic #61, #74): `./studio`
+  gains `attachOnionSkin` (raster ghosts of the Player's recorded frames at
+  +-k, or vector ghosts of a time-pure mobject via `setTime`),
+  `attachMotionPath` (speed-coloured joint/mobject trail with `KeyframeTrack`
+  markers) and the pure helpers `onionOffsets`, `onionFrames`, `onionTimes`,
+  `sampleMotionPath`, `sampleKeyframeMarkers`, `speedColor`,
+  `motionPathSegments`, `onionVectorGhosts`, `renderOnionRaster`,
+  `renderMotionPath`. See `docs/studio-overlays.md`.
 - **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
   subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
   bone hierarchy with stable ids, forward kinematics, joint world positions
