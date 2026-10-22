@@ -155,9 +155,7 @@ run `gh release create` by hand.
 
 **Tags are scoped: `@johnhenry/ecmanim@X.Y.Z`, never `vX.Y.Z`.** The `v`
 tags `v0.1.0`–`v0.11.1` belong to the old unscoped `ecmanim` package, and
-`v1.0.0`/`v1.1.0` to `manim-js`. A `v` tag for a scoped version either
-collides or misleads. Until `publish.yml` sets `tag-prefix` (#102, needs
-johnhenry/workflows#21), the workflow's `v` tag step skips with a notice, and
-the release must be created by hand:
-`gh release create '@johnhenry/ecmanim@X.Y.Z' --target <release commit> --notes-file <CHANGELOG section>`.
-See the era table at the top of `CHANGELOG.md`.
+`v1.0.0`/`v1.1.0` to `manim-js`. `publish.yml` passes
+`tag-prefix: "@johnhenry/ecmanim@"` to the shared workflow, so the tag and
+Release are created automatically. See the era table at the top of
+`CHANGELOG.md`.
