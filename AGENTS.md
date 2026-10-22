@@ -67,9 +67,15 @@ debugging a Node-render failure that looks like a code bug but isn't.
   without updating its scorecard — the numbers in the root README's
   campaign table (`k/n demos`) are read from those scorecards, not derived
   automatically.
-- **Renamed to `@johnhenry/ecmanim` at `0.0.0`** (#43; last unscoped release
-  `0.11.1`, still installable as `ecmanim`). Don't reintroduce the old
-  unscoped install command in docs/examples.
+- **Published under two names in lockstep.** `@johnhenry/ecmanim` is the
+  primary name (renamed at `0.0.0`, #43). From `0.12.0`, every release is
+  also published as unscoped `ecmanim`, with the same version and identical
+  contents from the same commit. The `publish-unscoped` job in `publish.yml`
+  does this by running `npm pkg set name=ecmanim` in its own checkout. Never
+  publish one name without the other. Docs and examples use the scoped name.
+  Version numbers overlap across three eras (`manim-js` 1.x–2.0, unscoped
+  `ecmanim` 0.0.1–0.11.1, scoped 0.0.0–0.2.0): see the era table at the top
+  of `CHANGELOG.md`. Don't create `v`-prefixed tags (see "Releases").
 
 ## API compatibility rules (standing)
 
@@ -139,7 +145,19 @@ skills.
 
 ## Releases
 
-Bump `version` in `package.json` in a PR, add the `CHANGELOG.md` entry,
-merge, then `gh release create v<version>` — the release event triggers
-`.github/workflows/publish.yml`, which skips if the version is already on
-npm (idempotent).
+**Main is the release branch.** To release, bump `version` in
+`package.json` (`npm version X.Y.Z --no-git-tag-version`, which also updates
+`package-lock.json`) and turn the `## Unreleased` CHANGELOG entries into a
+`## X.Y.Z — YYYY-MM-DD` section, all in one PR. Merging it to `main` makes
+`.github/workflows/publish.yml` publish to npm, which is a no-op if the
+version is already there. It then creates the tag and GitHub Release. Don't
+run `gh release create` by hand.
+
+**Tags are scoped: `@johnhenry/ecmanim@X.Y.Z`, never `vX.Y.Z`.** The `v`
+tags `v0.1.0`–`v0.11.1` belong to the old unscoped `ecmanim` package, and
+`v1.0.0`/`v1.1.0` to `manim-js`. A `v` tag for a scoped version either
+collides or misleads. Until `publish.yml` sets `tag-prefix` (#102, needs
+johnhenry/workflows#21), the workflow's `v` tag step skips with a notice, and
+the release must be created by hand:
+`gh release create '@johnhenry/ecmanim@X.Y.Z' --target <release commit> --notes-file <CHANGELOG section>`.
+See the era table at the top of `CHANGELOG.md`.

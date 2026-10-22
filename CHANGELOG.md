@@ -1,5 +1,27 @@
 # Changelog
 
+This project has shipped under three names. Version numbers **restart** between
+eras, so the same number can appear more than once below. Check which era
+section you're in:
+
+| Era | npm package | Versions | Git tags |
+|---|---|---|---|
+| **`@johnhenry/ecmanim`** (primary) | [`@johnhenry/ecmanim`](https://www.npmjs.com/package/@johnhenry/ecmanim) | 0.0.0 → 0.2.0, then **0.12.0 →** | `@johnhenry/ecmanim@X.Y.Z` (0.0.0 is also tagged `v0.0.0`) |
+| `ecmanim` (unscoped) | [`ecmanim`](https://www.npmjs.com/package/ecmanim) | 0.0.1 → 0.11.1 (its own line), then **0.12.0 →** as an identical copy | `vX.Y.Z` up to 0.11.1; from 0.12.0 shares the scoped tag |
+| `manim-js` (original name) | never published | 1.0.0 → 2.0.0 | `v1.0.0`, `v1.1.0` only |
+
+The scoped restart at 0.0.0 is a new address, not a maturity reset: it is the
+same code as unscoped 0.11.1 plus the never-published 0.11.2 fix.
+
+**From 0.12.0 on, both names publish in lockstep:** the same version, built
+from the same commit with identical contents (only `name` differs). The scoped
+line skipped 0.3.0–0.11.x so the numbers could line up, because those versions
+already exist on the unscoped package with older code. Install either one, but
+not both in the same app: they're separate copies, so `instanceof` checks
+between them fail.
+
+# `@johnhenry/ecmanim`
+
 ## Unreleased
 
 Changelog convention: under each release use these `###` headings, in this
@@ -353,7 +375,29 @@ integration only (skill doc, `docs/subtitles.md`, gallery + CI wiring).
   with `null` (discarding the dangling number) rather than reading past the
   token list.
 
-## 0.11.2 — 2026-07-11
+## 0.0.0 — 2026-08-25
+
+**Renamed: `ecmanim` → `@johnhenry/ecmanim`, restarting the version line at
+0.0.0** (#43). Same library and API as unscoped 0.11.1, plus the 0.11.2 fix
+below, which was never published under the unscoped name.
+
+### Changed
+
+- Package name `ecmanim` → `@johnhenry/ecmanim`. Two bins ship (`ecmanim`,
+  `py2ts`), so bare `npx @johnhenry/ecmanim` can't pick one; use
+  `npx -p @johnhenry/ecmanim ecmanim`.
+- The Studio dev server's import map aliases both the old and new specifiers,
+  so existing scene files keep working unmodified.
+- The unscoped `ecmanim` npm package was frozen at 0.11.1. It resumed in
+  0.12.0 as an identical copy of `@johnhenry/ecmanim`, published in lockstep.
+
+# Unscoped `ecmanim`, 0.0.1–0.11.1 (before the scope restart)
+
+Published to npm as `ecmanim`, 0.0.1 → 0.11.1, with tags `vX.Y.Z`. From 0.12.0
+the unscoped package is published from the same commits as
+`@johnhenry/ecmanim` (see the scoped sections above).
+
+## 0.11.2 — 2026-07-11 (never published as `ecmanim`; shipped in `@johnhenry/ecmanim` 0.0.0)
 
 ### Fixed
 - **`ThreeDAxes`'s y-axis and z-axis tick-number labels rendered rotated/edge-on relative to the camera, effectively illegible** (issue #38). Each axis's `NumberLine` builds its number `Text` labels *before* `ThreeDAxes`'s constructor rotates the y-axis and z-axis into place, so those labels — being submobjects of the line being rotated — rotated right along with it (the x-axis, never rotated, was never affected). Confirmed via a direct render: the z-axis's labels (rotated 90 degrees about Y) collapsed to near-zero world-space width; the y-axis's (rotated 90 degrees about Z) measured a visibly different aspect ratio than the x-axis's own upright labels. Fixed the same way the 2D `Axes` class's identical y-axis bug was fixed (see issue #31's changelog entry below): discard the mispositioned labels after rotation and rebuild them in world space via `coordsToPoint`, unrotated. Also added `xAxisConfig`/`yAxisConfig`/`zAxisConfig` per-axis overrides to `ThreeDAxesConfig` (previously only a single shared `axisConfig`), matching 2D `Axes`'s existing config API.
@@ -1890,6 +1934,11 @@ numbers tracked development phases, not releases.
 - Honesty pass: Lottie static-only scope, OTIO skeleton scope, voiceover
   bookmark-drift warning, SimpleEngine limits, Studio's actual feature set,
   diagram layout limits.
+
+# `manim-js` (original name, never published to npm)
+
+Versions 1.0.0 → 2.0.0 were never published to npm. Only `v1.0.0` and
+`v1.1.0` were tagged. The project was renamed to `ecmanim` in unscoped 0.0.1.
 
 ## 2.0.0 — adoption phase 7: authoring layer + Studio
 
