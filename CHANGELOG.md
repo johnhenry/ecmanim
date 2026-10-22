@@ -7,6 +7,18 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+## 0.2.0 — 2026-10-21
+
+Epic #61: skeletal animation and motion tooling, built clean-room (from prose
+docs, public algorithms and specs) with inspiration from StykAnimate. Adds the
+`./skeletal` subpath (Skeleton, poses, IK with joint limits and pole targets,
+pose operators, rig constraints, Clip, Stick Nodes `.nodes` import), camera
+motion effects (shake, handheld, impact, zoom pulse, follow with bake),
+per-keyframe outgoing easing, particle effect presets, isomorphic APNG/ZIP/GIF
+encoders (the `./encoders` subpath, `encoder: "js"`, CLI `--encoder`), studio
+onion-skin, motion-path and rig helpers, and API-compatibility guardrails. All
+additive: no existing export changed.
+
 ### Added
 
 - IK / rig follow-ups (`@johnhenry/ecmanim/skeletal` and `/studio`, #92, stacked on
