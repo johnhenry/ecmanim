@@ -368,10 +368,60 @@ export async function downloadMp4(sceneOrConstruct: any, filename = "scene.mp4",
 }
 
 // ---------------------------------------------------------------------------
+// APNG / frame-ZIP recording (first-party encoders, src/encoders)
+// ---------------------------------------------------------------------------
+// Lossless, alpha-preserving. Frames are read back with getImageData and
+// streamed into the isomorphic encoder; the encoders module is loaded lazily.
+async function recordWith(
+  kind: "apng" | "zip",
+  mime: string,
+  sceneOrConstruct: any,
+  options: BrowserOptions,
+): Promise<Blob> {
+  if (typeof document === "undefined" && !options.canvas) {
+    throw new Error(`record${kind === "apng" ? "Apng" : "Zip"}() is browser-only: needs a document or options.canvas`);
+  }
+  const { createFrameEncoder } = await import("./encoders/index.ts");
+  const q = QUALITIES[options.quality ?? "medium"] ?? QUALITIES.medium;
+  const width = options.pixelWidth ?? q.pixelWidth;
+  const height = options.pixelHeight ?? q.pixelHeight;
+  const fps = options.fps ?? q.fps;
+  const enc = await createFrameEncoder(kind, { width, height, fps });
+  const { frames } = await driveFrames(sceneOrConstruct, options, (ctx, canvas) => {
+    enc.addFrame(ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+  });
+  if (frames === 0) throw new Error(`record${kind === "apng" ? "Apng" : "Zip"}() produced no frames`);
+  return new Blob([enc.finish() as any], { type: mime });
+}
+
+// Record an animated PNG (lossless, full alpha).
+//   const blob = await recordApng(MyScene, { quality: "medium", fps: 30 });
+export function recordApng(sceneOrConstruct: any, options: BrowserOptions = {}): Promise<Blob> {
+  return recordWith("apng", "image/apng", sceneOrConstruct, options);
+}
+
+// Record a ZIP of numbered PNG frames plus an animation.json manifest.
+export function recordZip(sceneOrConstruct: any, options: BrowserOptions = {}): Promise<Blob> {
+  return recordWith("zip", "application/zip", sceneOrConstruct, options);
+}
+
+export async function downloadApng(sceneOrConstruct: any, filename = "scene.apng", options: BrowserOptions = {}) {
+  const blob = await recordApng(sceneOrConstruct, options);
+  triggerDownload(blob, filename);
+  return blob;
+}
+
+export async function downloadZip(sceneOrConstruct: any, filename = "scene.zip", options: BrowserOptions = {}) {
+  const blob = await recordZip(sceneOrConstruct, options);
+  triggerDownload(blob, filename);
+  return blob;
+}
+
+// ---------------------------------------------------------------------------
 // Unified dispatcher + download helper
 // ---------------------------------------------------------------------------
 export interface RecordVideoOptions extends BrowserOptions {
-  format?: "webm" | "gif" | "mp4";
+  format?: "webm" | "gif" | "mp4" | "apng" | "zip";
 }
 
 // Record a scene to the chosen container format.
@@ -382,7 +432,9 @@ export async function recordVideo(sceneOrConstruct: any, options: RecordVideoOpt
     case "gif": return recordGif(sceneOrConstruct, options);
     case "mp4": return recordMp4(sceneOrConstruct, options);
     case "webm": return record(sceneOrConstruct, options);
-    default: throw new Error(`recordVideo(): unknown format '${format}' (expected 'webm' | 'gif' | 'mp4')`);
+    case "apng": return recordApng(sceneOrConstruct, options);
+    case "zip": return recordZip(sceneOrConstruct, options);
+    default: throw new Error(`recordVideo(): unknown format '${format}' (expected 'webm' | 'gif' | 'mp4' | 'apng' | 'zip')`);
   }
 }
 

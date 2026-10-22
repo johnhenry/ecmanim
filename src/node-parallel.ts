@@ -38,12 +38,15 @@ import { discoverSegments, partitionSegments } from "./scene/render_frame.ts";
 import type { SegmentRecord } from "./scene/render_frame.ts";
 // Shared ffmpeg helpers — the single source of truth for both the sequential
 // (node.ts) and parallel cache paths, keeping partial files byte-compatible.
+import { normalizeFormat, partialExtension, isJsEncoderFormat } from "./core/render_format.ts";
 import { encodeFrames, concatPartials, remuxCopy } from "./renderer/ffmpeg.ts";
 
 export interface RenderParallelOptions {
   fps?: number;
   quality?: string;
   format?: string;
+  /** "js" = first-party apng/zip/gif encoders (rendered sequentially). See RenderOptions.encoder. */
+  encoder?: "ffmpeg" | "js";
   outPath?: string;
   output?: string; // alias for outPath (parity with node.ts render())
   background?: string;
@@ -104,11 +107,10 @@ function resolveRender(options: RenderParallelOptions): Resolved {
     ?? manimConfig.fps ?? q.fps;
 
   const background = options.background ?? manimConfig.background ?? "#000000";
-  let format = options.format ?? "mp4";
-  if (format === "png") format = "png-sequence";
-  const partialExt = format === "webm" ? "webm" : format === "mov" ? "mov" : "mp4";
+  const format = normalizeFormat(options.format);
+  const partialExt = partialExtension(format);
 
-  const outPath = resolve(options.outPath ?? options.output ?? "output.mp4");
+  const outPath = resolve(options.outPath ?? options.output ?? (format === "apng" || format === "zip" ? `output.${format}` : "output.mp4"));
   const cacheDir = join(dirname(outPath), "partial");
   return { fps, pixelWidth, pixelHeight, background, format, partialExt, outPath, cacheDir };
 }
@@ -316,7 +318,8 @@ export async function renderParallel(
 
   // Fallback to sequential node.ts render() when parallelism wouldn't pay off:
   // too few segments, or a single worker. Also covers segmentCount === 0.
-  if (workers <= 1 || segmentCount < 2 * workers) {
+  const jsEncoded = isJsEncoderFormat(r.format, options.encoder);
+  if (workers <= 1 || segmentCount < 2 * workers || jsEncoded) {
     if (verbose) {
       console.log(`[parallel] ${segmentCount} segment(s), ${workers} worker(s) — falling back to sequential render()`);
     }
@@ -325,6 +328,7 @@ export async function renderParallel(
       output: r.outPath,
       quality: options.quality,
       format: options.format,
+      ...(options.encoder !== undefined ? { encoder: options.encoder } : {}),
       fps: options.fps,
       pixelWidth: options.pixelWidth,
       pixelHeight: options.pixelHeight,

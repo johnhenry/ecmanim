@@ -11,6 +11,7 @@ import { registerNodeFontAutoLoader } from "./mobject/vectorized_text.ts";
 import { Scene, computeRenderConfigHash, computeParamsHash } from "./scene/Scene.ts";
 import { makeScene, runConstruct } from "./scene/orchestrate.ts";
 import { QUALITIES } from "./index.ts";
+import { resolveOutputFormat, isJsEncoderFormat } from "./core/render_format.ts";
 import { config as manimConfig, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
 import { startFfmpeg, writeToStream, encodeFrames, runFfmpeg, concatPartials, remuxCopy, tempPathFor } from "./renderer/ffmpeg.ts";
 
@@ -64,7 +65,7 @@ export interface RenderOptions {
   output?: string;
   quality?: string;
   background?: string;
-  format?: string; // "mp4" | "png-sequence" | "webm" | "gif" | "mov" | "png"
+  format?: string; // "mp4" | "png-sequence" | "webm" | "gif" | "mov" | "png" | "apng" | "zip"
   fps?: number;
   pixelWidth?: number;
   pixelHeight?: number;
@@ -91,6 +92,10 @@ export interface RenderOptions {
   aspectRatio?: string;               // named ASPECT_RATIO_PRESET (e.g. "9:16") or "W:H"
   stillFrame?: number;                // capture exactly this frame index as PNG (see renderStill)
   watermark?: import("./core/watermark.ts").WatermarkConfig; // burn a text/image watermark
+  /** Backend for formats that have a choice. "ffmpeg" (default) = today's behaviour.
+   *  "js" = first-party ffmpeg-free encoders (src/encoders): gif (gifenc), apng, zip.
+   *  "js" + mp4/webm/mov throws. "apng"/"zip" are always JS-encoded. */
+  encoder?: "ffmpeg" | "js";
   [key: string]: any;
 }
 
@@ -175,18 +180,10 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
 
   // Resolve the output path + effective format. transparent mp4 has no clean
   // path, so fall back to a .mov/prores4444 container (manim's behavior).
-  let output = options.output ?? "output.mp4";
-  let format = options.format ?? "mp4"; // "mp4" | "png-sequence" | "webm" | "gif" | "mov" | "png"
-  if (format === "png") format = "png-sequence";
-  if (transparent && format === "mp4") {
-    format = "mov";
-    output = output.replace(/\.mp4$/i, ".mov");
-    if (!/\.mov$/i.test(output)) output += ".mov";
-  }
-  if (transparent && format === "mov") {
-    // ensure .mov extension
-    if (!/\.mov$/i.test(output)) output = output.replace(/\.[^.]+$/, ".mov");
-  }
+  // (shared with node-parallel.ts -- see core/render_format.ts)
+  const { format, output } = resolveOutputFormat({
+    format: options.format, output: options.output, transparent, encoder: options.encoder,
+  });
 
   const { createCanvas, GlobalFonts } = await loadCanvas();
   autoRegisterFonts(GlobalFonts);
@@ -332,6 +329,37 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     if (emitted === 0) await scene.emitFrame();
     if (verbose) console.log(`✓ Rendered ${emitted} frames @ ${fps}fps -> ${frameDir}`);
     return { output: frameDir, frames: emitted, fps, pixelWidth, pixelHeight, sounds: scene.sounds?.length ?? 0, sections: scene.sections };
+  }
+
+  // --- First-party JS encoders (apng | zip | gif with encoder:"js"): frames are
+  //     read back as raw RGBA and streamed into src/encoders -- no ffmpeg, no
+  //     partial-movie cache. Audio, sections and watermark need ffmpeg and are
+  //     not applied on this path. ---
+  if (isJsEncoderFormat(format, options.encoder)) {
+    if (options.watermark) {
+      throw new Error(`render(): watermark needs ffmpeg and is not supported with format "${format}" (JS encoders)`);
+    }
+    const { createFrameEncoder } = await import("./encoders/index.ts");
+    const enc = await createFrameEncoder(format as "apng" | "zip" | "gif", { width: pixelWidth, height: pixelHeight, fps });
+    let jsEmitted = 0;
+    scene.frameHandler = async (mobjects: any[]) => {
+      renderer.renderScene(mobjects);
+      jsEmitted++;
+      enc.addFrame(ctx.getImageData(0, 0, pixelWidth, pixelHeight).data);
+    };
+    await runConstruct(sceneOrConstruct, scene, resolvedParams);
+    if (jsEmitted === 0) await scene.emitFrame();
+    // Atomic write, same pattern as the ffmpeg single-stream path.
+    const tmp = tempPathFor(outPath);
+    try {
+      writeFileSync(tmp, enc.finish());
+      renameSync(tmp, outPath);
+    } catch (err) {
+      try { rmSync(tmp, { force: true }); } catch { /* never created */ }
+      throw err;
+    }
+    if (verbose) console.log(`✓ Rendered ${jsEmitted} frames @ ${fps}fps -> ${outPath} (JS ${format} encoder)`);
+    return { output: outPath, frames: jsEmitted, fps, pixelWidth, pixelHeight, sounds: 0, sections: scene.sections };
   }
 
   // --- Caching path: render each play()/wait segment to its own partial movie

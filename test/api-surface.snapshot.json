@@ -1275,9 +1275,11 @@
         "dftOfPath": "function",
         "diagram": "function",
         "diffDiagrams": "function",
+        "downloadApng": "function",
         "downloadGif": "function",
         "downloadMp4": "function",
         "downloadWebM": "function",
+        "downloadZip": "function",
         "earclipWasm": "function",
         "edit": "function",
         "effect": "function",
@@ -1443,9 +1445,11 @@
         "rationalTime": "function",
         "reactive": "function",
         "record": "function",
+        "recordApng": "function",
         "recordGif": "function",
         "recordMp4": "function",
         "recordVideo": "function",
+        "recordZip": "function",
         "registerColors": "function",
         "registerComposition": "function",
         "registerStylePreset": "function",
@@ -2333,6 +2337,19 @@
         "word": "function",
         "wordCaptionTrackToAss": "function",
         "zoomInTransition": "function"
+      }
+    },
+    "./encoders": {
+      "exports": {
+        "ApngEncoder": "function",
+        "GifEncoder": "function",
+        "ZipSequenceEncoder": "function",
+        "ZipWriter": "function",
+        "crc32": "function",
+        "crc32Update": "function",
+        "createFrameEncoder": "function",
+        "encodePng": "function",
+        "msToDelay": "function"
       }
     },
     "./node": {

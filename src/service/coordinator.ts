@@ -272,7 +272,7 @@ export async function startCoordinator(options: CoordinatorOptions): Promise<Coo
             const local = storage.localPath(job.artifactKey);
             if (local == null) return sendJson(res, 404, { error: "artifact not locally available" });
             const ext = artifactExtension(job.spec);
-            const type = ext === "png" ? "image/png" : ext === "gif" ? "image/gif" : ext === "webm" ? "video/webm" : "video/mp4";
+            const type = ext === "png" ? "image/png" : ext === "apng" ? "image/apng" : ext === "zip" ? "application/zip" : ext === "gif" ? "image/gif" : ext === "webm" ? "video/webm" : "video/mp4";
             res.writeHead(200, { "content-type": type, "content-length": storage.size(job.artifactKey) });
             storage.getStream(job.artifactKey).pipe(res);
             return;
