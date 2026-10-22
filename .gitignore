@@ -1,4 +1,6 @@
-node_modules/
+# No trailing slash: also ignores a node_modules *symlink* (worktrees often link
+# to the main clone's node_modules), which `node_modules/` does not match.
+node_modules
 examples/out/
 media/
 *_frames/
