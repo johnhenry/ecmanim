@@ -9,6 +9,14 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **Stick Nodes import** (epic #61, #73): `loadStickNodes(bytes, config)` and
+  the pure `parseStickNodes(bytes)` in `@johnhenry/ecmanim/skeletal` read
+  `.nodes` figures (raw and zlib-wrapped, version-aware) into a `Skeleton`,
+  a `PoseLibrary` (`pose` / `default`), a one-key pose track and metadata with
+  an explicit `warnings` list for unsupported features. Layout follows
+  MIT sticknodes-rs (attribution in `THIRD_PARTY_NOTICES.md`); includes a small
+  dependency-free sync zlib inflate. Projects/movieclips are not supported.
+  See `docs/skeletal.md`.
 - **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
   subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
   bone hierarchy with stable ids, forward kinematics, joint world positions

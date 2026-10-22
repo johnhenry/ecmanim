@@ -8,3 +8,8 @@ export { Skeleton } from "./mobject/skeleton.ts";
 export type { SkeletonConfig, HeadSpec, FillSpec } from "./mobject/skeleton.ts";
 export { PoseTween, PoseLibrary, poseTrack } from "./animation/pose.ts";
 export type { PoseTarget } from "./animation/pose.ts";
+export { loadStickNodes, parseStickNodes, StickNodesParseError } from "./loaders/sticknodes_loader.ts";
+export type {
+  StickNodesConfig, StickNodesResult, StickNodesMeta, StickNodesFigure, StickNode, StickNodeType,
+  StickNodeConnector, StickNodesPolyfill, StickNodesColor,
+} from "./loaders/sticknodes_loader.ts";

@@ -3180,7 +3180,10 @@
         "ROOT_JOINT": "string",
         "Skeleton": "function",
         "SkeletonModel": "function",
+        "StickNodesParseError": "function",
         "lerpPose": "function",
+        "loadStickNodes": "function",
+        "parseStickNodes": "function",
         "poseTrack": "function",
         "wrapAngle": "function"
       }
