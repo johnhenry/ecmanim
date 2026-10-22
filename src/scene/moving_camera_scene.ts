@@ -12,6 +12,10 @@ import type { Mobject } from "../mobject/Mobject.ts";
 import * as V from "../core/math/vector.ts";
 import { ApplyMethod, Animation } from "../animation/Animation.ts";
 import type { AnimationConfig } from "../animation/Animation.ts";
+import { CameraShake } from "../camera/camera_effects.ts";
+import type { CameraShakeConfig } from "../camera/camera_effects.ts";
+import { CameraFollow, bakeCameraMotion } from "../camera/camera_follow.ts";
+import type { CameraFollowConfig, CameraFollowTarget } from "../camera/camera_follow.ts";
 
 /**
  * A named camera viewpoint (center/width/height/zoom), recalled via
@@ -294,6 +298,78 @@ export class MovingCameraScene extends Scene {
   getFrame(): Rectangle {
     this.setupFrame();
     return (this.camera as Camera).frame as Rectangle;
+  }
+
+  /**
+   * Shake the camera for `duration` seconds starting now (sugar over
+   * `camera.addEffect(new CameraShake(...), {start: this.time, ...})`). The
+   * shake rides on top of any frame animation / followCamera() and never
+   * touches the frame mobject. Returns `this` (does not advance time).
+   */
+  shakeCamera(config: CameraShakeConfig & { duration?: number; fadeIn?: number; fadeOut?: number } = {}): this {
+    const { duration = 0.5, fadeIn = 0, fadeOut = Math.min(0.25, duration / 2), ...shake } = config;
+    this.camera?.addEffect(new CameraShake({ decay: 0, ...shake }), { start: this.time, duration, fadeIn, fadeOut });
+    return this;
+  }
+
+  private _followUpdaters: Array<(m: any, dt: number) => void> = [];
+
+  // The camera frame is not a scene mobject, so Scene.updateMobjects() never
+  // ticks its updaters; drive them here (only when followCamera() added any).
+  // update() honours updatingSuspended, which play() sets while a frame
+  // animation runs -- that is how an explicit frame.animate wins.
+  updateMobjects(dt: number): void {
+    super.updateMobjects(dt);
+    if (this._followUpdaters.length) (this.camera?.frame as any)?.update?.(dt);
+  }
+
+  /**
+   * Make the camera frame follow `target` for an explicit window
+   * `[now, now + duration]`. The follower (dead zone, look-ahead, smoothing,
+   * optional auto-zoom -- see CameraFollow) is BAKED at a fixed dt into a
+   * keyframe track at call time and sampled by absolute scene time, so the
+   * result is seek/parallel safe. `target` must be a function of time since
+   * this call (`(t) => point | {center, width, height}`).
+   *
+   * The frame is only driven inside the window and only while no animation
+   * is playing on it: a `play(frame.animate...)` suspends the frame's
+   * updaters, so an explicit frame animation always wins. Shake effects
+   * ride on top. Returns `this`.
+   */
+  followCamera(
+    target: CameraFollowTarget,
+    config: Omit<CameraFollowConfig, "target"> & { duration: number; dt?: number },
+  ): this {
+    const { duration, dt, ...rest } = config;
+    const frame = this.getFrame();
+    const init = readFrameParams(frame);
+    const track = bakeCameraMotion(new CameraFollow({ target, ...rest }), {
+      duration, dt, center: init.center, height: init.height, aspect: init.width / init.height,
+    });
+    const t0 = this.time;
+    const aspect = init.width / init.height;
+    const updater = (m: any, step: number): void => {
+      const t = this.time + step - t0;
+      if (t < 0 || t > duration) return;
+      const v = track.valueAt(t);
+      const cur = readFrameParams(m);
+      const rect = new Rectangle({ width: v[2] * aspect, height: v[2], strokeWidth: 0, fillOpacity: 0 });
+      if (cur.roll !== 0) rect.rotate(cur.roll);
+      rect.moveTo([v[0], v[1], cur.center[2] ?? 0]);
+      m.points = rect.points;
+    };
+    (updater as any).hashExtra = () => `follow:${t0}:${duration}:${track.valueAt(duration).join(",")}`;
+    frame.addUpdater(updater);
+    this._followUpdaters.push(updater);
+    return this;
+  }
+
+  /** Detach every followCamera() driver, leaving the frame where it is. */
+  stopFollowCamera(): this {
+    const frame = this.getFrame();
+    frame.updaters = frame.updaters.filter((u: any) => !this._followUpdaters.includes(u));
+    this._followUpdaters = [];
+    return this;
   }
 
   private _cameraStops = new Map<string, CameraStop>();

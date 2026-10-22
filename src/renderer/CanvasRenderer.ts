@@ -7,6 +7,8 @@ import { ZBuffer } from "./zbuffer.ts";
 import { Color } from "../core/color.ts";
 import { splitEffects, effectsToCanvasFilter, effectPad, makeNoiseBytes } from "../core/effects.ts";
 import type { FrameEffect } from "../core/effects.ts";
+import { evaluateCameraEffects, fingerprintCameraEffects, makeEffectEntry } from "../camera/camera_effects.ts";
+import type { CameraEffectEntry, CameraEffectLike, CameraEffectOptions } from "../camera/camera_effects.ts";
 import type { Vec3, Ctx2D, ColorLike } from "../core/types.ts";
 import type { Mobject } from "../mobject/Mobject.ts";
 
@@ -112,6 +114,21 @@ export class Camera {
   // one object already threaded through every backend (node, browser,
   // player, studio) without touching Scene.
   declare frameEffects?: FrameEffect[];
+  // Camera motion effects (src/camera/camera_effects.ts). Registered with
+  // addEffect(); evaluated from absolute scene time by setEffectTime() into
+  // the three fields below, which toPixel / ThreeRenderer add ON TOP of
+  // frameCenter / zoom / rotation. They are separate fields (never written
+  // into frameCenter) because preRender() overwrites or accumulates there.
+  // All stay `undefined` until an effect has been evaluated, so a camera with
+  // no effects runs the exact pre-existing arithmetic.
+  declare effects?: CameraEffectEntry[];
+  declare effectTime?: number;
+  /** Composed world-space camera offset [dx, dy] from effects. */
+  declare effectOffset?: [number, number];
+  /** Composed log-space zoom (zoom factor = exp(effectLogZoom)). */
+  declare effectLogZoom?: number;
+  /** Composed roll in radians (added to rotation / gamma). */
+  declare effectRoll?: number;
 
   constructor(config: CameraConfig = {}) {
     this.pixelWidth = config.pixelWidth ?? 1920;
@@ -128,10 +145,17 @@ export class Camera {
 
   // World coordinates -> pixel coordinates (y is flipped: world y-up).
   toPixel(p: number[]): [number, number] {
-    const z = this.zoom ?? 1;
+    let z = this.zoom ?? 1;
     let cx = p[0] - this.frameCenter[0];
     let cy = p[1] - this.frameCenter[1];
-    const rot = this.rotation ?? 0;
+    let rot = this.rotation ?? 0;
+    if (this.effectOffset !== undefined) {
+      // Camera-motion effects ride on top of the framing (see addEffect()).
+      cx -= this.effectOffset[0];
+      cy -= this.effectOffset[1];
+      rot += this.effectRoll ?? 0;
+      z *= Math.exp(this.effectLogZoom ?? 0);
+    }
     if (rot !== 0) {
       // A camera rolled by +rot shows the world rotated by -rot.
       const c = Math.cos(-rot), s = Math.sin(-rot);
@@ -148,6 +172,54 @@ export class Camera {
   // Convert a manim stroke width (roughly px at 1080p) to this resolution.
   strokeScale(): number {
     return this.pixelHeight / 1080;
+  }
+
+  /**
+   * Register a camera motion effect (CameraShake, Handheld, CameraImpact,
+   * ZoomPulse, or any `(t) => {dx, dy, roll, logZoom}` function). Effects are
+   * evaluated from absolute scene time; they never touch `frameCenter`.
+   */
+  addEffect(fx: CameraEffectLike, opts: CameraEffectOptions = {}): this {
+    (this.effects ??= []).push(makeEffectEntry(fx, opts));
+    if (this.effectTime !== undefined) this.setEffectTime(this.effectTime);
+    return this;
+  }
+
+  /** Remove a previously added effect (by the object/function passed to addEffect). */
+  removeEffect(fx: CameraEffectLike): this {
+    if (this.effects) {
+      this.effects = this.effects.filter((e) => e.fx !== fx);
+      if (this.effectTime !== undefined) this.setEffectTime(this.effectTime);
+    }
+    return this;
+  }
+
+  clearEffects(): this {
+    this.effects = undefined;
+    if (this.effectTime !== undefined) this.setEffectTime(this.effectTime);
+    return this;
+  }
+
+  /** Evaluate all effects at absolute scene time `t` (Scene calls this each
+   *  frame). A no-op for a camera that has no effects. */
+  setEffectTime(t: number): void {
+    const es = this.effects;
+    if (!es || es.length === 0) {
+      this.effectOffset = undefined;
+      this.effectLogZoom = undefined;
+      this.effectRoll = undefined;
+      return;
+    }
+    this.effectTime = t;
+    const s = evaluateCameraEffects(es, t);
+    this.effectOffset = [s.dx, s.dy];
+    this.effectLogZoom = s.logZoom;
+    this.effectRoll = s.roll;
+  }
+
+  /** Cache-key description of the registered effects ("" when none). */
+  effectsFingerprint(): string {
+    return this.effects && this.effects.length ? fingerprintCameraEffects(this.effects) : "";
   }
 
   // Sync the viewport (frameCenter/width/height) to the frame mobject, if one is
@@ -729,7 +801,11 @@ export class CanvasRenderer {
 
   private _cameraFingerprint(): string {
     const c = this.camera;
-    return `${c.frameCenter.join(",")}|${c.frameWidth}|${c.frameHeight}|${c.zoom ?? 1}|${c.rotation ?? 0}`;
+    const base = `${c.frameCenter.join(",")}|${c.frameWidth}|${c.frameHeight}|${c.zoom ?? 1}|${c.rotation ?? 0}`;
+    // Effect state moves pixels without touching any field above.
+    return c.effectOffset === undefined
+      ? base
+      : `${base}|fx:${c.effectOffset.join(",")},${c.effectRoll},${c.effectLogZoom}`;
   }
 
   private _pixelBBox(mob: any): { minX: number; minY: number; maxX: number; maxY: number } {
@@ -955,22 +1031,82 @@ export class CanvasRenderer {
     const [x0] = camera.toPixel([0, 0, 0]);
     const [x1] = camera.toPixel([1, 0, 0]);
     const pxPerUnit = Math.abs(x1 - x0) || 1;
-    const square = mob.shape === "square";
+    const material: string = mob.material ?? mob.shape ?? "circle";
     ctx.save();
     for (const p of particles) {
       const alpha = p.opacity * mobOpacity;
       if (alpha <= 0) continue;
       const [px, py] = camera.toPixel([p.x, p.y, 0]);
       const d = Math.max(0.5, p.size * pxPerUnit);
+      if (material === "soft") {
+        this._drawSoftParticle(px, py, d, p.color, alpha);
+        continue;
+      }
       ctx.fillStyle = p.color.toRGBAString(alpha);
-      if (square) {
+      if (material === "square") {
         ctx.fillRect(px - d / 2, py - d / 2, d, d);
+      } else if (material === "star") {
+        ctx.beginPath();
+        const R = d / 2, r = R * 0.45;
+        for (let k = 0; k < 10; k++) {
+          const rad = k % 2 === 0 ? R : r;
+          const a = -Math.PI / 2 + (k * Math.PI) / 5;
+          const sx = px + rad * Math.cos(a), sy = py + rad * Math.sin(a);
+          if (k === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fill();
       } else {
         ctx.beginPath();
         ctx.arc(px, py, d / 2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+    ctx.restore();
+  }
+
+  // "soft" material: a radial-falloff blob. When an offscreen backend exists
+  // the tinted sprite is rendered once per quantized color and cached; else
+  // the same gradient is drawn directly (identical look, no cache).
+  private _softSprites = new Map<string, any>();
+  private _drawSoftParticle(px: number, py: number, d: number, color: any, alpha: number): void {
+    const { ctx } = this;
+    const SPRITE = 64;
+    const hex = color.toHex();
+    let sprite = this._softSprites.get(hex);
+    if (sprite === undefined) {
+      const cv = this._makeOffscreen(SPRITE, SPRITE);
+      sprite = null;
+      if (cv) {
+        const c2 = cv.getContext("2d");
+        if (c2) {
+          const g = c2.createRadialGradient(SPRITE / 2, SPRITE / 2, 0, SPRITE / 2, SPRITE / 2, SPRITE / 2);
+          g.addColorStop(0, color.toRGBAString(1));
+          g.addColorStop(0.4, color.toRGBAString(0.5));
+          g.addColorStop(1, color.toRGBAString(0));
+          c2.fillStyle = g;
+          c2.fillRect(0, 0, SPRITE, SPRITE);
+          sprite = cv;
+        }
+      }
+      if (this._softSprites.size > 256) this._softSprites.clear();
+      this._softSprites.set(hex, sprite);
+    }
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * (ctx.globalAlpha ?? 1));
+    if (sprite) {
+      try {
+        ctx.drawImage(sprite, px - d / 2, py - d / 2, d, d);
+        ctx.restore();
+        return;
+      } catch { /* fall through to the direct gradient */ }
+    }
+    const g = ctx.createRadialGradient(px, py, 0, px, py, d / 2);
+    g.addColorStop(0, color.toRGBAString(1));
+    g.addColorStop(0.4, color.toRGBAString(0.5));
+    g.addColorStop(1, color.toRGBAString(0));
+    ctx.fillStyle = g;
+    ctx.fillRect(px - d / 2, py - d / 2, d, d);
     ctx.restore();
   }
 

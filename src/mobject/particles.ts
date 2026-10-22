@@ -7,15 +7,30 @@
 //
 // Rendering: raster-drawn directly to the canvas by CanvasRenderer's
 // drawParticles (ImageMobject tier — thousands of VMobjects would crawl).
-// SVG/WebGL backends skip particles (documented in docs/renderers.md).
+// SVG/WebGL backends skip particles and warn once (docs/particles.md, docs/renderers.md).
 
 import { Mobject } from "./Mobject.ts";
 import type { MobjectConfig } from "./Mobject.ts";
-import { mulberry32 } from "../core/noise.ts";
+import { mulberry32, simplex3D, fbm3 } from "../core/noise.ts";
 import { Color } from "../core/color.ts";
 import type { ColorLike } from "../core/types.ts";
 
 export type Range = number | [number, number];
+
+/** Sprite used to draw each particle. */
+export type ParticleMaterial = "circle" | "square" | "soft" | "star";
+
+/** Closed-form turbulence displacement field (see {@link ParticleSystemConfig.turbulence}). */
+export interface ParticleTurbulence {
+  /** Peak displacement per axis is up to ~2x this, world units. */
+  amplitude: number;
+  /** Noise frequency in 1/world-unit (space) and 1/second (time). */
+  frequency: number;
+  /** Noise seed (default: the system's own seed). */
+  seed?: number;
+  /** fBm octaves (default 1 = plain simplex). */
+  octaves?: number;
+}
 
 export interface ParticleSystemConfig extends MobjectConfig {
   /** Emitter center (default origin). */
@@ -47,9 +62,22 @@ export interface ParticleSystemConfig extends MobjectConfig {
   /** Colors lerped across each particle's life fraction (default white). */
   colorRamp?: ColorLike[];
   seed?: number;
-  /** Hard cap on continuous-stream particles (default 2000). */
+  /** Cap on continuous-stream particles (default 2000); see `maxParticlesMode`. */
   maxParticles?: number;
+  /** What `maxParticles` limits. "total" (default, historical): total births —
+   *  the stream stops after that many. "alive": unlimited births, at most
+   *  `maxParticles` alive at once, keeping the most recent. Both are closed-form
+   *  and seek-safe. */
+  maxParticlesMode?: "total" | "alive";
   shape?: "circle" | "square";
+  /** Particle sprite (default: `shape`, i.e. "circle"). `shape` stays as an alias. */
+  material?: ParticleMaterial;
+  /** Compositing: "add" -> canvas "lighter", "screen" -> "screen"; "normal"/unset leaves
+   *  `compositeOperation` alone. Canvas-2D only. */
+  blendMode?: "normal" | "add" | "screen";
+  /** Seek-safe noise displacement: a closed-form function of (spawn position, age),
+   *  zero at birth. Consumes NO random draws, so unset = byte-identical. */
+  turbulence?: ParticleTurbulence;
   /** Advance the clock with scene time via an updater (default true). */
   autoAdvance?: boolean;
 }
@@ -82,6 +110,9 @@ export class ParticleSystem extends Mobject {
   /** The explicit clock (seconds since the system started emitting). */
   time = 0;
   shape: "circle" | "square";
+  /** Resolved sprite (`material` ?? `shape` ?? "circle"). */
+  material: ParticleMaterial;
+  private readonly _turb?: { amp: number; freq: number; noise: (x: number, y: number, z: number) => number };
   private readonly _cfg: ParticleSystemConfig;
   private readonly _seed: number;
   private readonly _rate: number;
@@ -93,6 +124,7 @@ export class ParticleSystem extends Mobject {
   private readonly _drag: number;
   private readonly _ramp: Color[];
   private readonly _max: number;
+  private readonly _maxAlive: boolean;
   private readonly _bursts: Burst[] = [];
 
   constructor(config: ParticleSystemConfig = {}) {
@@ -108,7 +140,20 @@ export class ParticleSystem extends Mobject {
     this._drag = config.drag ?? 0;
     this._ramp = (config.colorRamp?.length ? config.colorRamp : ["#FFFFFF"]).map((c) => Color.parse(c));
     this._max = config.maxParticles ?? 2000;
-    this.shape = config.shape ?? "circle";
+    this._maxAlive = config.maxParticlesMode === "alive";
+    this.material = config.material ?? config.shape ?? "circle";
+    this.shape = config.shape ?? (this.material === "square" ? "square" : "circle");
+    const tb = config.turbulence;
+    if (tb && tb.amplitude !== 0) {
+      const base = simplex3D(tb.seed ?? this._seed);
+      this._turb = {
+        amp: tb.amplitude,
+        freq: tb.frequency,
+        noise: (tb.octaves ?? 1) > 1 ? fbm3(base, { octaves: tb.octaves }) : base,
+      };
+    }
+    if (config.blendMode === "add") this.compositeOperation = "lighter";
+    else if (config.blendMode === "screen") this.compositeOperation = "screen";
     this._buildBox();
     if (config.autoAdvance ?? true) {
       this.addUpdater((_m: any, dt: number) => { this.time += dt; });
@@ -150,7 +195,9 @@ export class ParticleSystem extends Mobject {
     const travel = this._drag > 0
       ? (maxSpeed + g * maxLife) / this._drag
       : maxSpeed * maxLife + (g * maxLife * maxLife) / 2;
-    const r = reach + travel + this._size[0] / 2 + this._size[1] / 2;
+    // Turbulence adds at most ~2*amplitude per axis (field minus its birth value).
+    const turbReach = this._turb ? 2 * Math.abs(this._turb.amp) : 0;
+    const r = reach + travel + this._size[0] / 2 + this._size[1] / 2 + turbReach;
     this.points = [
       [ex - r, ey + r, 0],
       [ex + r, ey + r, 0],
@@ -211,6 +258,15 @@ export class ParticleSystem extends Mobject {
       y = y0 + vy * age + (gy * age * age) / 2;
     }
 
+    if (this._turb) {
+      // Closed-form displacement of (spawn pos, age), relative to birth so
+      // particles start exactly at their spawn point. No RNG draws.
+      const { amp, freq, noise } = this._turb;
+      const sx = x0 * freq, sy = y0 * freq, z = age * freq;
+      x += amp * (noise(sx, sy, z) - noise(sx, sy, 0));
+      y += amp * (noise(sx + 17.3, sy + 5.1, z) - noise(sx + 17.3, sy + 5.1, 0));
+    }
+
     const life = age / lifetime;
     const size = this._size[0] + (this._size[1] - this._size[0]) * life;
     const opacity = this._opacity[0] + (this._opacity[1] - this._opacity[0]) * life;
@@ -233,16 +289,37 @@ export class ParticleSystem extends Mobject {
    */
   sampleParticles(t: number = this.time): ParticleState[] {
     const out: ParticleState[] = [];
+    const dir = this._cfg.direction ?? Math.PI / 2;
+    const spr = this._cfg.spread ?? Math.PI / 4;
     if (this._rate > 0) {
-      const born = Math.min(this._max, Math.floor(t * this._rate) + 1);
-      for (let i = 0; i < born; i++) {
-        this._emit(out, t, 0, i, i / this._rate, this._speed, this._cfg.direction ?? Math.PI / 2, this._cfg.spread ?? Math.PI / 4);
+      // Only indices born within [t - lifetimeMax, t] can be alive; earlier ones
+      // are dead (emit nothing), so skipping them leaves output unchanged. The
+      // -2 slack absorbs float rounding at the window edge (extras self-filter).
+      const maxLife = Math.max(this._lifetime[0], this._lifetime[1]);
+      const lo = Math.max(0, Math.floor((t - maxLife) * this._rate) - 2);
+      const births = Math.floor(t * this._rate) + 1;
+      if (!this._maxAlive) {
+        const hi = Math.min(this._max, births);
+        for (let i = lo; i < hi; i++) this._emit(out, t, 0, i, i / this._rate, this._speed, dir, spr);
+      } else if (this._max > 0) {
+        // Newest-first until `max` are alive, then restore ascending index order.
+        const tmp: ParticleState[] = [];
+        const kept: ParticleState[] = [];
+        for (let i = births - 1; i >= lo && kept.length < this._max; i--) {
+          tmp.length = 0;
+          this._emit(tmp, t, 0, i, i / this._rate, this._speed, dir, spr);
+          if (tmp.length) kept.push(tmp[0]);
+        }
+        for (let k = kept.length - 1; k >= 0; k--) out.push(kept[k]);
       }
     }
     this._bursts.forEach((b, bi) => {
+      // Not yet born, or every particle past the longest possible lifetime: nothing alive.
       const speedRange = asRange(b.speed, this._speed);
       const direction = b.direction ?? this._cfg.direction ?? Math.PI / 2;
       const spread = b.spread ?? this._cfg.spread ?? Math.PI * 2;
+      const age = t - b.atT;
+      if (age < 0 || age >= Math.max(this._lifetime[0], this._lifetime[1])) return;
       for (let i = 0; i < b.count; i++) {
         this._emit(out, t, bi + 1, i, b.atT, speedRange, direction, spread);
       }

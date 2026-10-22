@@ -53,6 +53,9 @@ import * as movementAnim from "../animation/movement.ts";
 import * as indicationExtra from "../animation/indication_extra.ts";
 import * as changingAnim from "../animation/changing.ts";
 import * as specializedAnim from "../animation/specialized.ts";
+import * as skeletonMod from "../mobject/skeleton.ts";
+import * as clipMod from "../mobject/clip.ts";
+import * as poseMod from "../animation/pose.ts";
 import * as complexVT from "../mobject/complex_value_tracker.ts";
 import {
   RATE_FUNCTIONS,
@@ -74,7 +77,7 @@ export function registerBuiltins(): typeof registry {
 
   const mobjectModules = [geometry, tips, arcs, polygram, shapeMatchers, vectors,
     labeled, booleanOps, matrix, table, brace, graph, surface, polyhedra, coords, functionsMod, probabilityMod, vectorFieldMod,
-    complexVT, valueTracker, textMod, paragraphMod, texExtrasMod, codeMod, variableMod, vtextMod, mathtexMod, svgMod, imageMod, mathtexImageMod, threeDMod, movingCamScene, zoomedScene, vectorScene];
+    complexVT, valueTracker, textMod, paragraphMod, texExtrasMod, codeMod, variableMod, vtextMod, mathtexMod, svgMod, imageMod, mathtexImageMod, threeDMod, movingCamScene, zoomedScene, vectorScene, skeletonMod, clipMod];
   for (const mod of mobjectModules) {
     for (const [name, value] of Object.entries(mod)) {
       if (isSubclassOf(value, Mobject)) registry.registerMobject(name, value);
@@ -83,7 +86,7 @@ export function registerBuiltins(): typeof registry {
   }
 
   const animationModules = [animationMod, extra, composition, numbersAnim, creationExtra,
-    transformExtra, transformMatching, movementAnim, indicationExtra, changingAnim, specializedAnim];
+    transformExtra, transformMatching, movementAnim, indicationExtra, changingAnim, specializedAnim, poseMod];
   for (const mod of animationModules) {
     for (const [name, value] of Object.entries(mod)) {
       if (isSubclassOf(value, Animation)) registry.registerAnimation(name, value);

@@ -1,0 +1,480 @@
+# Skeletal animation (`@johnhenry/ecmanim/skeletal`)
+
+`Skeleton` is a stick-figure / rig mobject driven by a **pure, Mobject-free
+model** (`SkeletonModel`): a bone hierarchy, forward kinematics (FK) and a
+`Pose` value type. Poses tween with shortest-arc angle blending, so limbs keep
+their length mid-tween (lerping joint points would shrink them).
+
+```ts
+import { Skeleton, PoseTween, PoseLibrary, poseTrack } from "@johnhenry/ecmanim/skeletal";
+
+const D = Math.PI / 180;
+const fig = new Skeleton(
+  [
+    { id: "torso", parent: null, length: 1.4, angle: 90 * D },
+    { id: "neck", parent: "torso", length: 0.35 },
+    { id: "armL", parent: "torso", length: 0.9, angle: 140 * D, bend: 0.4 },
+    { id: "handL", parent: "armL", length: 0.8, angle: 20 * D },
+  ],
+  { joints: true, heads: [{ joint: "neck", radius: 0.3 }] },
+);
+this.add(fig);
+
+fig.setPose({ bones: { armL: { angle: 60 * D } } });              // immediate
+await this.play(fig.animate.setPose({ bones: { armL: { angle: 0 } } })); // .animate works
+await this.play(new PoseTween(fig, { bones: { armL: { angle: -170 * D } } }, { runTime: 1 }));
+```
+
+The subpath is separate from the root barrel on purpose (root export surface
+and bundle size stay stable); it can be re-exported from `.` later without a
+break.
+
+## The model (`SkeletonModel`) -- the contract other modules build on
+
+Everything is documented at the top of `src/mobject/skeleton_model.ts`.
+
+- **Stable ids.** A bone is `{ id, parent, length, angle, bend, width, zIndex }`.
+  Ids are caller-chosen strings, never renamed or reindexed; poses, fills,
+  heads and constraints refer to bones/joints only by id. `model.ids` is a
+  topological order (parents first). The joint at the end of bone `b` has id
+  `b`; the reserved id `"root"` is the origin where parent-less bones start.
+- **Angles** are radians, counter-clockwise, y-up. `angle` is relative to the
+  parent's world angle; the skeleton's `rotation` seeds root bones.
+- **Reads:** `jointPosition(id)`, `jointPositions()`, `boneStart(id)`,
+  `boneWorldAngle(id)`, `boneWorldAngles()`, `parentOf`, `childrenOf`,
+  `ancestorsOf`, `descendantsOf`, `rootBones`, `specOf`.
+- **Writes (drivable by IK, pose operators, constraints):** `setAngle`,
+  `setWorldAngle` (local angle from a desired world angle), `setLength`,
+  `setBend`, `setPlacement({root, rotation, scale})`, `setPose(partial)`.
+  Every write bumps `model.version`; FK is cached per version.
+- **`bend`** is the sweep of a circular arc drawn between a bone's endpoints.
+  It affects drawing only; joints and world angles use the straight chord.
+- **`Pose`** = `{ root, rotation, scale, bones: { [id]: { angle, length, bend } } }`.
+  `PartialPose` makes every field optional (unlisted fields are untouched;
+  unknown bone ids are ignored unless `setPose(p, { strict: true })`).
+  `lerpPose(a, b, t)` blends angles/rotation by shortest arc and everything
+  else linearly; it accepts partial poses.
+
+A model owned by a `Skeleton` can be driven directly; call
+`skeleton.refresh()` afterwards to rebuild the drawn geometry.
+
+## The mobject (`Skeleton extends VGroup`)
+
+Children (draw order): fills, bones, heads, joint dots -- plain `VMobject`s
+whose points are rewritten in place, so `getBoneMobject(id)` references stay
+valid. Options: `joints`, `heads: [{ joint, radius, ... }]`,
+`fills: [{ joints: [ids], color, opacity }]` (closed polygons over joint ids,
+`"root"` allowed), plus `root`/`rotation`/`scale` placement.
+
+- `setPose(p)`, `getPose()`, `bindPoseTrack(track)` + `setTime(t)`: pure
+  functions of absolute time (no integrated `dt`), so scrubbing, onion skins
+  and parallel segment rendering can evaluate any `t`.
+- **`copy()`** deep-clones the model and pose library (`Mobject.copy()` alone
+  would alias them); `.animate`, `saveState`, `generateTarget` and `Transform`
+  therefore work. The bound pose track is shared by reference.
+- **`interpolate()`** blends poses, never joint points, and does not call
+  `super.interpolate`. Bones are matched by id between start and target.
+- **Moving the group** (`shift`, `scale`, `rotate`, `moveTo`, ...) is folded
+  into the model's placement, so the next pose change does not snap back.
+- **z-order.** Each bone's `zIndex` is an *offset* from the Skeleton's
+  `zIndex`; `skeleton.setZIndex(n)` sets `n + offset` on every part (the base
+  class would overwrite all children with `n`). Change one bone with
+  `setBoneZIndex(id, offset)`.
+- No updaters are installed, so there is no hidden state for `wait()`
+  fingerprints: the cache key sees the geometry, which is rebuilt from the
+  model on every change.
+
+## Poses and tweening (`animation/pose.ts`)
+
+- `PoseTween(skeleton, pose, config)` tweens from the current pose to a
+  full/partial pose (modelled on `PlayKeyframeTrack.begin()`: no whole-mobject
+  start-state copy).
+- `PoseLibrary`: named poses (`set`, `get`, `capture`, `apply`, `tween`,
+  `toJSON`/`fromJSON`); each `Skeleton` has one at `skeleton.poses`.
+- `poseTrack(keyframes)`: a `KeyframeTrack<Pose>` (the existing
+  `interpolate` option set to `lerpPose`). Use with `setTime`, or
+  `new PlayKeyframeTrack(skeleton, track, (m, p) => m.setPose(p))`.
+
+## Inverse kinematics (`mobject/ik.ts`)
+
+Two layers. **Pure solvers** (no Mobject, no state, deterministic):
+
+- `solveTwoBone(root, l1, l2, target, bendSide, { allowStretch })`: analytic
+  law-of-cosines solve returning `{ mid, end, reached, scale, lengths }`.
+- `solveFABRIK(points, lengths, target, { iterations = 32, tolerance = 1e-4, allowStretch })`:
+  root fixed, inputs never mutated, returns `{ points, reached, scale, iterations, error }`.
+- Out of reach: a straight, fully extended limb pointing at the target, or --
+  with `allowStretch` -- every bone scaled by the same factor so the effector
+  lands on it. Inside the minimum reach the limb folds and stops at
+  `|l1 - l2|`. Target on the root, zero lengths and coincident points all give
+  finite, deterministic results.
+
+**`IKChain`** binds bone ids (root to effector, each the child of the previous)
+to a target and writes *derived angles* into the model (`setWorldAngle`; lengths
+are only written when stretching), then calls `skeleton.refresh()`:
+
+```ts
+import { IKChain, ikTargetXY } from "@johnhenry/ecmanim/skeletal";
+
+const hand = new Dot();
+const leg = new IKChain(fig, { bones: ["legL", "footL"], target: hand, bendSide: "right" });
+leg.solve();                 // one-shot
+leg.attach();                // or: re-solve every frame via an updater
+leg.pin();                   // plant the foot at its current world position
+fig.shift(RIGHT);            // the body moves, the foot stays planted
+leg.unpin();
+```
+
+- **Target** is a `() => [x, y]`; `ikTarget(src)` adapts a fixed point, a
+  function, any Mobject (its center: `Dot`, `ComplexValueTracker`, ...) or
+  `{ track: KeyframeTrack<number[]>, time: () => number }`. `ikTargetXY(xTracker,
+  yTracker)` wraps two `ValueTracker`s. Assign `chain.target = ikTarget(...)` to retarget.
+- **`bendSide`**: `"left"` is the counter-clockwise side of the root-to-target
+  direction, `"right"` the mirror. **`"auto"` (default) keeps the branch the
+  limb is currently on**, read from the pose (sign of
+  `cross(effector - root, mid - root)`). When the limb is straight there is
+  no current side, so the chain uses the last side it saw while bent
+  (initially `autoFallback`, default `"left"`; exposed as `chain.autoSide`).
+  That memory is the only hidden state: `"auto"` is path-dependent, so use an
+  explicit side when you need to evaluate an arbitrary time (scrubbing,
+  parallel segment rendering).
+- **Chains of 3+ bones** use FABRIK seeded from the current pose (so the shape
+  is continuous frame to frame). `bendSide` only matters there to nudge an
+  exactly straight chain off its line.
+- **`allowStretch`** stretches uniformly only when the target is out of reach;
+  authored lengths (`restLengths`, default: lengths at construction) are
+  restored as soon as the target is back in reach. Without it the effector stops
+  at full extension.
+- **`pin(position?)`** fixes the effector's *world* position (default: where it
+  is now); the chain keeps reaching for it while the skeleton moves, ignoring
+  `target` until `unpin()`. Out-of-reach pins behave like out-of-reach targets.
+- Model placement (`root`, `rotation`, `scale`) is honoured; the solve is in
+  world units.
+
+### Joint limits, pole targets and effector lock (#92)
+
+All optional; without them every solve is exactly as before.
+
+**Joint limits.** `BoneSpec.limits = { min?, max? }` (or `model.setLimits(id, limits | null)`,
+`model.limitsOf(id)`) bounds a bone's *local* angle (relative to its parent's
+world angle, radians, either end optional). FK, `setAngle` and poses stay
+unconstrained -- only IK honours limits:
+
+- `solveTwoBone(..., { limits: { parentAngle, a, b } })` keeps the preferred
+  bend branch if it satisfies both ranges, else takes the other branch
+  (`result.limited === true`); if neither does it clamps the less-violating
+  branch (lengths kept, `reached` false unless the clamped pose still lands on
+  the target). `limited` exists only when `limits` was passed.
+- `solveFABRIK(..., { limits: [rangeOrNull, ...], parentAngle })` projects the
+  seed into the limits and clamps every link in each forward pass, so the
+  returned pose always satisfies them; backward passes are unconstrained, so a
+  target that needs a violation ends with `reached: false` and `error > 0`.
+- `IKChain` reads the limits from the model automatically (including the
+  effector bone's, see below) and adds them to `ikFingerprint()`.
+- One-sided ranges are never wrapped; a two-sided range is also tested modulo
+  2*PI, so `[0, 4]` admits an angle of -2.5.
+- **Unsatisfiable** (target beyond what the limits allow): the chain ends as
+  close as the clamping allows, still inside the limits, and reports it through
+  `IKSolveResult.reached/error`; it never throws. FABRIK clamping is a
+  heuristic (not an optimal constrained solve) and can stall short of a target a
+  cleverer solver could reach.
+
+**Pole target.** `pole` (any `IKTargetSource`) picks the side a chain bends to:
+interior joints end up on the pole's side of the root -> target line. 2 bones:
+overrides `bendSide`. 3+ bones: the seed is mirrored to that side (a straight
+chain is nudged toward it) and a converged result left on the wrong side is
+mirrored across the root -> effector line (lengths preserved). 2D has no
+bend *plane*, so "pole" here only decides the side; it does not pull the elbow
+toward the point. A pole on the root -> target line has no side and is ignored;
+with active joint limits the limits win. No pole = the previous behaviour.
+
+**Effector orientation lock.** `effectorAngle: number | () => number` keeps the
+*effector bone* at that WORLD angle. The effector bone is a child of the last
+chain bone (the hand/foot beyond the chain; `effectorBone` picks one when there
+are several, and a missing child throws): the chain's last bone ends at the
+target and the hand is re-aimed after every solve, so it holds while pinned and
+while the figure moves. The effector bone's own limits clamp it. A rig
+`angleLock` on the same bone runs later and wins.
+
+### IK, `play()` and `PoseTween`
+
+`attach()` installs an ordinary updater, and `Scene.play` **suspends the
+animated mobject's updaters** for the duration of the animation. So an attached
+chain **freezes under a `PoseTween` on the same skeleton** by default.
+Decision: rather than silently changing suspension semantics, `PoseTween`
+accepts an optional `ik` config -- `new PoseTween(fig, pose, { ik: chain })` (or an
+array) -- and re-solves those chains after every pose write, so IK wins over FK for the
+bones it drives and the foot stays planted while the body tweens. The
+alternative, `suspendMobjectUpdating: false`, also works but lets *all*
+updaters on the skeleton run. Chains whose target is driven by something else
+being animated (a `ValueTracker` moved by `play(tracker.animate...)`) need
+nothing: the skeleton is not the animated mobject then, so its updater keeps
+running. `Skeleton.copy()` (and therefore `.animate`, `saveState`) does not copy
+updaters (base `Mobject.copy()` behaviour); recreate/`attach()` on the copy.
+`attach()` supplies a `hashExtra` so `wait()` caches see the target/pin/bend
+state, and `PoseTween` now salts its cache key with its target pose and IK
+fingerprint.
+
+Scope: without `effectorAngle` the effector's own children rotate with their
+parent (FK). There is no multi-chain solving yet.
+
+## Rig constraints (`mobject/skeleton_constraints.ts`)
+
+Constraints are declared on a rig and re-applied automatically. Evaluation
+order per frame: **pose -> IK -> constraints -> refresh**. `Skeleton.refresh()`
+applies the constraint set first, and `setPose`, `interpolate`, `PoseTween` and
+`IKChain.solve()` all end in `refresh()`, so constraints hold after every pose
+or IK write (including `PoseTween` with `{ ik }`). A skeleton with no
+constraints takes exactly the old path (`skeleton.constraints === null`).
+
+```ts
+fig.addConstraint({ type: "connector", id: "belt", bone: "belt", a: "hipL", b: "hipR", slide: 0.5 });
+fig.addConstraint({ type: "weighted", bone: "chest", origin: "spine",
+  anchors: [{ joint: "armL", weight: 0.5 }, { joint: "armR", weight: 0.5 }] });
+fig.addConstraint({ type: "angleLock", bone: "head", reference: "world", multiplier: 0 }); // stays upright
+fig.addConstraint({ type: "stretch", driver: "armL", min: 0.5, max: 2 });
+fig.constraints!.get("belt")!.slide = 0.25;   // value fields are live
+```
+
+Our own semantics (`joint` = a bone id, meaning that bone's end, or `"root"`):
+
+- **connector** `{ bone, a, b, slide }`: the end joint of `bone` sits at
+  `A + slide * (B - A)`. `slide` is a number or `() => number`; it is not
+  clamped. The bone keeps its start (its parent's end) and has its **angle and
+  length** driven to land there; its children follow.
+- **weighted** `{ bone, origin, anchors: [{ joint, weight }] }`: end joint =
+  `O + sum(w_i * (J_i - O))`, 1-16 distinct anchors, signed weights. Angle and
+  length driven like a connector.
+- **angleLock** `{ bone, reference = "parent", multiplier = 1, offset = 0 }`:
+  world angle = `offset + multiplier * R`, `R` = the parent bone's world angle
+  (the placement rotation for a root bone) or, for `"world"`, the figure's
+  placement rotation. Multiplier 1 is parallel to the reference; 0 pins the bone
+  at `offset` in world space.
+- **stretch** `{ driver, targets?, exclude?, restLength?, min?, max? }`:
+  `ratio = clamp(length(driver) / rest, min, max)` (`rest` = `restLength` or the
+  driver's authored length); each target's length becomes its authored length
+  times `ratio`. Targets default to all descendants of the driver; `exclude`
+  bones keep their length. The driver is never written (stretch it with a pose,
+  IK `allowStretch`, or a connector). Optional extras (#92):
+  `multipliers: { bone: k }` scales the stretch *amount* per target
+  (`length = authored * (1 + (ratio - 1) * k)`, floored at 0; k = 0 leaves it
+  alone, k > 1 exaggerates; keys must be targets), and `widthResponse: w` with
+  `widthBones` (default all targets) scales those bones' drawn stroke width by
+  `ratio ** -w` (w = 1 thins as the bone lengthens, area-style). The width is
+  stored as a per-bone runtime scale (`model.getWidthScale`) and applied by
+  `Skeleton.refresh()`; it is not part of a `Pose` and is derived each refresh.
+
+**Graph.** Each constraint declares what it writes (bone angle/length) and
+reads (joint geometry, or a driver's length); one depends on another when it
+reads something the other writes. `ConstraintSet.order()` is a stable
+topological order (insertion order among ready constraints). Adding a
+constraint that forms a cycle -- including a constraint reading geometry its own
+write moves -- throws `ConstraintSet: cycle detected ...` naming the
+constraints and leaves the set unchanged. Two constraints cannot drive the same
+channel of one bone (error names the owner). `enabled` toggles a constraint;
+structural fields are fixed at `add()`.
+
+**Fixed point.** `apply()` makes one pass by default. `new ConstraintSet(model,
+{ iterations: n, tolerance })` (or `skeleton.ensureConstraints({ iterations })`,
+or `cs.configure(...)`) repeats the pass up to `n` times until the largest bone
+angle/length change is <= `tolerance` (default 1e-9); `apply()` returns
+`{ passes, residual }`. The declared graph is acyclic, so one pass is already
+exact for declared dependencies; extra passes matter for state the graph cannot
+see, such as a `slide` callback that reads the rig it drives. If it does not
+converge within `n` passes the last pass stands (no throw). This does not loop
+IK <-> constraints; that order stays pose -> IK -> constraints.
+
+`ConstraintSet` also works on a bare `SkeletonModel` (`new ConstraintSet(model).add(...).apply()`).
+`Skeleton.copy()` copies the set rebound to the copy's model. IK/`PoseTween`
+cache fingerprints include constraint values when any exist.
+
+## Pose operators (`animation/pose_ops.ts`)
+
+Pure `Pose -> Pose` in-between tools after Blender's In-Betweens manual
+(Breakdowner / Blend to Neighbour / Relax / Push); angles take the shortest arc.
+
+- `breakdown(prev, next, t)`: 0 = prev, 1 = next.
+- `blendToNeighbor(prev, cur, next, amount)`: -1 prev, 0 cur, +1 next (clamped).
+- `relax(prev, cur, next, tPrev, tCur, tNext, factor)`: move `cur` toward the
+  in-between at `cur`'s proportional time (`factor` 1 = exactly it).
+- `push(...)`: same args; reflects the relax displacement (exaggerates). `scale`
+  and bone `length` are floored at 0.
+- `applyPoseOp(track, index, {op, amount})` rewrites a `poseTrack` key from its
+  strict neighbours; `insertBreakdown(track, t, amount)` adds a key.
+
+## Clip: nested animation with its own clock (`Clip extends Group`)
+
+```ts
+import { Clip } from "@johnhenry/ecmanim/skeletal";
+
+fig.bindPoseTrack(walkCycle);                       // a Skeleton with a pose track
+const walker = new Clip(fig, { mode: "loop", duration: 1.2, speed: 1.5 });
+this.add(walker);
+await this.wait(6);                                 // walker.update(dt) advances its own clock
+
+walker.seek(0.3);                                   // pure: same t in, same frame out
+const ghost = walker.copy().seek(0.3 + 0.1);        // independent clock (onion skin)
+```
+
+Content is any child exposing `setTime(t)` (a `Skeleton` with a bound pose
+track, particle presets, other `Clip`s) or a builder `(t, clip) => void`.
+Children without `setTime` are left alone (they keep normal `update` recursion).
+
+| Mode | Local time for `raw = t * speed + startOffset` |
+|---|---|
+| `loop` (default) | `raw` wrapped into `[0, duration)` (negative speed works) |
+| `once-hold` | `raw` clamped to `[0, duration]` (holds the last frame) |
+| `once-hide` | as `once-hold` inside `[0, duration]`; **renders nothing** outside it (content is detached, not evaluated, while hidden) |
+| `single-frame` | always `startOffset` (a pinned still) |
+
+Without `duration` there is nothing to wrap or hide against: local time is
+`raw` (clamped at 0 for the `once-*` modes).
+
+- `localTime(t)` and `isVisibleAt(t)` are pure; `setTime(t)` / `seek(t)` set the
+  clip's clock and evaluate deterministically (any order, any `t`).
+- Live play: `update(dt)` advances the clock by `dt` (scaling by `speed` happens
+  in the time model, never by feeding children a scaled `dt`) and does **not**
+  recurse into time-driven children, which would otherwise receive the scene's
+  unscaled `dt`. For fully scene-clock-locked playback you can instead drive it
+  yourself: `clip.clearUpdaters(); clip.addUpdater(() => clip.setTime(scene.time - t0))`.
+- **`play()` suspends updaters** on the animated mobject, so a Clip's clock
+  pauses during `play(clip.animate...)`/`FadeIn(clip)` unless the animation sets
+  `suspendMobjectUpdating: false`. `seek()` still works while suspended.
+- **`copy()`** gives an independent clock and re-arms the driver (plain
+  `Mobject.copy()` would drop the updater and freeze the copy); builders are shared.
+- `wait()` fingerprints include the clip's mode/speed/offset/clock via an updater `hashExtra`.
+- `isolate: true` renders the content into its own offscreen layer
+  (`CompositeGroup` semantics: blend modes apply among siblings only; Canvas
+  backends, degrades to unscoped drawing elsewhere).
+
+**Why `./skeletal` and not the root `.`:** `Clip` is fully generic (duck-typed on
+`setTime`, no skeleton imports), but the epic's packaging plan keeps the root
+barrel (~390 exports) and bundle stable, and moving an export from a subpath into
+`.` later is additive whereas the reverse would be a break. It is also
+registered by `registerBuiltins()` like the other mobjects.
+
+## Renderer support
+
+| Feature | Canvas-2D (Node/browser) | SVG | WebGL (Three) |
+|---|---|---|---|
+| Bones (line/arc), joints, heads, fills | yes (golden-tested) | yes (plain `VMobject`s) | yes (plain `VMobject`s) |
+| Pose tweening / `setTime` / pose operators | yes (model-level, renderer-independent) | same | same |
+| IK (`solveTwoBone`, `solveFABRIK`, `IKChain`) | yes (model-level; only writes angles/lengths, golden-tested) | same | same |
+| `Clip` modes / speed / seek | yes (model-level, renderer-independent) | same | same |
+| `Clip` `isolate: true` | offscreen layer | children drawn unscoped | children drawn unscoped |
+| Joint limits, pole target, effector lock, stretch multipliers / width response, constraint iterations | yes (model-level; width response changes the drawn stroke width, which every backend honours) | same | same |
+| Rig constraints (connector, weighted, angle lock, stretch) | yes (model-level, renderer-independent; unit-tested) | same | same |
+
+Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
+`VMobject` geometry but are not separately pinned.
+
+## Importing Stick Nodes figures (`loadStickNodes`)
+
+```ts
+import { loadStickNodes } from "@johnhenry/ecmanim/skeletal";
+
+const bytes = new Uint8Array(await (await fetch("figure.nodes")).arrayBuffer()); // or fs.readFileSync
+const { skeleton, track, poses, meta } = loadStickNodes(bytes, { unitsPerPixel: 0.01 });
+scene.add(skeleton);
+await scene.play(poses.tween(skeleton, "default"));   // saved pose -> the file's default pose
+console.log(meta.warnings);                            // everything read but not represented
+```
+
+`parseStickNodes(bytes)` is the pure half: `Uint8Array` in, plain `StickNodesFigure`
+data out (sync, no I/O, no `node:` imports, no mobjects). `loadStickNodes` is
+sync and pure of I/O like `loadLottie`: read the file yourself.
+
+- **Formats.** `.nodes` figures: raw big-endian (versions 160-423) and
+  zlib-wrapped little-endian files, inflated synchronously with `fflate`
+  (`DecompressionStream` is async) under a 64 MiB output cap that rejects
+  decompression bombs. Per-version/build
+  field differences follow sticknodes-rs up to Stick Nodes 4.2.3 build 72;
+  newer files are read best-effort with a warning. Malformed input throws
+  `StickNodesParseError`.
+- **Mapping.** Each non-root node becomes a bone `n<drawIndex>` (parent = the
+  parent node; children of the root are root bones). Node angles (degrees,
+  relative, summed down the chain) become bone angles; the root node's angle
+  becomes the skeleton's `rotation`. `length * unitsPerPixel` is the bone
+  length; `thickness` becomes the stroke width; draw index is the bone's
+  z offset; the figure colour (and per-segment colours/alpha) style the bones.
+- **Result.** `skeleton`; `poses` (`"pose"` = the saved pose, `"default"` = the
+  file's default angles/lengths); `track` (a one-key `KeyframeTrack<Pose>` at
+  `t = 0`; `skeleton.bindPoseTrack(track)` + `setTime`); `meta` (version,
+  build, `boneIdByDrawIndex`, the full parsed figure, `warnings`).
+- **Provenance.** The layout follows MIT-licensed
+  [sticknodes-rs](https://github.com/vinceTheProgrammer/sticknodes-rs); see
+  `THIRD_PARTY_NOTICES.md`. Two kinds of test fixture: synthetic ones from a
+  test-only encoder (`test/helpers/sticknodes_encoder.ts`) and a cross-validation
+  set in `test/fixtures/sticknodes/` — figures of our own design written by
+  sticknodes-rs itself, read back by it, with its decoded values dumped to JSON;
+  `test/sticknodes-crossval.test.ts` asserts `parseStickNodes` matches that dump
+  field-by-field (see the folder's README for provenance and regeneration).
+  No files saved by the Stick Nodes app are committed.
+
+### Stick Nodes import: honest divergences
+
+- **Figures only, one pose.** `.nodes` is the only format read. Projects
+  (`.stknds`, a zip container) and movieclips (`.nodemc`) are rejected with a
+  clear error: no permissive layout reference exists (sticknodes-rs lists them
+  as future work) and none has been verified against a file saved by the app, so
+  no frames are imported and `track` has a single key. Tracked as blocked
+  upstream.
+- **Not simulated** (listed in `meta.warnings` with draw indices; the stored
+  pose is kept): smart stretch, floaty motion, stretchy/static flags, angle
+  locks, drag locks, connectors, per-segment scale.
+- **Shapes.** Circle, triangle, ellipse, trapezoid and polygon nodes are drawn
+  as plain bones; gradients, curve radius and polyfills are not rendered
+  (polyfill data stays in `meta.figure.polyfills`). Compressed files' polyfill
+  and connector-end tables are not read (as in sticknodes-rs); trailing bytes
+  are reported.
+- **Orientation/units.** Angles import as-is: counter-clockwise, y-up, matching
+  sticknodes-rs, whose writer derives each node's stored `localX/localY` as
+  `length * (cos, sin)` of the summed ancestor angles (our parser agrees with it
+  on every cross-validation fixture). That proves the reference's
+  self-consistency, **not** how the Stick Nodes app orients its canvas: it has
+  not been checked against a file saved by the app, so the figure may appear
+  mirrored. Pass `flipY: true` to mirror. The header `scale` is recorded in
+  `meta.figure` but not applied.
+- **Reference quirks (sticknodes-rs).** Cross-validation found three places
+  where the reference's *writer* is not round-trippable, so fixtures avoid them:
+  build 36 (writes 8 zero bytes where its reader consumes 10), a connector node
+  that shares a parent with a plain sibling (connector flags are written in
+  child order but the children in reverse), and it discards the root node's own
+  fields on read. Our parser follows the reader.
+- **Per-bone styling** (segment colour, alpha) is set on the bone mobjects at
+  load and, like all Skeleton styles, is not interpolated by `interpolate()`.
+  Renderer matrix: the result is an ordinary `Skeleton`, so Canvas-2D, SVG and
+  WebGL behave as for any Skeleton.
+
+## Honest divergences / limits
+
+- 2D only (z is dropped; the model is x/y).
+- `Transform` between skeletons with *different* bone sets does not morph
+  structure: bones are matched by id and unmatched ids are ignored.
+- Bone/fill/head **styles** (colour, width) are not interpolated by
+  `interpolate()`; only the pose and group opacity are.
+- Non-similarity group transforms (`stretch`, mirror `flip`) distort the drawn
+  geometry but cannot be represented in the model's placement (root, rotation,
+  uniform scale), so the next pose change snaps back.
+- Head radius and joint-dot size are fixed at construction (not part of a Pose).
+- IK is 2D and per-chain: no shared-bone conflict detection; joint-limit
+  clamping inside FABRIK is a heuristic (see Joint limits); a pole picks a
+  side only (no bend plane in 2D); `"auto"` bend continuity is
+  path-dependent (see above); long chains may keep a small residual at the
+  iteration limit (`IKSolveResult.error`).
+- `Clip`: the clock is a float accumulator under live `update(dt)` (drift
+  ~1e-16/frame, irrelevant in practice; use `seek`/a scene-time updater for
+  exactness); `once-hide` detaches children while hidden, so code holding the
+  clip must not rely on `clip.submobjects` being populated then; `Clip` is not
+  golden-frame tested (it adds no drawing of its own).
+- Pose operators work on whole poses (no per-bone filter, no easing curve on the amount, unlike Blender's Graph Editor).
+- Rig constraints are 2D, drive bone angle/length only (never placement), run
+  once per `refresh()` in dependency order by default (opt-in `iterations`
+  fixed point, which never loops IK <-> constraints). A constraint fighting IK
+  on the same bone resolves to the constraint (it runs last).
+- Studio (`@johnhenry/ecmanim/studio`): `rigToControls` / `applyRigControl`
+  describe and edit constraint values, IK options and joint limits as
+  `PropControl`-shaped controls, and `createIKDrag` / `attachIKDrag` drag an IK
+  target (or pin) in a 2D viewport. There is no visual constraint-graph editor,
+  no creating/removing constraints or editing structural fields (bones,
+  anchors) from the UI, and no joint-limit arc gizmo yet.

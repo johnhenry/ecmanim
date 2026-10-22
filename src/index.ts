@@ -93,6 +93,19 @@ export { VectorScene, LinearTransformationScene } from "./scene/vector_space_sce
 export { MultiCamera } from "./camera/multi_camera.ts";
 export { MappingCamera } from "./camera/mapping_camera.ts";
 export {
+  CameraShake, Handheld, CameraImpact, ZoomPulse,
+  evaluateCameraEffects, effectWeight,
+} from "./camera/camera_effects.ts";
+export type {
+  CameraEffectSample, CameraEffectFn, CameraEffectObject, CameraEffectLike,
+  CameraEffectOptions, CameraEffectEntry, CameraShakeConfig, HandheldConfig,
+  CameraImpactConfig, ZoomPulseConfig,
+} from "./camera/camera_effects.ts";
+export { CameraFollow, bakeCameraMotion } from "./camera/camera_follow.ts";
+export type {
+  CameraFollowConfig, CameraFollowTarget, CameraFollowSample, BakeCameraMotionOptions,
+} from "./camera/camera_follow.ts";
+export {
   Surface, ParametricSurface, Sphere, Torus, Cylinder, Cone, Box, Cube,
   Prism, Dot3D, Line3D, Arrow3D, ThreeDVMobject,
 } from "./mobject/surface.ts";
@@ -132,7 +145,9 @@ export type { FunnelChartConfig, FunnelStage } from "./mobject/funnel.ts";
 export { RadarChart } from "./mobject/radar.ts";
 export type { RadarChartConfig, RadarIndicator } from "./mobject/radar.ts";
 export { ParticleSystem } from "./mobject/particles.ts";
-export type { ParticleSystemConfig, ParticleState } from "./mobject/particles.ts";
+export type { ParticleSystemConfig, ParticleState, ParticleMaterial, ParticleTurbulence } from "./mobject/particles.ts";
+export { ParticlePreset, Aura, Explosion, Smoke, Beam } from "./mobject/particle_presets.ts";
+export type { ParticlePresetConfig, AuraConfig, ExplosionConfig, SmokeConfig, BeamConfig } from "./mobject/particle_presets.ts";
 export { CellularAutomaton } from "./mobject/cellular_automaton.ts";
 export type { CellularAutomatonConfig, CellularAutomatonRule } from "./mobject/cellular_automaton.ts";
 export { SoftBodySimulation, SoftBody } from "./mobject/soft_body.ts";
@@ -201,6 +216,7 @@ export { wiggle, remap, ramp, valueAtTime, compose, mulberry32 } from "./animati
 export type { Driver } from "./animation/expressions.ts";
 // Seeded deterministic noise fields (value/simplex/fbm).
 export { valueNoise1D, simplex2D, simplex3D, fbm, fbm3 } from "./core/noise.ts";
+export { deprecate } from "./core/deprecate.ts";
 
 // --- D3-parity campaign (v0.4.0): scales, shapes, layouts, joins ------------
 export {

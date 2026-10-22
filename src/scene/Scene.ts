@@ -305,6 +305,9 @@ export class Scene {
     // otherwise be invisible to the hash.
     const untouched = this._untouchedMobjectsFingerprint(anims);
     if (untouched) parts.push(`untouched:${untouched}`);
+    // Camera-motion effects change pixels without touching any mobject.
+    const fx = (this.camera as any)?.effectsFingerprint?.();
+    if (fx) parts.push(`camfx:${fx}`);
     return fnv1a(parts.join("|"));
   }
 
@@ -455,6 +458,9 @@ export class Scene {
   async construct(): Promise<void> {}
 
   async emitFrame(): Promise<void> {
+    // Camera motion effects are pure functions of absolute scene time (seek /
+    // parallel safe). No-op for a camera without effects.
+    this.camera?.setEffectTime?.(this.time);
     await this.frameHandler(this.mobjects, this.frameCount, this.time);
     this.frameCount++;
   }
@@ -766,6 +772,10 @@ export function computeRenderConfigHash(config: {
       !!c.disableZBuffer, !!c.flatShading, c.focalDistance ?? "",
     );
   }
+  // Camera-motion effects registered before render start (appended only when
+  // present, so the hash of an effect-free camera is unchanged).
+  const fx = c?.effectsFingerprint?.();
+  if (fx) parts.push(`camfx:${fx}`);
   return fnv1a(parts.join("|"));
 }
 

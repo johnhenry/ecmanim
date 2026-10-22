@@ -110,28 +110,51 @@ export class ThreeRenderer {
   // Position the Three camera to reproduce ThreeDCamera's phi/theta/focal view.
   syncCamera(): void {
     const { camera, threeCamera } = this;
-    const center = camera.frameCenter ?? [0, 0, 0];
+    // Sync frameCenter/Width/Height/rotation from a MovingCameraScene frame
+    // mobject (no-op when `camera.frame` is unset), as Canvas/SVG renderers do.
+    camera.preRender?.();
+    let center = camera.frameCenter ?? [0, 0, 0];
+    // Camera roll (radians) from a rotated frame; 0 when unset.
+    let roll = camera.rotation ?? 0;
+    // Camera-motion effects (addEffect): undefined unless evaluated, so the
+    // no-effect path below is untouched.
+    const fxOff = camera.effectOffset as [number, number] | undefined;
+    let zoom = camera.zoom ?? 1;
+    if (fxOff !== undefined) {
+      zoom *= Math.exp(camera.effectLogZoom ?? 0);
+      roll += this.is3D() ? 0 : (camera.effectRoll ?? 0);
+    }
     if (this.is3D()) {
       // Inverse of ThreeDCamera.toCameraSpace: rotate camera-space basis into
       // world. gamma (roll) is applied first about the view axis (camera-space z),
       // then the phi/theta rotations, matching toCameraSpace's inverse order.
-      const gamma = camera.gamma ?? 0;
+      const gamma = (camera.gamma ?? 0) + roll + (fxOff !== undefined ? (camera.effectRoll ?? 0) : 0);
       const rot = (v: number[]) => V.rotateVector(
         V.rotateVector(V.rotateVector(v, gamma, [0, 0, 1]), camera.phi, [1, 0, 0]),
         camera.theta + 90 * V.DEGREES, [0, 0, 1],
       );
+      // Effect offset is a camera-space shift of eye AND target.
+      if (fxOff !== undefined) center = V.add(center, rot([fxOff[0], fxOff[1], 0]));
       const eye = V.add(center, rot([0, 0, camera.focalDistance]));
       const up = rot([0, 1, 0]);
       threeCamera.position.set(eye[0], eye[1], eye[2]);
       threeCamera.up.set(up[0], up[1], up[2]);
       threeCamera.lookAt(center[0], center[1], center[2]);
       threeCamera.fov = (2 * Math.atan((camera.frameHeight / 2) / camera.focalDistance) * 180) / Math.PI;
-      threeCamera.zoom = camera.zoom ?? 1;
+      threeCamera.zoom = zoom;
     } else {
+      if (fxOff !== undefined) center = [center[0] + fxOff[0], center[1] + fxOff[1], center[2] ?? 0];
       threeCamera.position.set(center[0], center[1], 100);
-      threeCamera.up.set(0, 1, 0);
+      // Camera rolled by +roll: its up axis is the world +y rotated by +roll.
+      if (roll !== 0) threeCamera.up.set(-Math.sin(roll), Math.cos(roll), 0);
+      else threeCamera.up.set(0, 1, 0);
+      // Frustum follows the (possibly animated) frame size; identical to the
+      // constructor's values when no frame is set.
+      const hw = camera.frameWidth / 2, hh = camera.frameHeight / 2;
+      threeCamera.left = -hw; threeCamera.right = hw;
+      threeCamera.top = hh; threeCamera.bottom = -hh;
       threeCamera.lookAt(center[0], center[1], 0);
-      threeCamera.zoom = camera.zoom ?? 1;
+      threeCamera.zoom = zoom;
     }
     threeCamera.updateProjectionMatrix();
   }
@@ -385,12 +408,16 @@ export class ThreeRenderer {
     for (const root of mobjects) {
       const family = typeof root?.getFamily === "function" ? root.getFamily() : [root];
       for (const m of family) {
-        if (!m || this._warnedUnsupported.has(m)) continue;
+        if (!m) continue;
+        // Preset children (Aura/Explosion/...) share one warning, keyed on the preset.
+        const owner = m._isParticles ? (m._presetOwner ?? m) : m;
+        if (this._warnedUnsupported.has(owner)) continue;
         if (m._isParticles) {
-          this._warnedUnsupported.add(m);
+          this._warnedUnsupported.add(owner);
           console.warn(
-            "[ecmanim] ThreeRenderer (WebGL): ParticleSystem is not supported and will not render " +
-            "(see docs/renderers.md). Use the Canvas-2D or SVG backend for particle effects.",
+            `[ecmanim] ThreeRenderer (WebGL): ${owner === m ? "ParticleSystem" : owner.constructor?.name ?? "particle preset"} ` +
+            "is not supported and will not render (see docs/particles.md and docs/renderers.md). " +
+            "Use the Canvas-2D backend for particle effects.",
           );
         } else if (m.effects && m.effects.length) {
           this._warnedUnsupported.add(m);

@@ -138,6 +138,7 @@ See `examples/browser/index.html` for a full page and
 | `ecmanim/browser` | browser (Canvas-2D) | live `<canvas>` + WebM | `play()` for real-time, `record()` → WebM `Blob` via `MediaRecorder` |
 | `ecmanim/browser-three` | browser (WebGL) | live `<canvas>` + WebM | Three.js: hardware depth buffer, MSAA, OrbitControls; same `play`/`record` API |
 | `ecmanim/authoring` | Node | plan IR / formats | plan-IR dry-run, quality gates, pluggable Format lifecycle + llm/tts/render providers ([docs/authoring-studio.md](docs/authoring-studio.md)) |
+| `ecmanim/skeletal` | Node + browser | skeletal animation | `Skeleton`, FK, `Pose` tweening, `PoseLibrary` ([docs/skeletal.md](docs/skeletal.md)) |
 | `ecmanim/studio` | Node + browser | live-preview dev server | hot-reloading `<manim-player>` preview + schema→props controls ([docs/authoring-studio.md](docs/authoring-studio.md)) |
 
 The Canvas-2D CPU backend is the default and the only one needed for headless

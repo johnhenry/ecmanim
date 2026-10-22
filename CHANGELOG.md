@@ -2,6 +2,182 @@
 
 ## Unreleased
 
+Changelog convention: under each release use these `###` headings, in this
+order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
+`Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
+compatibility rules" section of `AGENTS.md`.
+
+### Added
+
+- IK / rig follow-ups (`@johnhenry/ecmanim/skeletal` and `/studio`, #92, stacked on
+  #91): per-bone joint limits (`BoneSpec.limits`, honoured by `solveTwoBone`,
+  `solveFABRIK` and `IKChain`), `IKChain` `effectorAngle` / `effectorBone`
+  (effector orientation lock) and `pole` (bend side for 2+ bone chains),
+  stretch-constraint `multipliers` and `widthResponse` / `widthBones`
+  (per-bone width scale applied by `Skeleton.refresh()`), opt-in constraint
+  fixed point (`ConstraintSet` `iterations` / `tolerance`, `apply()` now returns
+  `{ passes, residual }`), and studio helpers `rigToControls` /
+  `applyRigControl` / `createIKDrag` / `attachIKDrag`. All options default to
+  the previous behaviour.
+- Skeleton rig constraints (`@johnhenry/ecmanim/skeletal`, epic #61 child #75):
+  `Skeleton.addConstraint()` / `ConstraintSet` with connector (joint at slide%
+  between two anchors), weighted joint (origin + sum of weighted offsets),
+  angle lock (to parent or world, with multiplier/offset) and simplified
+  stretch (descendant lengths scaled by the clamped driver ratio). Evaluated in
+  topological order with cycle detection, after pose and IK on every
+  `refresh()`; skeletons without constraints are unchanged.
+
+- **Inverse kinematics for `Skeleton`** (epic #61, #66): pure `solveTwoBone`
+  (analytic) and `solveFABRIK` solvers, `IKChain` (bone-id chain bound to a
+  target, `bendSide: "left" | "right" | "auto"`, world-space `pin()`,
+  `allowStretch`, `attach()` updater), and `ikTarget`/`ikTargetXY` target
+  adapters, all from `@johnhenry/ecmanim/skeletal`. `PoseTween` accepts an
+  optional `ik` config so IK stays live while `play()` suspends updaters, and
+  now salts its cache key with its target pose. See `docs/skeletal.md`.
+
+- **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
+  subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
+  bone hierarchy with stable ids, forward kinematics, joint world positions
+  and per-bone world angles, bent/arc links, heads, joint dots, polygon
+  fills), the `Pose`/`PartialPose` types, shortest-arc `lerpPose`,
+  `PoseTween`, `PoseLibrary` and `poseTrack` (a `KeyframeTrack<Pose>`).
+  `Skeleton` overrides `copy()` and `interpolate()` so `.animate.setPose()`,
+  `saveState` and `Transform` work, and exposes `setTime(t)` for time-pure
+  evaluation. See `docs/skeletal.md`. `Skeleton` and `PoseTween` register via
+  `registerBuiltins()`.
+
+- **API-compatibility guardrails** (epic #61, #63): `test/api-surface.test.ts`
+  snapshots the runtime `name: typeof` export surface of every `package.json`
+  `exports` subpath into `test/api-surface.snapshot.json` (removals and kind
+  changes fail; additions fail until regenerated with `UPDATE_API=1`;
+  subpaths whose optional dependency isn't installed are reported as
+  skipped); `test/types/api.test-d.ts` (run by `npm run type-check`) pins the
+  shapes of `RenderOptions`, `RecordVideoOptions`, `BrowserOptions`,
+  `Keyframe`, `KeyframeTrackOptions`, `ParticleSystemConfig` and `Camera`;
+  `test/exports-map.test.ts` checks every `exports` target exists in `dist/`
+  and in the npm tarball after a build. New public export `deprecate(id,
+  message)` (`src/core/deprecate.ts`): a warn-once-per-id helper for the
+  deprecation convention documented in `AGENTS.md`.
+
+- **Per-keyframe outgoing easing for `KeyframeTrack`** (epic #61, #65): optional
+  `Keyframe.easeOut` (`"auto"` monotone cubic, `"hold"`, `"linear"`,
+  `"easeIn"`, `"easeOut"`, any rate function / `"bezier:..."` string) governing
+  the segment leaving a key and beating the next key's `ease`, plus optional
+  `KeyframeTrackOptions.easeMode: "incoming" | "outgoing"` (default
+  `"incoming"`). Tracks that set neither sample byte-identically to before.
+  See `docs/primitives.md`.
+
+- **Isomorphic APNG + frame-ZIP encoders, ffmpeg-free GIF in Node** (epic #61,
+  #70): `src/encoders/` (`ApngEncoder`, `ZipSequenceEncoder`, `ZipWriter`,
+  `GifEncoder`, `crc32`, `createFrameEncoder`), exposed as the new
+  `@johnhenry/ecmanim/encoders` subpath. `RenderOptions.encoder?: "ffmpeg" |
+  "js"` (default `"ffmpeg"`; `"js"` + mp4/webm/mov throws); new Node formats
+  `"apng"` and `"zip"`; browser `recordApng` / `recordZip` / `downloadApng` /
+  `downloadZip` and `RecordVideoOptions.format` widened to include
+  `"apng" | "zip"`; render-service `format` accepts `apng` / `zip`. Format
+  resolution is now one shared function (`core/render_format.ts`) instead of
+  two copies in `node.ts` / `node-parallel.ts`. New runtime dependency:
+  `fflate` (MIT) for deflate. See `docs/encoders.md`.
+
+- **Particle presets + ParticleSystem options** (epic #61, #71): `Aura`,
+  `Explosion`, `Smoke`, `Beam` (each a `Group` of `ParticleSystem` layers with
+  named styles and a single deterministic clock, `setTime(t)`; base class
+  `ParticlePreset`), and optional `ParticleSystemConfig` fields
+  `turbulence` (closed-form simplex displacement of spawn position + age,
+  seek-safe), `blendMode` (`"normal" | "add" | "screen"` -> existing
+  `compositeOperation`) and `material` (`"circle" | "square" | "soft" |
+  "star"`; `shape` stays as an alias). With none of the new options set,
+  particle output is byte-identical to before (RNG draw order untouched,
+  pinned by `test/particles-defaults.test.ts`). SVGRenderer now warns once per
+  particle mobject instead of skipping silently; ThreeRenderer warns once per
+  preset rather than per child. See `docs/particles.md`.
+
+- **Camera motion** (epic #61, #69; `docs/camera-motion.md`):
+  `camera.addEffect(fx, {start, duration, fadeIn, fadeOut})` / `removeEffect` /
+  `clearEffects` with seeded closed-form presets `CameraShake`, `Handheld`,
+  `CameraImpact`, `ZoomPulse`, evaluated from absolute scene time into the new
+  optional `effectOffset` / `effectRoll` / `effectLogZoom` camera fields
+  (consumed by `Camera.toPixel`, `ThreeDCamera` and `ThreeRenderer`; never
+  written into `frameCenter`). `CameraFollow` (dead zone, hysteresis,
+  look-ahead, critically damped smoothing, auto-zoom) is baked at a fixed dt
+  by `bakeCameraMotion` into a `KeyframeTrack`. `MovingCameraScene` gains
+  `shakeCamera()`, `followCamera()` and `stopFollowCamera()`. Effect state
+  salts `computeRenderConfigHash`, `hashAnimations` and the canvas camera
+  fingerprint. A camera with no effects is byte-identical to before.
+
+- **Pose operators** (epic #61, #67): `breakdown`, `blendToNeighbor`, `relax`,
+  `push`, `applyPoseOp`, `insertBreakdown` from `./skeletal`; pure shortest-arc
+  in-between tools on `Pose` after Blender's In-Betweens manual.
+
+- **`Clip`** (epic #61, #72; `@johnhenry/ecmanim/skeletal`): a `Group` that
+  evaluates its content (children with `setTime(t)` -- `Skeleton`, particle
+  presets, nested `Clip`s -- or builder functions) at a local clock with modes
+  `loop | once-hold | once-hide | single-frame`, `speed`, `startOffset`,
+  `duration`; pure `localTime(t)` / `seek(t)`, `copy()` with an independent
+  clock, `hashExtra` cache salting, optional `isolate` layer. See
+  `docs/skeletal.md`.
+
+- **Stick Nodes import** (epic #61, #73): `loadStickNodes(bytes, config)` and
+  the pure `parseStickNodes(bytes)` in `@johnhenry/ecmanim/skeletal` read
+  `.nodes` figures (raw and zlib-wrapped, version-aware) into a `Skeleton`,
+  a `PoseLibrary` (`pose` / `default`), a one-key pose track and metadata with
+  an explicit `warnings` list for unsupported features. Layout follows
+  MIT sticknodes-rs (attribution in `THIRD_PARTY_NOTICES.md`); includes a small
+  dependency-free sync zlib inflate. Projects/movieclips are not supported.
+  See `docs/skeletal.md`.
+
+- **Studio onion-skin and motion-path overlays** (epic #61, #74): `./studio`
+  gains `attachOnionSkin` (raster ghosts of the Player's recorded frames at
+  +-k, or vector ghosts of a time-pure mobject via `setTime`),
+  `attachMotionPath` (speed-coloured joint/mobject trail with `KeyframeTrack`
+  markers) and the pure helpers `onionOffsets`, `onionFrames`, `onionTimes`,
+  `sampleMotionPath`, `sampleKeyframeMarkers`, `speedColor`,
+  `motionPathSegments`, `onionVectorGhosts`, `renderOnionRaster`,
+  `renderMotionPath`. See `docs/studio-overlays.md`.
+
+- **CLI `--format apng|zip` and `--encoder ffmpeg|js`** (epic #61, #83): `ecmanim render`
+  can emit the JS-encoded formats and an ffmpeg-free GIF; `--encoder js` with
+  mp4/webm/mov/png or an unknown encoder exits 1 with a message. No existing flag changed.
+
+- **`ParticleSystemConfig.maxParticlesMode`** (#93): optional
+  `"total" | "alive"`, default `"total"` (unchanged). `"alive"` allows
+  unlimited births and caps only the number alive at once (most recent kept;
+  closed-form, seek-safe). The presets' continuous layers now use `"alive"`
+  so they run indefinitely. See `docs/particles.md`.
+
+- **Stick Nodes import** (epic #61, #73): `loadStickNodes(bytes, config)` and
+  the pure `parseStickNodes(bytes)` in `@johnhenry/ecmanim/skeletal` read
+  `.nodes` figures (raw and zlib-wrapped, version-aware) into a `Skeleton`,
+  a `PoseLibrary` (`pose` / `default`), a one-key pose track and metadata with
+  an explicit `warnings` list for unsupported features. Layout follows
+  MIT sticknodes-rs (attribution in `THIRD_PARTY_NOTICES.md`); compressed files
+  are inflated with `fflate` under a 64 MiB output cap. Projects/movieclips are
+  not supported.
+  See `docs/skeletal.md`.
+
+- **Stick Nodes import cross-validation** (#89): 14 `.nodes` figures written by
+  sticknodes-rs (MIT) across versions/builds 250-423/72, read back by it, and
+  asserted field-by-field against `parseStickNodes` (`test/fixtures/sticknodes/`,
+  `test/sticknodes-crossval.test.ts`); no loader discrepancy found. The loader's
+  own inflate (`src/loaders/inflate.ts`, internal) was replaced by `fflate`.
+
+### Fixed
+
+- **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL
+  backend previously never synced the camera frame mobject, so
+  `MovingCameraScene` frame motion (`frame.animate...`, `CameraFrameTween`,
+  `centerOn`, `rotateCamera`) had no effect under `browser-three`. The
+  orthographic camera now follows the frame's center/size (frustum) and
+  roll; the perspective (`ThreeDCamera`) camera follows center, height (fov)
+  and roll. Scenes without a camera frame produce identical three camera
+  parameters to before.
+
+- **ParticleSystem sampling cost** (#93): `sampleParticles` now
+  visits only continuous-stream indices that can be alive at `t` (and skips
+  bursts that are unborn or fully dead) instead of every index since time 0, so
+  per-frame cost is O(alive) rather than O(total births). Output is
+  byte-identical (pinned by `test/particles-live-window.test.ts`).
+
 ## 0.1.0 — 2026-09-28
 
 First release since the `@johnhenry/ecmanim` scope restart at 0.0.0. Adds

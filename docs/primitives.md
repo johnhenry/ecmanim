@@ -102,6 +102,37 @@ await scene.play(new PlayKeyframeTrack(circle, track, (m, v) => m.scale(v)));
 await scene.play(animateSignal(mySignal, track));
 ```
 
+### Per-keyframe outgoing easing
+
+By default a keyframe's `ease` shapes the segment *arriving* at it. Set
+`easeOut` on a keyframe to shape the segment *leaving* it (k0 -> k1); it takes
+precedence over `k1.ease`. `new KeyframeTrack(kfs, { easeMode: "outgoing" })`
+makes plain `ease` mean "leaving" for the whole track (default `"incoming"`).
+
+| `easeOut` | Behaviour |
+|---|---|
+| `"auto"` | Monotone cubic (Fritsch-Carlson, duration-weighted harmonic tangents) across consecutive auto keys: continuous velocity at interior keys, zero tangent at flat spans, reversals and the ends of an auto run; never overshoots a segment's endpoints. Two isolated auto keys = smoothstep. |
+| `"hold"` | Step: k0's value until k1's exact time. |
+| `"linear"`, `"easeIn"`, `"easeOut"` | Uniform speed, cubic ease-in, cubic ease-out. |
+| any rate function / name / `"bezier:x1,y1,x2,y2"` | Resolved exactly like `ease`. |
+
+```js
+const track = new KeyframeTrack([
+  { t: 0, value: 0, easeOut: "auto" },
+  { t: 1, value: 5, easeOut: "auto" },
+  { t: 2, value: 5, easeOut: "hold" },
+  { t: 3, value: 0 },
+]);
+```
+
+Honest divergences: `"auto"` is solved per component for `number`/`number[]`
+tracks only; a track with a custom `interpolate` (e.g. `Color.lerp`) falls back
+to smoothstep alpha per segment, with no cross-key tangent continuity. A
+non-auto neighbouring segment ends the auto run (that edge eases from/to rest).
+Tangents are computed at sample time from the live `keyframes` array, so edits
+are reflected immediately. Renderer-independent (pure value sampling); the
+renderer-support matrix is therefore identical for Canvas, SVG and WebGL.
+
 Default interpolation handles `number`/`number[]` via `V.lerp`;
 `options.interpolate` is the escape hatch for other types (e.g. `Color.lerp`
 for a color-typed track). See

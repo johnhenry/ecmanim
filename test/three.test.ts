@@ -49,7 +49,7 @@ function mockTHREE() {
     Scene: class { constructor() { this.children = []; } add(o) { this.children.push(o); } },
     Group: class { constructor() { this.children = []; } add(o) { this.children.push(o); } clear() { this.children = []; } },
     PerspectiveCamera: class { constructor(fov, asp) { Object.assign(this, cam({ isPerspectiveCamera: true, fov, aspect: asp })); } },
-    OrthographicCamera: class { constructor() { Object.assign(this, cam({ isOrthographicCamera: true })); } },
+    OrthographicCamera: class { constructor(l, r, t, b) { Object.assign(this, cam({ isOrthographicCamera: true, left: l, right: r, top: t, bottom: b })); } },
     BufferGeometry: class { setAttribute(k, v) { (this.attrs ??= {})[k] = v; } dispose() {} },
     Float32BufferAttribute: class { constructor(arr, size) { this.array = arr; this.itemSize = size; } },
     MeshBasicMaterial: class { constructor(o) { Object.assign(this, o); } dispose() {} },
@@ -144,4 +144,86 @@ test("ThreeRenderer does NOT warn for an ordinary mobject with no effects", () =
   }
 
   assert.deepEqual(warnings, []);
+});
+
+// Regression for #62: ThreeRenderer never called camera.preRender(), so
+// MovingCameraScene frame motion never reached the WebGL camera.
+test("ThreeRenderer 2D: no camera frame leaves three camera params unchanged (#62)", () => {
+  const THREE = mockTHREE();
+  const cam = new Camera({ pixelWidth: 640, pixelHeight: 360 });
+  const r = new ThreeRenderer(THREE, { camera: cam, canvas: {} });
+  const t = r.threeCamera;
+  const before = { l: t.left, r: t.right, t: t.top, b: t.bottom };
+  r.render([new Circle({ radius: 1 })]);
+  assert.deepEqual({ l: t.left, r: t.right, t: t.top, b: t.bottom }, before);
+  assert.deepEqual([t.position.x, t.position.y, t.position.z], [0, 0, 100]);
+  assert.deepEqual([t.up.x, t.up.y, t.up.z], [0, 1, 0]);
+  assert.equal(t.zoom, 1);
+});
+
+test("ThreeRenderer 2D: moved/scaled/rolled camera frame reaches the three camera (#62)", async () => {
+  const { Rectangle } = await import("../src/mobject/geometry.ts");
+  const THREE = mockTHREE();
+  const cam = new Camera({ pixelWidth: 640, pixelHeight: 360 });
+  const frame = new Rectangle({ width: cam.frameWidth, height: cam.frameHeight, strokeWidth: 0, fillOpacity: 0 });
+  (frame as any).__isCameraFrameRect = true;
+  cam.frame = frame;
+  const r = new ThreeRenderer(THREE, { camera: cam, canvas: {} });
+  const w0 = cam.frameWidth;
+  frame.scale(0.5).moveTo([2, 1, 0]);
+  r.render([new Circle({ radius: 1 })]);
+  const t = r.threeCamera;
+  assert.ok(Math.abs(t.position.x - 2) < 1e-9 && Math.abs(t.position.y - 1) < 1e-9);
+  assert.ok(Math.abs(t.right - w0 / 4) < 1e-9 && Math.abs(t.left + w0 / 4) < 1e-9);
+  assert.ok(Math.abs(t.top - cam.frameHeight / 2) < 1e-9);
+  assert.ok(Math.abs(cam.frameWidth - w0 / 2) < 1e-9);
+  // Roll: rotating the frame rolls the camera (up vector rotated by +rotation).
+  frame.rotate(Math.PI / 2);
+  r.render([new Circle({ radius: 1 })]);
+  assert.ok(Math.abs(Math.abs(cam.rotation!) - Math.PI / 2) < 1e-6);
+  assert.ok(Math.abs(t.up.x + Math.sin(cam.rotation!)) < 1e-9 && Math.abs(t.up.y - Math.cos(cam.rotation!)) < 1e-9);
+  // Zoom still honoured.
+  cam.zoom = 2;
+  r.render([new Circle({ radius: 1 })]);
+  assert.equal(t.zoom, 2);
+});
+
+test("ThreeRenderer 3D: frame center/size/roll reach the perspective camera (#62)", async () => {
+  const { Rectangle } = await import("../src/mobject/geometry.ts");
+  const THREE = mockTHREE();
+  const mk = () => new ThreeDCamera({ pixelWidth: 640, pixelHeight: 360, phi: 60 * V.DEGREES, theta: -90 * V.DEGREES });
+  // Baseline (no frame) vs a frame identical to the default viewport: same camera.
+  const base = mk();
+  const rb = new ThreeRenderer(THREE, { camera: base, canvas: {} });
+  rb.render([]);
+  const cam = mk();
+  const frame = new Rectangle({ width: cam.frameWidth, height: cam.frameHeight, strokeWidth: 0, fillOpacity: 0 });
+  (frame as any).__isCameraFrameRect = true;
+  cam.frame = frame;
+  const r = new ThreeRenderer(THREE, { camera: cam, canvas: {} });
+  r.render([]);
+  const t = r.threeCamera, tb = rb.threeCamera;
+  assert.ok(Math.abs(t.position.x - tb.position.x) < 1e-9 && Math.abs(t.fov - tb.fov) < 1e-9);
+  frame.scale(0.5).moveTo([1, 0, 0]);
+  r.render([]);
+  assert.ok(Math.abs(t.position.x - tb.position.x - 1) < 1e-9);
+  assert.ok(t.fov < tb.fov);
+});
+
+test("ThreeRenderer warns once per particle PRESET, not once per child system", async () => {
+  const { Aura } = await import("../src/mobject/particle_presets.ts");
+  const THREE = mockTHREE();
+  const r = new ThreeRenderer(THREE, { camera: new Camera({ pixelWidth: 640, pixelHeight: 360 }), canvas: {} });
+  const aura = new Aura();
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    r._warnUnsupported([aura]);
+    r._warnUnsupported([aura]);
+  } finally {
+    console.warn = origWarn;
+  }
+  assert.equal(warnings.length, 1, JSON.stringify(warnings));
+  assert.match(warnings[0], /Aura/);
 });

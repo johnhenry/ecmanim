@@ -27,3 +27,20 @@ export type {
   TimeAxisOptions, FrameAxisOptions, SectionThumbnailLayout, StepMarkerLayout, WaveformBar,
   KeyframeMarkerLayout, KeyframeTimelineEditorOptions,
 } from "./studio/timeline.ts";
+
+export {
+  onionOffsets, onionFrames, onionTimes, speedColor, sampleMotionPath, sampleKeyframeMarkers,
+  motionPathSegments, onionVectorGhosts, renderOnionRaster, renderMotionPath,
+  attachOnionSkin, attachMotionPath,
+} from "./studio/overlays.ts";
+export type {
+  OnionOptions, OnionOffset, OnionFrame, OnionTime, SpeedColorOptions, MotionSource, MotionSample,
+  MotionPath, KeyMarker, PathSegment, VectorGhost, CanvasFactory, RasterOnionOptions,
+  MotionPathRenderOptions, OverlayHandle, OnionSkinOverlayOptions, MotionPathOverlayOptions,
+} from "./studio/overlays.ts";
+export {
+  rigToControls, applyRigControl, ikHandles, pickIKHandle, createIKDrag, attachIKDrag,
+} from "./studio/rig.ts";
+export type {
+  RigControl, RigControlTarget, IKHandle, IKDrag, IKDragOptions, AttachIKDragOptions,
+} from "./studio/rig.ts";

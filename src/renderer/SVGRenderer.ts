@@ -57,6 +57,8 @@ export class SVGRenderer {
   // on this export path -- mirrors CanvasRenderer._buildGradient's
   // bounding-box + sheenDirection approach, emitted as real SVG markup.
   private _gradientDefs: string[] = [];
+  // Mobjects (or preset owners) already warned about for unsupported particles.
+  private _warnedParticles = new WeakSet<object>();
   private _gradientCounter = 0;
   // Per-renderToString-call effect <filter> defs, same lifecycle as gradients.
   private _filterDefs: string[] = [];
@@ -152,6 +154,19 @@ export class SVGRenderer {
 
     for (const { mob } of flat) {
       let el: string | null = null;
+      if (mob._isParticles) {
+        // Particles are Canvas-2D-tier: SVG has no per-particle output. Warn
+        // once per mobject (once per preset for Aura/Explosion/Smoke/Beam).
+        const key = mob._presetOwner ?? mob;
+        if (!this._warnedParticles.has(key)) {
+          this._warnedParticles.add(key);
+          console.warn(
+            `[ecmanim] SVGRenderer: ${key === mob ? "ParticleSystem" : key.constructor?.name ?? "particle preset"} ` +
+            "is not supported and will not render (particles, blend modes and soft/star materials are Canvas-2D only; " +
+            "see docs/particles.md). Use the Canvas-2D backend.",
+          );
+        }
+      }
       try {
         if (mob._isText) el = this.drawText(mob);
         else if (mob._isImage) el = this.drawImage(mob);

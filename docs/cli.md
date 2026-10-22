@@ -42,7 +42,7 @@ default export → the first exported `Scene` subclass found. With `-a` /
 | `-q` | `--quality` | preset | `medium` | `low` \| `medium` \| `high` \| `fourk` \| `production` |
 | `-r` | `--resolution` | `WxH` | — | Explicit resolution, e.g. `1920x1080` (overrides quality dims) |
 |  | `--fps` | n | preset fps | Frames per second (overrides the preset) |
-| `-f` | `--format` | fmt | `mp4` | `mp4` \| `webm` \| `gif` \| `mov` \| `png` |
+| `-f` | `--format` | fmt | `mp4` | `mp4` \| `webm` \| `gif` \| `mov` \| `png` \| `apng` \| `zip` |
 | `-s` | `--save_last_frame` | — | off | Write only the final frame as a PNG (no video) |
 | `-t` | `--transparent` | — | off | Preserve alpha (an `mp4` request falls back to `.mov` / ProRes 4444) |
 | `-a` | `--write_all` | — | off | Render every exported `Scene` in the file |
@@ -53,6 +53,7 @@ default export → the first exported `Scene` subclass found. With `-a` /
 | `-c` | `--config` | file | — | Load a `manim.config.{js,json}` before rendering |
 |  | `--bg` | color | `#000000` | Background color |
 |  | `--renderer` | r | `canvas` | `canvas` (default) \| `webgl` (browser-only; note printed) |
+|  | `--encoder` | enc | `ffmpeg` | `ffmpeg` \| `js`. `js` encodes gif/apng/zip without ffmpeg; errors with mp4/webm/mov/png |
 | `-v` | `--verbose` | — | off | Verbose ffmpeg output |
 | `-h` | `--help` | — | — | Show help |
 
@@ -190,7 +191,13 @@ explicitly.
 | `gif` | `.gif` | animated GIF |
 | `mov` | `.mov` | QuickTime (used automatically for transparent mp4 → ProRes 4444) |
 | `png` | directory | a PNG frame sequence |
+| `apng` | `.apng` | lossless animated PNG (JS encoder; no ffmpeg) |
+| `zip` | `.zip` | `frame-000001.png`... + `animation.json` (JS encoder; no ffmpeg) |
 | `-s` / `--save_last_frame` | `.png` | single final frame, no video |
+
+`--format gif --encoder js` produces a GIF with no ffmpeg; `apng`/`zip` are always
+JS-encoded. These bypass the partial-movie cache and `--workers` (sequential
+fallback); audio is not applied. See [encoders.md](encoders.md).
 
 Video encoding pipes `@napi-rs/canvas` PNG frames to `ffmpeg`; audio added via
 `scene.addSound(...)` is muxed in during encoding. `ffmpeg` and `ffprobe` must be
