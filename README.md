@@ -72,9 +72,11 @@ await render(Demo, { output: "demo.mp4", quality: "high" });
 npm install            # pulls @napi-rs/canvas + three + harfbuzzjs + yoga-layout as optional deps
 # ffmpeg (and ffprobe) must be on PATH for Node video output
 
-> Previously published as `ecmanim` (last unscoped release: 0.11.x, now
+> Previously published as `ecmanim` (last unscoped release: 0.11.1, now
 > deprecated). The scoped package restarts its version line at 0.0.0 — a new
-> address and era, not a maturity signal: this is the same tested 0.11.x code.
+> address and era, not a maturity signal: it is the same tested 0.11.x code.
+> Version numbers overlap between the eras; see the table at the top of
+> [CHANGELOG.md](CHANGELOG.md).
 ```
 
 `@napi-rs/canvas` ships prebuilt binaries — **no system Cairo required**, so it
