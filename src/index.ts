@@ -201,6 +201,7 @@ export { wiggle, remap, ramp, valueAtTime, compose, mulberry32 } from "./animati
 export type { Driver } from "./animation/expressions.ts";
 // Seeded deterministic noise fields (value/simplex/fbm).
 export { valueNoise1D, simplex2D, simplex3D, fbm, fbm3 } from "./core/noise.ts";
+export { deprecate } from "./core/deprecate.ts";
 
 // --- D3-parity campaign (v0.4.0): scales, shapes, layouts, joins ------------
 export {

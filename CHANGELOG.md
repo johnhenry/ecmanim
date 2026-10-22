@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+Changelog convention: under each release use these `###` headings, in this
+order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
+`Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
+compatibility rules" section of `AGENTS.md`.
+
+### Added
+
+- **API-compatibility guardrails** (epic #61, #63): `test/api-surface.test.ts`
+  snapshots the runtime `name: typeof` export surface of every `package.json`
+  `exports` subpath into `test/api-surface.snapshot.json` (removals and kind
+  changes fail; additions fail until regenerated with `UPDATE_API=1`;
+  subpaths whose optional dependency isn't installed are reported as
+  skipped); `test/types/api.test-d.ts` (run by `npm run type-check`) pins the
+  shapes of `RenderOptions`, `RecordVideoOptions`, `BrowserOptions`,
+  `Keyframe`, `KeyframeTrackOptions`, `ParticleSystemConfig` and `Camera`;
+  `test/exports-map.test.ts` checks every `exports` target exists in `dist/`
+  and in the npm tarball after a build. New public export `deprecate(id,
+  message)` (`src/core/deprecate.ts`): a warn-once-per-id helper for the
+  deprecation convention documented in `AGENTS.md`.
+
 ## 0.1.0 — 2026-09-28
 
 First release since the `@johnhenry/ecmanim` scope restart at 0.0.0. Adds

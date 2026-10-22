@@ -66,7 +66,7 @@
   "scripts": {
     "build": "tsc && tsc -p tsconfig.bin.json",
     "prepare": "npm run build",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.test-types.json",
     "test": "node --test 'test/**/*.test.ts'",
     "test:golden-parity": "node --test test/golden-parity.test.ts",
     "example": "node examples/basic.ts",
