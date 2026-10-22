@@ -9,6 +9,14 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **Per-keyframe outgoing easing for `KeyframeTrack`** (epic #61, #65): optional
+  `Keyframe.easeOut` (`"auto"` monotone cubic, `"hold"`, `"linear"`,
+  `"easeIn"`, `"easeOut"`, any rate function / `"bezier:..."` string) governing
+  the segment leaving a key and beating the next key's `ease`, plus optional
+  `KeyframeTrackOptions.easeMode: "incoming" | "outgoing"` (default
+  `"incoming"`). Tracks that set neither sample byte-identically to before.
+  See `docs/primitives.md`.
+
 - **API-compatibility guardrails** (epic #61, #63): `test/api-surface.test.ts`
   snapshots the runtime `name: typeof` export surface of every `package.json`
   `exports` subpath into `test/api-surface.snapshot.json` (removals and kind
