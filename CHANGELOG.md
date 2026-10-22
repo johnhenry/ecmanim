@@ -9,6 +9,9 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **Pose operators** (epic #61, #67): `breakdown`, `blendToNeighbor`, `relax`,
+  `push`, `applyPoseOp`, `insertBreakdown` from `./skeletal`; pure shortest-arc
+  in-between tools on `Pose` after Blender's In-Betweens manual.
 - **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
   subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
   bone hierarchy with stable ids, forward kinematics, joint world positions

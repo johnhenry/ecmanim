@@ -8,3 +8,5 @@ export { Skeleton } from "./mobject/skeleton.ts";
 export type { SkeletonConfig, HeadSpec, FillSpec } from "./mobject/skeleton.ts";
 export { PoseTween, PoseLibrary, poseTrack } from "./animation/pose.ts";
 export type { PoseTarget } from "./animation/pose.ts";
+export { breakdown, blendToNeighbor, relax, push, applyPoseOp, insertBreakdown } from "./animation/pose_ops.ts";
+export type { PoseOpSpec } from "./animation/pose_ops.ts";

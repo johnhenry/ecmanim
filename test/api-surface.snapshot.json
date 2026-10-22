@@ -3180,8 +3180,14 @@
         "ROOT_JOINT": "string",
         "Skeleton": "function",
         "SkeletonModel": "function",
+        "applyPoseOp": "function",
+        "blendToNeighbor": "function",
+        "breakdown": "function",
+        "insertBreakdown": "function",
         "lerpPose": "function",
         "poseTrack": "function",
+        "push": "function",
+        "relax": "function",
         "wrapAngle": "function"
       }
     },
