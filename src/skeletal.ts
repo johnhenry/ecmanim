@@ -22,3 +22,8 @@ export type {
   StickNodesConfig, StickNodesResult, StickNodesMeta, StickNodesFigure, StickNode, StickNodeType,
   StickNodeConnector, StickNodesPolyfill, StickNodesColor,
 } from "./loaders/sticknodes_loader.ts";
+export { ConstraintSet, MAX_WEIGHTED_ANCHORS } from "./mobject/skeleton_constraints.ts";
+export type {
+  RigConstraint, BoundConstraint, ConnectorConstraint, WeightedJointConstraint, WeightedAnchor,
+  AngleLockConstraint, StretchConstraint,
+} from "./mobject/skeleton_constraints.ts";

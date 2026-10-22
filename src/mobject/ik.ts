@@ -341,7 +341,9 @@ export class IKChain implements IKSolver {
   /** Hidden state for cache keys (partial-movie / wait fingerprints). */
   ikFingerprint(): string {
     const t = this.currentTarget();
-    return `ik:${this.bones.join(">")}:${t[0].toFixed(5)},${t[1].toFixed(5)}:${this._pin ? "pin" : "free"}:${this.bendSide}:${this.autoSide}:${this.allowStretch ? 1 : 0}`;
+    const cs = this._skeleton?.constraints;
+    const rig = cs && cs.size > 0 ? `:rig[${cs.fingerprint()}]` : "";
+    return `ik:${this.bones.join(">")}:${t[0].toFixed(5)},${t[1].toFixed(5)}:${this._pin ? "pin" : "free"}:${this.bendSide}:${this.autoSide}:${this.allowStretch ? 1 : 0}${rig}`;
   }
 
   // --- internals --------------------------------------------------------------

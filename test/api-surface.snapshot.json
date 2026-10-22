@@ -3245,7 +3245,9 @@
     "./skeletal": {
       "exports": {
         "Clip": "function",
+        "ConstraintSet": "function",
         "IKChain": "function",
+        "MAX_WEIGHTED_ANCHORS": "number",
         "PoseLibrary": "function",
         "PoseTween": "function",
         "ROOT_JOINT": "string",

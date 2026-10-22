@@ -15,6 +15,8 @@ import { Circle } from "./geometry.ts";
 import { ArcBetweenPoints } from "./arcs.ts";
 import { SkeletonModel, ROOT_JOINT, lerpPose } from "./skeleton_model.ts";
 import type { BoneSpec, Pose, PartialPose, Placement } from "./skeleton_model.ts";
+import { ConstraintSet } from "./skeleton_constraints.ts";
+import type { RigConstraint } from "./skeleton_constraints.ts";
 import { PoseLibrary } from "../animation/pose.ts";
 import type { KeyframeTrack } from "../animation/keyframe_track.ts";
 import type { ColorLike } from "../core/types.ts";
@@ -66,6 +68,7 @@ export class Skeleton extends VGroup {
   /** Track evaluated by setTime(); shared by reference with copies. */
   poseTrack: KeyframeTrack<any> | null = null;
 
+  private _constraints: ConstraintSet | null = null;
   private _cfg: Required<Pick<SkeletonConfig, "strokeWidth" | "joints" | "jointRadius">> & SkeletonConfig;
   private _parts: Part[] = [];
 
@@ -124,11 +127,28 @@ export class Skeleton extends VGroup {
     return this.setPose(this.poseTrack.valueAt(t));
   }
 
+  // --- rig constraints (skeleton_constraints.ts) -----------------------------
+  /** The constraint set, or null when none was ever added (the unconstrained fast path). */
+  get constraints(): ConstraintSet | null { return this._constraints; }
+  /** The constraint set, creating an empty one on first use. */
+  ensureConstraints(): ConstraintSet { return this._constraints ??= new ConstraintSet(this.model); }
+  /** Add a rig constraint (validated; throws on cycles/conflicts) and apply it now. */
+  addConstraint(c: RigConstraint): this { this.ensureConstraints().add(c); return this.refresh(); }
+  removeConstraint(id: string): boolean {
+    const ok = this._constraints?.remove(id) ?? false;
+    if (ok) this.refresh();
+    return ok;
+  }
+  /** Evaluate constraints into the model without rebuilding geometry (refresh() does both). */
+  applyConstraints(): this { this._constraints?.apply(); return this; }
+
   /**
    * Rebuild the drawn geometry from the model. Call after another module (IK,
-   * constraints, pose ops) has driven `skeleton.model` directly.
+   * pose ops) has driven `skeleton.model` directly. Rig constraints (if any)
+   * are applied first, so they hold after every pose / IK write.
    */
   refresh(): this {
+    this._constraints?.apply();
     const m = this.model;
     const j = m.jointPositions();
     this._parts.forEach((part, i) => {
@@ -240,6 +260,7 @@ export class Skeleton extends VGroup {
     const c = super.copy();
     c.model = this.model.clone();
     c.poses = this.poses.clone();
+    c._constraints = this._constraints ? this._constraints.cloneFor(c.model) : null;
     c._parts = this._parts.map((p) => ({ ...p }));
     c._cfg = { ...this._cfg, heads: this._cfg.heads?.map((h) => ({ ...h })), fills: this._cfg.fills?.map((f) => ({ ...f, joints: [...f.joints] })) };
     return c;
