@@ -32,7 +32,8 @@ function targets(): Array<{ from: string; file: string }> {
 
 test("exports-map: package.json declares targets under ./dist/", () => {
   const ts = targets();
-  assert.ok(ts.length >= 18, "expected at least the 9 documented subpaths x (types, default)");
+  assert.ok(ts.length >= 20, "expected at least the 10 documented subpaths x (types, default)");
+  assert.ok(ts.some((t) => t.from === "exports../skeletal.types" && t.file === "./dist/skeletal.d.ts"), "./skeletal subpath (epic #61, #64)");
   for (const { from, file } of ts) assert.ok(file.startsWith("./dist/"), `${from} -> ${file} is not under ./dist/`);
 });
 

@@ -9,6 +9,16 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
+  subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
+  bone hierarchy with stable ids, forward kinematics, joint world positions
+  and per-bone world angles, bent/arc links, heads, joint dots, polygon
+  fills), the `Pose`/`PartialPose` types, shortest-arc `lerpPose`,
+  `PoseTween`, `PoseLibrary` and `poseTrack` (a `KeyframeTrack<Pose>`).
+  `Skeleton` overrides `copy()` and `interpolate()` so `.animate.setPose()`,
+  `saveState` and `Transform` work, and exposes `setTime(t)` for time-pure
+  evaluation. See `docs/skeletal.md`. `Skeleton` and `PoseTween` register via
+  `registerBuiltins()`.
 - **API-compatibility guardrails** (epic #61, #63): `test/api-surface.test.ts`
   snapshots the runtime `name: typeof` export surface of every `package.json`
   `exports` subpath into `test/api-surface.snapshot.json` (removals and kind

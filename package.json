@@ -43,6 +43,10 @@
       "types": "./dist/studio.d.ts",
       "default": "./dist/studio.js"
     },
+    "./skeletal": {
+      "types": "./dist/skeletal.d.ts",
+      "default": "./dist/skeletal.js"
+    },
     "./physics/rapier2d": {
       "types": "./dist/physics/rapier2d.d.ts",
       "default": "./dist/physics/rapier2d.js"
