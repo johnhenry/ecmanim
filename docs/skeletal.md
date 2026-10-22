@@ -151,6 +151,51 @@ leg.unpin();
 - Model placement (`root`, `rotation`, `scale`) is honoured; the solve is in
   world units.
 
+### Joint limits, pole targets and effector lock (#92)
+
+All optional; without them every solve is exactly as before.
+
+**Joint limits.** `BoneSpec.limits = { min?, max? }` (or `model.setLimits(id, limits | null)`,
+`model.limitsOf(id)`) bounds a bone's *local* angle (relative to its parent's
+world angle, radians, either end optional). FK, `setAngle` and poses stay
+unconstrained -- only IK honours limits:
+
+- `solveTwoBone(..., { limits: { parentAngle, a, b } })` keeps the preferred
+  bend branch if it satisfies both ranges, else takes the other branch
+  (`result.limited === true`); if neither does it clamps the less-violating
+  branch (lengths kept, `reached` false unless the clamped pose still lands on
+  the target). `limited` exists only when `limits` was passed.
+- `solveFABRIK(..., { limits: [rangeOrNull, ...], parentAngle })` projects the
+  seed into the limits and clamps every link in each forward pass, so the
+  returned pose always satisfies them; backward passes are unconstrained, so a
+  target that needs a violation ends with `reached: false` and `error > 0`.
+- `IKChain` reads the limits from the model automatically (including the
+  effector bone's, see below) and adds them to `ikFingerprint()`.
+- One-sided ranges are never wrapped; a two-sided range is also tested modulo
+  2*PI, so `[0, 4]` admits an angle of -2.5.
+- **Unsatisfiable** (target beyond what the limits allow): the chain ends as
+  close as the clamping allows, still inside the limits, and reports it through
+  `IKSolveResult.reached/error`; it never throws. FABRIK clamping is a
+  heuristic (not an optimal constrained solve) and can stall short of a target a
+  cleverer solver could reach.
+
+**Pole target.** `pole` (any `IKTargetSource`) picks the side a chain bends to:
+interior joints end up on the pole's side of the root -> target line. 2 bones:
+overrides `bendSide`. 3+ bones: the seed is mirrored to that side (a straight
+chain is nudged toward it) and a converged result left on the wrong side is
+mirrored across the root -> effector line (lengths preserved). 2D has no
+bend *plane*, so "pole" here only decides the side; it does not pull the elbow
+toward the point. A pole on the root -> target line has no side and is ignored;
+with active joint limits the limits win. No pole = the previous behaviour.
+
+**Effector orientation lock.** `effectorAngle: number | () => number` keeps the
+*effector bone* at that WORLD angle. The effector bone is a child of the last
+chain bone (the hand/foot beyond the chain; `effectorBone` picks one when there
+are several, and a missing child throws): the chain's last bone ends at the
+target and the hand is re-aimed after every solve, so it holds while pinned and
+while the figure moves. The effector bone's own limits clamp it. A rig
+`angleLock` on the same bone runs later and wins.
+
 ### IK, `play()` and `PoseTween`
 
 `attach()` installs an ordinary updater, and `Scene.play` **suspends the
@@ -170,10 +215,8 @@ updaters (base `Mobject.copy()` behaviour); recreate/`attach()` on the copy.
 state, and `PoseTween` now salts its cache key with its target pose and IK
 fingerprint.
 
-Scope: the effector's own children rotate with their parent (FK); there is no
-effector-orientation lock, joint limits, pole targets or multi-chain solving
-yet (an `angleLock` constraint on the effector bone covers orientation; see
-Rig constraints below).
+Scope: without `effectorAngle` the effector's own children rotate with their
+parent (FK). There is no multi-chain solving yet.
 
 ## Rig constraints (`mobject/skeleton_constraints.ts`)
 
@@ -212,7 +255,14 @@ Our own semantics (`joint` = a bone id, meaning that bone's end, or `"root"`):
   driver's authored length); each target's length becomes its authored length
   times `ratio`. Targets default to all descendants of the driver; `exclude`
   bones keep their length. The driver is never written (stretch it with a pose,
-  IK `allowStretch`, or a connector).
+  IK `allowStretch`, or a connector). Optional extras (#92):
+  `multipliers: { bone: k }` scales the stretch *amount* per target
+  (`length = authored * (1 + (ratio - 1) * k)`, floored at 0; k = 0 leaves it
+  alone, k > 1 exaggerates; keys must be targets), and `widthResponse: w` with
+  `widthBones` (default all targets) scales those bones' drawn stroke width by
+  `ratio ** -w` (w = 1 thins as the bone lengthens, area-style). The width is
+  stored as a per-bone runtime scale (`model.getWidthScale`) and applied by
+  `Skeleton.refresh()`; it is not part of a `Pose` and is derived each refresh.
 
 **Graph.** Each constraint declares what it writes (bone angle/length) and
 reads (joint geometry, or a driver's length); one depends on another when it
@@ -223,6 +273,16 @@ write moves -- throws `ConstraintSet: cycle detected ...` naming the
 constraints and leaves the set unchanged. Two constraints cannot drive the same
 channel of one bone (error names the owner). `enabled` toggles a constraint;
 structural fields are fixed at `add()`.
+
+**Fixed point.** `apply()` makes one pass by default. `new ConstraintSet(model,
+{ iterations: n, tolerance })` (or `skeleton.ensureConstraints({ iterations })`,
+or `cs.configure(...)`) repeats the pass up to `n` times until the largest bone
+angle/length change is <= `tolerance` (default 1e-9); `apply()` returns
+`{ passes, residual }`. The declared graph is acyclic, so one pass is already
+exact for declared dependencies; extra passes matter for state the graph cannot
+see, such as a `slide` callback that reads the rig it drives. If it does not
+converge within `n` passes the last pass stands (no throw). This does not loop
+IK <-> constraints; that order stays pose -> IK -> constraints.
 
 `ConstraintSet` also works on a bare `SkeletonModel` (`new ConstraintSet(model).add(...).apply()`).
 `Skeleton.copy()` copies the set rebound to the copy's model. IK/`PoseTween`
@@ -235,6 +295,7 @@ cache fingerprints include constraint values when any exist.
 | Bones (line/arc), joints, heads, fills | yes (golden-tested) | yes (plain `VMobject`s) | yes (plain `VMobject`s) |
 | Pose tweening / `setTime` | yes (model-level, renderer-independent) | same | same |
 | IK (`solveTwoBone`, `solveFABRIK`, `IKChain`) | yes (model-level; only writes angles/lengths, golden-tested) | same | same |
+| Joint limits, pole target, effector lock, stretch multipliers / width response, constraint iterations | yes (model-level; width response changes the drawn stroke width, which every backend honours) | same | same |
 | Rig constraints (connector, weighted, angle lock, stretch) | yes (model-level, renderer-independent; unit-tested) | same | same |
 
 Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
@@ -251,15 +312,20 @@ Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
   geometry but cannot be represented in the model's placement (root, rotation,
   uniform scale), so the next pose change snaps back.
 - Head radius and joint-dot size are fixed at construction (not part of a Pose).
-- IK is 2D and per-chain: no joint limits, effector-orientation lock, pole
-  targets or shared-bone conflict detection; `"auto"` bend continuity is
+- IK is 2D and per-chain: no shared-bone conflict detection; joint-limit
+  clamping inside FABRIK is a heuristic (see Joint limits); a pole picks a
+  side only (no bend plane in 2D); `"auto"` bend continuity is
   path-dependent (see above); long chains may keep a small residual at the
   iteration limit (`IKSolveResult.error`).
 - Rig constraints are 2D, drive bone angle/length only (never placement), run
-  once per `refresh()` in dependency order (no iteration to a fixed point), and
-  have no studio/editor UI, per-target stretch multipliers or width response.
-  A constraint fighting IK on the same bone resolves to the constraint (it runs
-  last). Not yet: IK effector-orientation lock (angle lock on the effector
-  bone is the workaround), joint limits and pole targets.
+  once per `refresh()` in dependency order by default (opt-in `iterations`
+  fixed point, which never loops IK <-> constraints). A constraint fighting IK
+  on the same bone resolves to the constraint (it runs last).
+- Studio (`@johnhenry/ecmanim/studio`): `rigToControls` / `applyRigControl`
+  describe and edit constraint values, IK options and joint limits as
+  `PropControl`-shaped controls, and `createIKDrag` / `attachIKDrag` drag an IK
+  target (or pin) in a 2D viewport. There is no visual constraint-graph editor,
+  no creating/removing constraints or editing structural fields (bones,
+  anchors) from the UI, and no joint-limit arc gizmo yet.
 - Pose operators, clips, Stick Nodes import and studio overlays are separate
   follow-ups (epic #61).

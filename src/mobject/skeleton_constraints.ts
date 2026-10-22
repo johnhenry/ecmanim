@@ -41,7 +41,7 @@
 // Structural fields (bones, anchors) are fixed at `add()`; mutate only the
 // value fields (slide, weights, multiplier, offset, min, max, enabled).
 
-import { ROOT_JOINT } from "./skeleton_model.ts";
+import { ROOT_JOINT, wrapAngle } from "./skeleton_model.ts";
 import type { SkeletonModel } from "./skeleton_model.ts";
 
 const EPS = 1e-12;
@@ -73,6 +73,33 @@ export interface StretchConstraint extends Base {
   restLength?: number;
   min?: number;
   max?: number;
+  /**
+   * Per-target multiplier on the stretch AMOUNT: length = authored * (1 +
+   * (ratio - 1) * k). Default k = 1 (plain `authored * ratio`); k = 0 leaves a
+   * target unstretched; k > 1 exaggerates. Keys must be targets.
+   */
+  multipliers?: Record<string, number>;
+  /**
+   * Width response: each `widthBones` bone's drawn stroke width is scaled by
+   * `ratio ** -widthResponse` (1 = area-preserving thinning when stretched,
+   * 0 / omitted = no width change; negative widens). Written to the model's
+   * per-bone width scale (`getWidthScale`), applied by `Skeleton.refresh()`.
+   */
+  widthResponse?: number;
+  /** Bones that get the width response (each must be a target). Default: all targets. */
+  widthBones?: string[];
+}
+export interface ConstraintSetOptions {
+  /** Max evaluation passes per `apply()` (>= 1). Default 1 = a single pass (the original behaviour). */
+  iterations?: number;
+  /** Stop early once the largest angle/length change in a pass is <= this. Default 1e-9. */
+  tolerance?: number;
+}
+export interface ConstraintApplyResult {
+  /** Passes executed (1 with the default settings). */
+  passes: number;
+  /** Largest bone angle/length change in the last pass (0 for a single, un-measured pass). */
+  residual: number;
 }
 export type RigConstraint = ConnectorConstraint | WeightedJointConstraint | AngleLockConstraint | StretchConstraint;
 /** A constraint after `add()`: `id` is always set and `enabled` defaults to true. */
@@ -88,7 +115,26 @@ export class ConstraintSet {
   private _counter = 0;
 
   readonly model: SkeletonModel;
-  constructor(model: SkeletonModel) { this.model = model; }
+  /** Max passes per `apply()`. Default 1 (single pass, the original behaviour). */
+  iterations = 1;
+  /** Fixed-point stop threshold (only used when `iterations > 1`). Default 1e-9. */
+  tolerance = 1e-9;
+  constructor(model: SkeletonModel, opts?: ConstraintSetOptions) {
+    this.model = model;
+    if (opts) this.configure(opts);
+  }
+  /** Set the fixed-point options (validated). */
+  configure(opts: ConstraintSetOptions): this {
+    if (opts.iterations !== undefined) {
+      if (!Number.isInteger(opts.iterations) || opts.iterations < 1) throw new Error(`ConstraintSet: iterations must be an integer >= 1 (got ${String(opts.iterations)})`);
+      this.iterations = opts.iterations;
+    }
+    if (opts.tolerance !== undefined) {
+      if (typeof opts.tolerance !== "number" || !(opts.tolerance >= 0)) throw new Error(`ConstraintSet: tolerance must be a number >= 0 (got ${String(opts.tolerance)})`);
+      this.tolerance = opts.tolerance;
+    }
+    return this;
+  }
 
   /** Constraint ids in insertion order. */
   ids(): string[] { return this._nodes.map((n) => n.c.id); }
@@ -116,9 +162,32 @@ export class ConstraintSet {
     return true;
   }
 
-  /** Evaluate every enabled constraint in dependency order, writing into the model. */
-  apply(): void {
-    for (const n of this._order) if (n.c.enabled) this._eval(n.c);
+  /**
+   * Evaluate every enabled constraint in dependency order, writing into the
+   * model. With the default `iterations = 1` this is exactly one pass. With
+   * `iterations > 1` the pass repeats until the largest bone angle/length
+   * change is <= `tolerance` (or the pass budget runs out; the last pass wins).
+   * The declared graph is acyclic, so extra passes only matter for state the
+   * graph cannot see, e.g. a `slide` callback that reads the rig it drives.
+   */
+  apply(): ConstraintApplyResult {
+    const run = () => { for (const n of this._order) if (n.c.enabled) this._eval(n.c); };
+    if (this.iterations <= 1) { run(); return { passes: 1, residual: 0 }; }
+    const m = this.model;
+    const snap = () => m.ids.map((id) => [m.getAngle(id), m.getLength(id)] as const);
+    let passes = 0, residual = Infinity;
+    while (passes < this.iterations) {
+      const before = snap();
+      run();
+      passes++;
+      const after = snap();
+      residual = 0;
+      for (let i = 0; i < before.length; i++) {
+        residual = Math.max(residual, Math.abs(wrapAngle(after[i][0] - before[i][0])), Math.abs(after[i][1] - before[i][1]));
+      }
+      if (residual <= this.tolerance) break;
+    }
+    return { passes, residual };
   }
 
   /** Copy of this set bound to another model with the same bones (used by `Skeleton.copy()`). */
@@ -126,17 +195,19 @@ export class ConstraintSet {
     const out = new ConstraintSet(model);
     for (const n of this._nodes) out.add(cloneSpec(n.c));
     out._counter = this._counter;
+    out.iterations = this.iterations; out.tolerance = this.tolerance;
     return out;
   }
 
   /** Hidden state for cache keys (updater / wait fingerprints). */
   fingerprint(): string {
-    return this._nodes.map((n) => {
+    const iter = this.iterations > 1 ? `iter${this.iterations}:${this.tolerance}|` : "";
+    return iter + this._nodes.map((n) => {
       const c = n.c as any;
       const v = c.type === "connector" ? slideOf(c)
         : c.type === "weighted" ? c.anchors.map((a: WeightedAnchor) => a.weight).join(",")
         : c.type === "angleLock" ? `${c.reference ?? "parent"}:${c.multiplier ?? 1}:${c.offset ?? 0}`
-        : `${c.restLength ?? ""}:${c.min ?? ""}:${c.max ?? ""}`;
+        : `${c.restLength ?? ""}:${c.min ?? ""}:${c.max ?? ""}${stretchExtraKey(c)}`;
       return `${c.id}=${c.enabled ? 1 : 0}:${v}`;
     }).join(";");
   }
@@ -199,6 +270,18 @@ export class ConstraintSet {
         const lo = c.min === undefined ? 0 : num(c.min, `${what} min`), hi = c.max === undefined ? Infinity : (c.max === Infinity ? Infinity : num(c.max, `${what} max`));
         if (lo < 0 || lo > hi) throw new Error(`ConstraintSet: ${what} needs 0 <= min <= max (got min ${lo}, max ${hi})`);
         c._targets = targets;
+        if (c.multipliers !== undefined) {
+          for (const [k, v] of Object.entries(c.multipliers as Record<string, number>)) {
+            if (!targets.includes(k)) throw new Error(`ConstraintSet: ${what} multipliers key "${k}" is not a target of the stretch`);
+            num(v, `${what} multipliers["${k}"]`);
+          }
+        }
+        if (c.widthResponse !== undefined) num(c.widthResponse, `${what} widthResponse`);
+        if (c.widthBones !== undefined) {
+          for (const b of c.widthBones as string[]) {
+            if (!targets.includes(b)) throw new Error(`ConstraintSet: ${what} widthBones entry "${b}" is not a target of the stretch`);
+          }
+        }
         writes = targets.map((t) => ({ bone: t, angle: false, length: true }));
         reads = [{ kind: "len", bone: c.driver }];
         break;
@@ -278,7 +361,15 @@ export class ConstraintSet {
         const rest = c.restLength ?? m.specOf(c.driver).length;
         const raw = rest > EPS ? m.getLength(c.driver) / rest : 1;
         const ratio = Math.min(Math.max(raw, c.min ?? 0), c.max ?? Infinity);
-        for (const t of (c as any)._targets as string[]) m.setLength(t, m.specOf(t).length * ratio);
+        const mult = c.multipliers;
+        for (const t of (c as any)._targets as string[]) {
+          const k = mult?.[t];
+          m.setLength(t, k === undefined ? m.specOf(t).length * ratio : m.specOf(t).length * Math.max(0, 1 + (ratio - 1) * k));
+        }
+        if (c.widthResponse !== undefined) {
+          const ws = ratio > EPS ? ratio ** -c.widthResponse : 1;
+          for (const b of c.widthBones ?? ((c as any)._targets as string[])) m.setWidthScale(b, ws);
+        }
         break;
       }
     }
@@ -297,6 +388,13 @@ export class ConstraintSet {
   }
 }
 
+function stretchExtraKey(c: StretchConstraint): string {
+  let k = "";
+  if (c.multipliers) k += `:x${Object.keys(c.multipliers).sort().map((b) => `${b}=${c.multipliers![b]}`).join(",")}`;
+  if (c.widthResponse !== undefined) k += `:w${c.widthResponse}[${(c.widthBones ?? []).join(",")}]`;
+  return k;
+}
+
 function slideOf(c: ConnectorConstraint): number {
   const v = typeof c.slide === "function" ? c.slide() : c.slide;
   if (typeof v !== "number" || !Number.isFinite(v)) throw new TypeError(`ConstraintSet: connector "${(c as any).id}" slide must be a finite number (got ${String(v)})`);
@@ -309,5 +407,7 @@ function cloneSpec(c: BoundConstraint): RigConstraint {
   if (rest.anchors) rest.anchors = rest.anchors.map((a: WeightedAnchor) => ({ ...a }));
   if (rest.targets) rest.targets = [...rest.targets];
   if (rest.exclude) rest.exclude = [...rest.exclude];
+  if (rest.multipliers) rest.multipliers = { ...rest.multipliers };
+  if (rest.widthBones) rest.widthBones = [...rest.widthBones];
   return rest;
 }

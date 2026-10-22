@@ -27,3 +27,10 @@ export type {
   TimeAxisOptions, FrameAxisOptions, SectionThumbnailLayout, StepMarkerLayout, WaveformBar,
   KeyframeMarkerLayout, KeyframeTimelineEditorOptions,
 } from "./studio/timeline.ts";
+
+export {
+  rigToControls, applyRigControl, ikHandles, pickIKHandle, createIKDrag, attachIKDrag,
+} from "./studio/rig.ts";
+export type {
+  RigControl, RigControlTarget, IKHandle, IKDrag, IKDragOptions, AttachIKDragOptions,
+} from "./studio/rig.ts";

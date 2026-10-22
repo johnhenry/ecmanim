@@ -3195,6 +3195,8 @@
     "./studio": {
       "exports": {
         "ManimChartElement": "function",
+        "applyRigControl": "function",
+        "attachIKDrag": "function",
         "attachInteractiveCamera": "function",
         "attachKeyframeTimelineEditor": "function",
         "buildStudioHarness": "function",
@@ -3202,14 +3204,18 @@
         "computeSectionThumbnails": "function",
         "computeStepMarkers": "function",
         "computeWaveformBars": "function",
+        "createIKDrag": "function",
         "defineManimChart": "function",
         "frameToPixel": "function",
+        "ikHandles": "function",
         "pickAt": "function",
+        "pickIKHandle": "function",
         "pixelToFrame": "function",
         "pixelToTime": "function",
         "renderKeyframeTimeline": "function",
         "renderSectionOverview": "function",
         "renderWaveform": "function",
+        "rigToControls": "function",
         "schemaToControls": "function",
         "startStudio": "function",
         "timeToPixel": "function"
