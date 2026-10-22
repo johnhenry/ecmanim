@@ -91,6 +91,14 @@ compatibility rules" section of `AGENTS.md`.
   `push`, `applyPoseOp`, `insertBreakdown` from `./skeletal`; pure shortest-arc
   in-between tools on `Pose` after Blender's In-Betweens manual.
 
+- **`Clip`** (epic #61, #72; `@johnhenry/ecmanim/skeletal`): a `Group` that
+  evaluates its content (children with `setTime(t)` -- `Skeleton`, particle
+  presets, nested `Clip`s -- or builder functions) at a local clock with modes
+  `loop | once-hold | once-hide | single-frame`, `speed`, `startOffset`,
+  `duration`; pure `localTime(t)` / `seek(t)`, `copy()` with an independent
+  clock, `hashExtra` cache salting, optional `isolate` layer. See
+  `docs/skeletal.md`.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL

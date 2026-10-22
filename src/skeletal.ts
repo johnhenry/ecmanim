@@ -15,3 +15,5 @@ export type {
 } from "./mobject/ik.ts";
 export { breakdown, blendToNeighbor, relax, push, applyPoseOp, insertBreakdown } from "./animation/pose_ops.ts";
 export type { PoseOpSpec } from "./animation/pose_ops.ts";
+export { Clip } from "./mobject/clip.ts";
+export type { ClipConfig, ClipMode, ClipContent, ClipBuilder } from "./mobject/clip.ts";

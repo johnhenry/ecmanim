@@ -3244,6 +3244,7 @@
     },
     "./skeletal": {
       "exports": {
+        "Clip": "function",
         "IKChain": "function",
         "PoseLibrary": "function",
         "PoseTween": "function",
