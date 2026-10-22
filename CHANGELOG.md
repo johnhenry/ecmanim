@@ -108,6 +108,15 @@ compatibility rules" section of `AGENTS.md`.
   dependency-free sync zlib inflate. Projects/movieclips are not supported.
   See `docs/skeletal.md`.
 
+- **Studio onion-skin and motion-path overlays** (epic #61, #74): `./studio`
+  gains `attachOnionSkin` (raster ghosts of the Player's recorded frames at
+  +-k, or vector ghosts of a time-pure mobject via `setTime`),
+  `attachMotionPath` (speed-coloured joint/mobject trail with `KeyframeTrack`
+  markers) and the pure helpers `onionOffsets`, `onionFrames`, `onionTimes`,
+  `sampleMotionPath`, `sampleKeyframeMarkers`, `speedColor`,
+  `motionPathSegments`, `onionVectorGhosts`, `renderOnionRaster`,
+  `renderMotionPath`. See `docs/studio-overlays.md`.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL
