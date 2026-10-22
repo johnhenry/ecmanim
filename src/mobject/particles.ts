@@ -62,8 +62,13 @@ export interface ParticleSystemConfig extends MobjectConfig {
   /** Colors lerped across each particle's life fraction (default white). */
   colorRamp?: ColorLike[];
   seed?: number;
-  /** Hard cap on continuous-stream particles (default 2000). */
+  /** Cap on continuous-stream particles (default 2000); see `maxParticlesMode`. */
   maxParticles?: number;
+  /** What `maxParticles` limits. "total" (default, historical): total births —
+   *  the stream stops after that many. "alive": unlimited births, at most
+   *  `maxParticles` alive at once, keeping the most recent. Both are closed-form
+   *  and seek-safe. */
+  maxParticlesMode?: "total" | "alive";
   shape?: "circle" | "square";
   /** Particle sprite (default: `shape`, i.e. "circle"). `shape` stays as an alias. */
   material?: ParticleMaterial;
@@ -119,6 +124,7 @@ export class ParticleSystem extends Mobject {
   private readonly _drag: number;
   private readonly _ramp: Color[];
   private readonly _max: number;
+  private readonly _maxAlive: boolean;
   private readonly _bursts: Burst[] = [];
 
   constructor(config: ParticleSystemConfig = {}) {
@@ -134,6 +140,7 @@ export class ParticleSystem extends Mobject {
     this._drag = config.drag ?? 0;
     this._ramp = (config.colorRamp?.length ? config.colorRamp : ["#FFFFFF"]).map((c) => Color.parse(c));
     this._max = config.maxParticles ?? 2000;
+    this._maxAlive = config.maxParticlesMode === "alive";
     this.material = config.material ?? config.shape ?? "circle";
     this.shape = config.shape ?? (this.material === "square" ? "square" : "circle");
     const tb = config.turbulence;
@@ -282,16 +289,37 @@ export class ParticleSystem extends Mobject {
    */
   sampleParticles(t: number = this.time): ParticleState[] {
     const out: ParticleState[] = [];
+    const dir = this._cfg.direction ?? Math.PI / 2;
+    const spr = this._cfg.spread ?? Math.PI / 4;
     if (this._rate > 0) {
-      const born = Math.min(this._max, Math.floor(t * this._rate) + 1);
-      for (let i = 0; i < born; i++) {
-        this._emit(out, t, 0, i, i / this._rate, this._speed, this._cfg.direction ?? Math.PI / 2, this._cfg.spread ?? Math.PI / 4);
+      // Only indices born within [t - lifetimeMax, t] can be alive; earlier ones
+      // are dead (emit nothing), so skipping them leaves output unchanged. The
+      // -2 slack absorbs float rounding at the window edge (extras self-filter).
+      const maxLife = Math.max(this._lifetime[0], this._lifetime[1]);
+      const lo = Math.max(0, Math.floor((t - maxLife) * this._rate) - 2);
+      const births = Math.floor(t * this._rate) + 1;
+      if (!this._maxAlive) {
+        const hi = Math.min(this._max, births);
+        for (let i = lo; i < hi; i++) this._emit(out, t, 0, i, i / this._rate, this._speed, dir, spr);
+      } else if (this._max > 0) {
+        // Newest-first until `max` are alive, then restore ascending index order.
+        const tmp: ParticleState[] = [];
+        const kept: ParticleState[] = [];
+        for (let i = births - 1; i >= lo && kept.length < this._max; i--) {
+          tmp.length = 0;
+          this._emit(tmp, t, 0, i, i / this._rate, this._speed, dir, spr);
+          if (tmp.length) kept.push(tmp[0]);
+        }
+        for (let k = kept.length - 1; k >= 0; k--) out.push(kept[k]);
       }
     }
     this._bursts.forEach((b, bi) => {
+      // Not yet born, or every particle past the longest possible lifetime: nothing alive.
       const speedRange = asRange(b.speed, this._speed);
       const direction = b.direction ?? this._cfg.direction ?? Math.PI / 2;
       const spread = b.spread ?? this._cfg.spread ?? Math.PI * 2;
+      const age = t - b.atT;
+      if (age < 0 || age >= Math.max(this._lifetime[0], this._lifetime[1])) return;
       for (let i = 0; i < b.count; i++) {
         this._emit(out, t, bi + 1, i, b.atT, speedRange, direction, spread);
       }

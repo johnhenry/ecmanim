@@ -9,6 +9,12 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **`ParticleSystemConfig.maxParticlesMode`** (#93): optional
+  `"total" | "alive"`, default `"total"` (unchanged). `"alive"` allows
+  unlimited births and caps only the number alive at once (most recent kept;
+  closed-form, seek-safe). The presets' continuous layers now use `"alive"`
+  so they run indefinitely. See `docs/particles.md`.
+
 - **Particle presets + ParticleSystem options** (epic #61, #71): `Aura`,
   `Explosion`, `Smoke`, `Beam` (each a `Group` of `ParticleSystem` layers with
   named styles and a single deterministic clock, `setTime(t)`; base class
@@ -34,6 +40,14 @@ compatibility rules" section of `AGENTS.md`.
   and in the npm tarball after a build. New public export `deprecate(id,
   message)` (`src/core/deprecate.ts`): a warn-once-per-id helper for the
   deprecation convention documented in `AGENTS.md`.
+
+### Fixed
+
+- **ParticleSystem sampling cost** (#93): `sampleParticles` now
+  visits only continuous-stream indices that can be alive at `t` (and skips
+  bursts that are unborn or fully dead) instead of every index since time 0, so
+  per-frame cost is O(alive) rather than O(total births). Output is
+  byte-identical (pinned by `test/particles-live-window.test.ts`).
 
 ## 0.1.0 — 2026-09-28
 

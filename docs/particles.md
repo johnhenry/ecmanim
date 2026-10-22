@@ -15,6 +15,16 @@ All optional; unset = identical output to earlier releases.
 | `blendMode: "normal" \| "add" \| "screen"` | Sets the mobject's `compositeOperation` (`"lighter"` / `"screen"`). `"normal"`/unset leaves it untouched. |
 | `material: "circle" \| "square" \| "soft" \| "star"` | Sprite per particle. `shape` (`"circle" \| "square"`) remains as an alias; `material` wins when both are set. `soft` is a radial-falloff blob (sprite canvases are cached per color when an offscreen backend exists, otherwise the same gradient is drawn directly). |
 
+### `maxParticles` and `maxParticlesMode`
+
+| Mode | Meaning |
+|------|---------|
+| `"total"` (default) | `maxParticles` caps total births: the continuous stream stops after that many (20/s at the default 2000 stops at about 100 s). |
+| `"alive"` | Unlimited births; at most `maxParticles` particles alive at once, keeping the most recent. Deterministic and seek-safe. Identical to `"total"` while below the cap. |
+
+Sampling cost is O(particles that can be alive at `t`) (`rate x max lifetime`),
+not O(total births), in both modes.
+
 **Compatibility contract:** the per-particle RNG draw order
 (`lifetime, speed, angle, spawnA, spawnB`) must never change. New options add
 no draws; `test/particles-defaults.test.ts` compares fixed-seed output with a
@@ -45,10 +55,8 @@ either direction.
 | `Smoke` | `wisp`, `billow`, `steam` | `center`, `width`. Continuous rising column. |
 | `Beam` | `laser`, `plasma`, `holy` | `from`, `to` (required), `width`. Core glow, travelling streaks, side sparks. |
 
-Continuous layers use `ParticleSystem`'s `maxParticles` cap (4000 per layer in
-presets); a continuous stream stops emitting once that many particles have been
-born (roughly 1-3 minutes at preset rates). Split very long scenes or use
-`setTime` with an offset.
+Continuous preset layers use `maxParticlesMode: "alive"` (4000 alive per
+layer), so presets run indefinitely; there is no total-births limit.
 
 ## Renderer support
 
