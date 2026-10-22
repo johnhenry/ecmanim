@@ -117,6 +117,10 @@ compatibility rules" section of `AGENTS.md`.
   `motionPathSegments`, `onionVectorGhosts`, `renderOnionRaster`,
   `renderMotionPath`. See `docs/studio-overlays.md`.
 
+- **CLI `--format apng|zip` and `--encoder ffmpeg|js`** (epic #61, #83): `ecmanim render`
+  can emit the JS-encoded formats and an ffmpeg-free GIF; `--encoder js` with
+  mp4/webm/mov/png or an unknown encoder exits 1 with a message. No existing flag changed.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL
