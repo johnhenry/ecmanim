@@ -67,12 +67,15 @@ debugging a Node-render failure that looks like a code bug but isn't.
   without updating its scorecard — the numbers in the root README's
   campaign table (`k/n demos`) are read from those scorecards, not derived
   automatically.
-- **Renamed to `@johnhenry/ecmanim` at `0.0.0`** (#43). The last unscoped
-  release is `ecmanim@0.11.1`, which is deprecated on npm. There are three
-  eras with overlapping version numbers (`manim-js` 1.x–2.0, unscoped
-  `ecmanim` 0.0.1–0.11.1, scoped 0.0.0→), described in the era table at the
-  top of `CHANGELOG.md`. Don't reintroduce the old unscoped install command in
-  docs/examples, and don't create `v`-prefixed tags (see "Releases").
+- **Published under two names in lockstep.** `@johnhenry/ecmanim` is the
+  primary name (renamed at `0.0.0`, #43). From `0.12.0`, every release is
+  also published as unscoped `ecmanim`, with the same version and identical
+  contents from the same commit. The `publish-unscoped` job in `publish.yml`
+  does this by running `npm pkg set name=ecmanim` in its own checkout. Never
+  publish one name without the other. Docs and examples use the scoped name.
+  Version numbers overlap across three eras (`manim-js` 1.x–2.0, unscoped
+  `ecmanim` 0.0.1–0.11.1, scoped 0.0.0–0.2.0): see the era table at the top
+  of `CHANGELOG.md`. Don't create `v`-prefixed tags (see "Releases").
 
 ## API compatibility rules (standing)
 

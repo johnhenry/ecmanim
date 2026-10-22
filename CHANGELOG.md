@@ -6,12 +6,19 @@ section you're in:
 
 | Era | npm package | Versions | Git tags |
 |---|---|---|---|
-| **`@johnhenry/ecmanim`** (current) | [`@johnhenry/ecmanim`](https://www.npmjs.com/package/@johnhenry/ecmanim) | 0.0.0 → | `@johnhenry/ecmanim@X.Y.Z` (0.0.0 is also tagged `v0.0.0`) |
-| `ecmanim` (unscoped, deprecated) | [`ecmanim`](https://www.npmjs.com/package/ecmanim) | 0.0.1 → 0.11.1 | `vX.Y.Z` |
+| **`@johnhenry/ecmanim`** (primary) | [`@johnhenry/ecmanim`](https://www.npmjs.com/package/@johnhenry/ecmanim) | 0.0.0 → 0.2.0, then **0.12.0 →** | `@johnhenry/ecmanim@X.Y.Z` (0.0.0 is also tagged `v0.0.0`) |
+| `ecmanim` (unscoped) | [`ecmanim`](https://www.npmjs.com/package/ecmanim) | 0.0.1 → 0.11.1 (its own line), then **0.12.0 →** as an identical copy | `vX.Y.Z` up to 0.11.1; from 0.12.0 shares the scoped tag |
 | `manim-js` (original name) | never published | 1.0.0 → 2.0.0 | `v1.0.0`, `v1.1.0` only |
 
 The scoped restart at 0.0.0 is a new address, not a maturity reset: it is the
 same code as unscoped 0.11.1 plus the never-published 0.11.2 fix.
+
+**From 0.12.0 on, both names publish in lockstep:** the same version, built
+from the same commit with identical contents (only `name` differs). The scoped
+line skipped 0.3.0–0.11.x so the numbers could line up, because those versions
+already exist on the unscoped package with older code. Install either one, but
+not both in the same app: they're separate copies, so `instanceof` checks
+between them fail.
 
 # `@johnhenry/ecmanim`
 
@@ -381,15 +388,14 @@ below, which was never published under the unscoped name.
   `npx -p @johnhenry/ecmanim ecmanim`.
 - The Studio dev server's import map aliases both the old and new specifiers,
   so existing scene files keep working unmodified.
+- The unscoped `ecmanim` npm package was frozen at 0.11.1. It resumed in
+  0.12.0 as an identical copy of `@johnhenry/ecmanim`, published in lockstep.
 
-### Deprecated
+# Unscoped `ecmanim`, 0.0.1–0.11.1 (before the scope restart)
 
-- The unscoped `ecmanim` npm package (last release 0.11.1) gets no further
-  releases.
-
-# Unscoped `ecmanim` (deprecated)
-
-Published to npm as `ecmanim`, 0.0.1 → 0.11.1. Tags are `vX.Y.Z`.
+Published to npm as `ecmanim`, 0.0.1 → 0.11.1, with tags `vX.Y.Z`. From 0.12.0
+the unscoped package is published from the same commits as
+`@johnhenry/ecmanim` (see the scoped sections above).
 
 ## 0.11.2 — 2026-07-11 (never published as `ecmanim`; shipped in `@johnhenry/ecmanim` 0.0.0)
 
