@@ -129,6 +129,12 @@ compatibility rules" section of `AGENTS.md`.
   can emit the JS-encoded formats and an ffmpeg-free GIF; `--encoder js` with
   mp4/webm/mov/png or an unknown encoder exits 1 with a message. No existing flag changed.
 
+- **`ParticleSystemConfig.maxParticlesMode`** (#93): optional
+  `"total" | "alive"`, default `"total"` (unchanged). `"alive"` allows
+  unlimited births and caps only the number alive at once (most recent kept;
+  closed-form, seek-safe). The presets' continuous layers now use `"alive"`
+  so they run indefinitely. See `docs/particles.md`.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL
@@ -139,6 +145,12 @@ compatibility rules" section of `AGENTS.md`.
   roll; the perspective (`ThreeDCamera`) camera follows center, height (fov)
   and roll. Scenes without a camera frame produce identical three camera
   parameters to before.
+
+- **ParticleSystem sampling cost** (#93): `sampleParticles` now
+  visits only continuous-stream indices that can be alive at `t` (and skips
+  bursts that are unborn or fully dead) instead of every index since time 0, so
+  per-frame cost is O(alive) rather than O(total births). Output is
+  byte-identical (pinned by `test/particles-live-window.test.ts`).
 
 ## 0.1.0 — 2026-09-28
 

@@ -116,6 +116,7 @@ type ParticleSystemConfigPin = {
   colorRamp?: import("../../src/core/types.ts").ColorLike[];
   seed?: number;
   maxParticles?: number;
+  maxParticlesMode?: "total" | "alive";
   shape?: "circle" | "square";
   autoAdvance?: boolean;
 };

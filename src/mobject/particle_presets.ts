@@ -53,7 +53,7 @@ export abstract class ParticlePreset extends Group {
   /** Add one ParticleSystem layer (never self-advancing; the preset owns the clock). */
   protected _layer(cfg: ParticleSystemConfig, bursts: Burst[] = []): ParticleSystem {
     const seed = (this._seed + 1) * 7919 + this._layerCount++ * 104729;
-    const ps = new ParticleSystem({ maxParticles: 4000, ...cfg, seed, autoAdvance: false });
+    const ps = new ParticleSystem({ maxParticles: 4000, maxParticlesMode: "alive", ...cfg, seed, autoAdvance: false });
     for (const [at, n, o] of bursts) ps.burst(at, Math.max(0, Math.round(n * this._intensity)), o);
     (ps as any)._presetOwner = this;
     this.add(ps);
