@@ -9,6 +9,13 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **Inverse kinematics for `Skeleton`** (epic #61, #66): pure `solveTwoBone`
+  (analytic) and `solveFABRIK` solvers, `IKChain` (bone-id chain bound to a
+  target, `bendSide: "left" | "right" | "auto"`, world-space `pin()`,
+  `allowStretch`, `attach()` updater), and `ikTarget`/`ikTargetXY` target
+  adapters, all from `@johnhenry/ecmanim/skeletal`. `PoseTween` accepts an
+  optional `ik` config so IK stays live while `play()` suspends updaters, and
+  now salts its cache key with its target pose. See `docs/skeletal.md`.
 - **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
   subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
   bone hierarchy with stable ids, forward kinematics, joint world positions

@@ -18,6 +18,18 @@ export interface PoseTarget {
   setPose(pose: PartialPose): unknown;
 }
 
+/** Anything with a `solve()` that drives the posed object (an `IKChain`). */
+export interface PoseTweenIK { solve(): unknown; ikFingerprint?(): string }
+
+export interface PoseTweenConfig extends AnimationConfig {
+  /**
+   * IK chain(s) to re-solve after every pose write during the tween, so IK
+   * stays live although `Scene.play` suspends the skeleton's updaters. Default:
+   * none (unchanged behaviour).
+   */
+  ik?: PoseTweenIK | PoseTweenIK[];
+}
+
 /** A name -> pose map. Poses may be partial (e.g. "only the arms"). */
 export class PoseLibrary {
   private _poses = new Map<string, PartialPose>();
@@ -64,12 +76,20 @@ export class PoseLibrary {
  */
 export class PoseTween extends Animation {
   target: PartialPose;
+  /** IK chains re-solved after every pose write (see `PoseTweenConfig.ik`). */
+  ik: PoseTweenIK[];
   startPose!: Pose;
   endPose!: Pose;
 
-  constructor(mobject: PoseTarget, target: PartialPose, config: AnimationConfig = {}) {
+  constructor(mobject: PoseTarget, target: PartialPose, config: PoseTweenConfig = {}) {
     super(mobject as any, config);
     this.target = target;
+    this.ik = config.ik === undefined ? [] : Array.isArray(config.ik) ? config.ik : [config.ik];
+  }
+
+  /** Cache-key salt: the tween's target pose and any IK it drives. */
+  _hashExtra(): string {
+    return JSON.stringify(this.target) + this.ik.map((c) => c.ikFingerprint?.() ?? "ik").join("|");
   }
 
   begin(): this {
@@ -85,6 +105,9 @@ export class PoseTween extends Animation {
 
   interpolateMobject(alpha: number): void {
     (this.mobject as PoseTarget).setPose(lerpPose(this.startPose, this.endPose, alpha));
+    // IK wins over the FK pose for the bones it drives, even though Scene.play
+    // has suspended the skeleton's updaters (so an attached IKChain would freeze).
+    for (const c of this.ik) c.solve();
   }
 }
 

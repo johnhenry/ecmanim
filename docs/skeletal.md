@@ -95,12 +95,92 @@ valid. Options: `joints`, `heads: [{ joint, radius, ... }]`,
   `interpolate` option set to `lerpPose`). Use with `setTime`, or
   `new PlayKeyframeTrack(skeleton, track, (m, p) => m.setPose(p))`.
 
+## Inverse kinematics (`mobject/ik.ts`)
+
+Two layers. **Pure solvers** (no Mobject, no state, deterministic):
+
+- `solveTwoBone(root, l1, l2, target, bendSide, { allowStretch })`: analytic
+  law-of-cosines solve returning `{ mid, end, reached, scale, lengths }`.
+- `solveFABRIK(points, lengths, target, { iterations = 32, tolerance = 1e-4, allowStretch })`:
+  root fixed, inputs never mutated, returns `{ points, reached, scale, iterations, error }`.
+- Out of reach: a straight, fully extended limb pointing at the target, or --
+  with `allowStretch` -- every bone scaled by the same factor so the effector
+  lands on it. Inside the minimum reach the limb folds and stops at
+  `|l1 - l2|`. Target on the root, zero lengths and coincident points all give
+  finite, deterministic results.
+
+**`IKChain`** binds bone ids (root to effector, each the child of the previous)
+to a target and writes *derived angles* into the model (`setWorldAngle`; lengths
+are only written when stretching), then calls `skeleton.refresh()`:
+
+```ts
+import { IKChain, ikTargetXY } from "@johnhenry/ecmanim/skeletal";
+
+const hand = new Dot();
+const leg = new IKChain(fig, { bones: ["legL", "footL"], target: hand, bendSide: "right" });
+leg.solve();                 // one-shot
+leg.attach();                // or: re-solve every frame via an updater
+leg.pin();                   // plant the foot at its current world position
+fig.shift(RIGHT);            // the body moves, the foot stays planted
+leg.unpin();
+```
+
+- **Target** is a `() => [x, y]`; `ikTarget(src)` adapts a fixed point, a
+  function, any Mobject (its center: `Dot`, `ComplexValueTracker`, ...) or
+  `{ track: KeyframeTrack<number[]>, time: () => number }`. `ikTargetXY(xTracker,
+  yTracker)` wraps two `ValueTracker`s. Assign `chain.target = ikTarget(...)` to retarget.
+- **`bendSide`**: `"left"` is the counter-clockwise side of the root-to-target
+  direction, `"right"` the mirror. **`"auto"` (default) keeps the branch the
+  limb is currently on**, read from the pose (sign of
+  `cross(effector - root, mid - root)`). When the limb is straight there is
+  no current side, so the chain uses the last side it saw while bent
+  (initially `autoFallback`, default `"left"`; exposed as `chain.autoSide`).
+  That memory is the only hidden state: `"auto"` is path-dependent, so use an
+  explicit side when you need to evaluate an arbitrary time (scrubbing,
+  parallel segment rendering).
+- **Chains of 3+ bones** use FABRIK seeded from the current pose (so the shape
+  is continuous frame to frame). `bendSide` only matters there to nudge an
+  exactly straight chain off its line.
+- **`allowStretch`** stretches uniformly only when the target is out of reach;
+  authored lengths (`restLengths`, default: lengths at construction) are
+  restored as soon as the target is back in reach. Without it the effector stops
+  at full extension.
+- **`pin(position?)`** fixes the effector's *world* position (default: where it
+  is now); the chain keeps reaching for it while the skeleton moves, ignoring
+  `target` until `unpin()`. Out-of-reach pins behave like out-of-reach targets.
+- Model placement (`root`, `rotation`, `scale`) is honoured; the solve is in
+  world units.
+
+### IK, `play()` and `PoseTween`
+
+`attach()` installs an ordinary updater, and `Scene.play` **suspends the
+animated mobject's updaters** for the duration of the animation. So an attached
+chain **freezes under a `PoseTween` on the same skeleton** by default.
+Decision: rather than silently changing suspension semantics, `PoseTween`
+accepts an optional `ik` config -- `new PoseTween(fig, pose, { ik: chain })` (or an
+array) -- and re-solves those chains after every pose write, so IK wins over FK for the
+bones it drives and the foot stays planted while the body tweens. The
+alternative, `suspendMobjectUpdating: false`, also works but lets *all*
+updaters on the skeleton run. Chains whose target is driven by something else
+being animated (a `ValueTracker` moved by `play(tracker.animate...)`) need
+nothing: the skeleton is not the animated mobject then, so its updater keeps
+running. `Skeleton.copy()` (and therefore `.animate`, `saveState`) does not copy
+updaters (base `Mobject.copy()` behaviour); recreate/`attach()` on the copy.
+`attach()` supplies a `hashExtra` so `wait()` caches see the target/pin/bend
+state, and `PoseTween` now salts its cache key with its target pose and IK
+fingerprint.
+
+Scope: the effector's own children rotate with their parent (FK); there is no
+effector-orientation lock, joint limits, pole targets or multi-chain solving
+yet (see rig constraints, epic #61).
+
 ## Renderer support
 
 | Feature | Canvas-2D (Node/browser) | SVG | WebGL (Three) |
 |---|---|---|---|
 | Bones (line/arc), joints, heads, fills | yes (golden-tested) | yes (plain `VMobject`s) | yes (plain `VMobject`s) |
 | Pose tweening / `setTime` | yes (model-level, renderer-independent) | same | same |
+| IK (`solveTwoBone`, `solveFABRIK`, `IKChain`) | yes (model-level; only writes angles/lengths, golden-tested) | same | same |
 
 Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
 `VMobject` geometry but are not separately pinned.
@@ -116,5 +196,9 @@ Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
   geometry but cannot be represented in the model's placement (root, rotation,
   uniform scale), so the next pose change snaps back.
 - Head radius and joint-dot size are fixed at construction (not part of a Pose).
-- IK, pose operators, clips, Stick Nodes import, studio overlays and rig
+- IK is 2D and per-chain: no joint limits, effector-orientation lock, pole
+  targets or shared-bone conflict detection; `"auto"` bend continuity is
+  path-dependent (see above); long chains may keep a small residual at the
+  iteration limit (`IKSolveResult.error`).
+- Pose operators, clips, Stick Nodes import, studio overlays and rig
   constraints are separate follow-ups (epic #61).
