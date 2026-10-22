@@ -51,6 +51,7 @@ type RenderOptionsPin = {
   aspectRatio?: string;
   stillFrame?: number;
   watermark?: import("../../src/core/watermark.ts").WatermarkConfig;
+  encoder?: "ffmpeg" | "js"; // added by #70 (additive)
 };
 export type _RenderOptions = Expect<Pinned<RenderOptions, keyof RenderOptionsPin, RenderOptionsPin>>;
 
@@ -75,6 +76,7 @@ export type _BrowserOptions = Expect<Pinned<BrowserOptions, keyof BrowserOptions
 // and every BrowserOptions key still present.
 type RecordVideoFormat = NonNullable<RecordVideoOptions["format"]>;
 export type _RecordVideoFormatKeepsOld = Expect<"webm" | "gif" | "mp4" extends RecordVideoFormat ? true : false>;
+export type _RecordVideoAddsJsFormats = Expect<"apng" | "zip" extends RecordVideoFormat ? true : false>;
 export type _RecordVideoIsOptional = Expect<{} extends Pick<RecordVideoOptions, "format"> ? true : false>;
 export type _RecordVideoExtendsBrowserOptions = Expect<RecordVideoOptions extends BrowserOptions ? true : false>;
 

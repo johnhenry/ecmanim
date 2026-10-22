@@ -41,6 +41,18 @@ compatibility rules" section of `AGENTS.md`.
   `"incoming"`). Tracks that set neither sample byte-identically to before.
   See `docs/primitives.md`.
 
+- **Isomorphic APNG + frame-ZIP encoders, ffmpeg-free GIF in Node** (epic #61,
+  #70): `src/encoders/` (`ApngEncoder`, `ZipSequenceEncoder`, `ZipWriter`,
+  `GifEncoder`, `crc32`, `createFrameEncoder`), exposed as the new
+  `@johnhenry/ecmanim/encoders` subpath. `RenderOptions.encoder?: "ffmpeg" |
+  "js"` (default `"ffmpeg"`; `"js"` + mp4/webm/mov throws); new Node formats
+  `"apng"` and `"zip"`; browser `recordApng` / `recordZip` / `downloadApng` /
+  `downloadZip` and `RecordVideoOptions.format` widened to include
+  `"apng" | "zip"`; render-service `format` accepts `apng` / `zip`. Format
+  resolution is now one shared function (`core/render_format.ts`) instead of
+  two copies in `node.ts` / `node-parallel.ts`. New runtime dependency:
+  `fflate` (MIT) for deflate. See `docs/encoders.md`.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL

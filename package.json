@@ -35,6 +35,10 @@
       "types": "./dist/browser-three.d.ts",
       "default": "./dist/browser-three.js"
     },
+    "./encoders": {
+      "types": "./dist/encoders.d.ts",
+      "default": "./dist/encoders.js"
+    },
     "./authoring": {
       "types": "./dist/authoring.d.ts",
       "default": "./dist/authoring.js"
@@ -111,6 +115,7 @@
     "yoga-layout": "^3.2.1"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "gifenc": "^1.0.3",
     "mathjax-full": "^3.2.1",
     "mp4-muxer": "^5.2.2",
