@@ -387,6 +387,7 @@ sync and pure of I/O like `loadLottie`: read the file yourself.
   exactness); `once-hide` detaches children while hidden, so code holding the
   clip must not rely on `clip.submobjects` being populated then; `Clip` is not
   golden-frame tested (it adds no drawing of its own).
+- Pose operators work on whole poses (no per-bone filter, no easing curve on the amount, unlike Blender's Graph Editor).
 - Rig constraints are 2D, drive bone angle/length only (never placement), run
   once per `refresh()` in dependency order (no iteration to a fixed point), and
   have no studio/editor UI, per-target stretch multipliers or width response.
