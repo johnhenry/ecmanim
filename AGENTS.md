@@ -71,6 +71,50 @@ debugging a Node-render failure that looks like a code bug but isn't.
   `0.11.1`, still installable as `ecmanim`). Don't reintroduce the old
   unscoped install command in docs/examples.
 
+## API compatibility rules (standing)
+
+The public surface is machine-checked; these rules apply to every PR (they
+were set by epic #61).
+
+1. **Additive only.** Never remove, rename, or change the signature/runtime
+   default of an existing export. New behaviour lives behind new exports, new
+   *optional* fields, or new format strings, whose defaults equal today's
+   behaviour.
+2. **Byte-identical defaults, proven by test.** When extending an existing
+   class/option, add a test showing the old path is untouched (same output for
+   the same input/seed). Never regenerate an existing golden image to make a
+   change pass -- that is a red flag.
+3. **No type narrowing of existing fields.** Don't turn `format?: string` into
+   a strict union; widen with `"gif" | "apng" | (string & {})`.
+4. **Guardrails you will hit:**
+   - `test/api-surface.test.ts` compares the runtime `name: typeof` surface of
+     every `package.json` `exports` subpath with
+     `test/api-surface.snapshot.json`. Removals/kind changes fail (breaking);
+     additions fail until you regenerate on purpose:
+     `UPDATE_API=1 node --test test/api-surface.test.ts`, then confirm
+     `git diff test/api-surface.snapshot.json` is additions only. A new
+     subpath must be added to `exports` *and* the snapshot. Subpaths needing
+     an uninstalled optional dependency are reported as SKIPPED (never
+     silently passed).
+   - `test/types/api.test-d.ts` (run by `npm run type-check`) pins the current
+     keys/types of `RenderOptions`, `RecordVideoOptions`, `BrowserOptions`,
+     `Keyframe`, `KeyframeTrackOptions`, `ParticleSystemConfig`, and `Camera`.
+     Adding an optional field is free; to pin it, *add* a line to the pin.
+     Never edit or delete an existing pin line.
+   - `test/exports-map.test.ts` (after `npm run build`) checks every
+     `exports`/`main`/`types`/`bin` target exists in `dist/` and in the npm
+     tarball. It skips with a message if `dist/` isn't built.
+5. **Deprecating instead of removing.** Keep the old export working for at
+   least one minor release: add a JSDoc `@deprecated Use {@link newName}.`
+   tag, call `deprecate("<stable-id>", "Use newName() instead.")` from
+   `src/core/deprecate.ts` (exported from the root barrel; warns once per id),
+   and list it under **Deprecated** in `CHANGELOG.md`. Only remove it in a
+   later release, under **Removed**.
+6. **CHANGELOG headings.** Under `## Unreleased` use only these `###`
+   headings, in this order: **Added**, **Changed** (mark API-visible breaks
+   `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. While 0.x,
+   ship features as minor bumps containing only **Added**.
+
 ## Definition of done
 
 A change is done when all of the following hold, not just when tests pass:
