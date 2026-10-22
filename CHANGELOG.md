@@ -19,6 +19,7 @@ compatibility rules" section of `AGENTS.md`.
   `saveState` and `Transform` work, and exposes `setTime(t)` for time-pure
   evaluation. See `docs/skeletal.md`. `Skeleton` and `PoseTween` register via
   `registerBuiltins()`.
+
 - **API-compatibility guardrails** (epic #61, #63): `test/api-surface.test.ts`
   snapshots the runtime `name: typeof` export surface of every `package.json`
   `exports` subpath into `test/api-surface.snapshot.json` (removals and kind
@@ -31,6 +32,14 @@ compatibility rules" section of `AGENTS.md`.
   and in the npm tarball after a build. New public export `deprecate(id,
   message)` (`src/core/deprecate.ts`): a warn-once-per-id helper for the
   deprecation convention documented in `AGENTS.md`.
+
+- **Per-keyframe outgoing easing for `KeyframeTrack`** (epic #61, #65): optional
+  `Keyframe.easeOut` (`"auto"` monotone cubic, `"hold"`, `"linear"`,
+  `"easeIn"`, `"easeOut"`, any rate function / `"bezier:..."` string) governing
+  the segment leaving a key and beating the next key's `ease`, plus optional
+  `KeyframeTrackOptions.easeMode: "incoming" | "outgoing"` (default
+  `"incoming"`). Tracks that set neither sample byte-identically to before.
+  See `docs/primitives.md`.
 
 ### Fixed
 

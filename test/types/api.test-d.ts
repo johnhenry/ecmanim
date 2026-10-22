@@ -81,11 +81,19 @@ export type _RecordVideoExtendsBrowserOptions = Expect<RecordVideoOptions extend
 // --- Keyframe (src/animation/keyframe_track.ts) ----------------------------
 type KeyframePin = { t: number; value: string; ease?: import("../../src/core/types.ts").RateFunc | string };
 export type _Keyframe = Expect<Pinned<Keyframe<string>, keyof KeyframePin, KeyframePin>>;
+// Additive fields (#65): optional, so existing Keyframe literals stay valid.
+type KeyframeOutgoingPin = { easeOut?: import("../../src/core/types.ts").RateFunc | string };
+export type _KeyframeOutgoing = Expect<Pinned<Keyframe<string>, keyof KeyframeOutgoingPin, KeyframeOutgoingPin>>;
 
 // --- KeyframeTrackOptions ---------------------------------------------------
 type KeyframeTrackOptionsPin = { duration?: number; interpolate?: (a: string, b: string, alpha: number) => string };
 export type _KeyframeTrackOptions = Expect<
   Pinned<KeyframeTrackOptions<string>, keyof KeyframeTrackOptionsPin, KeyframeTrackOptionsPin>
+>;
+// Additive field (#65).
+type KeyframeTrackEaseModePin = { easeMode?: "incoming" | "outgoing" };
+export type _KeyframeTrackEaseMode = Expect<
+  Pinned<KeyframeTrackOptions<string>, keyof KeyframeTrackEaseModePin, KeyframeTrackEaseModePin>
 >;
 
 // --- ParticleSystemConfig (src/mobject/particles.ts) -----------------------
