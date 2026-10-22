@@ -20,6 +20,10 @@ jobs:
     uses: johnhenry/workflows/.github/workflows/npm-publish.yml@v1
     with:
       node-version: "24"
+      # v0.1.0-v0.11.1 tags belong to the old unscoped `ecmanim` package (and
+      # v1.0.0/v1.1.0 to manim-js), so scoped releases are tagged
+      # @johnhenry/ecmanim@X.Y.Z. See the era table in CHANGELOG.md.
+      tag-prefix: "@johnhenry/ecmanim@"
       install-command: sudo apt-get update && sudo apt-get install -y ffmpeg && npm ci
       gate-commands: |
         npm run type-check
