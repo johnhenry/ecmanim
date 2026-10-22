@@ -44,7 +44,16 @@ export interface BoneSpec {
   width?: number;
   /** z offset of this bone's mobject relative to the Skeleton's zIndex (view hint). */
   zIndex?: number;
+  /**
+   * Optional joint limits on this bone's local angle (radians, relative to the
+   * parent's world angle). Not enforced by `setAngle` / poses (FK stays
+   * unconstrained); honoured by IK solves (`IKChain`). Default: none.
+   */
+  limits?: AngleLimits;
 }
+
+/** Allowed range of a bone's LOCAL (parent-relative) angle, radians. Either end may be omitted. */
+export interface AngleLimits { min?: number; max?: number }
 
 export interface BonePose { angle: number; length: number; bend: number }
 
@@ -74,6 +83,20 @@ interface BoneState {
   angle: number;
   length: number;
   bend: number;
+  limits?: AngleLimits;
+  /** Runtime stroke-width multiplier (derived by constraints; not part of a Pose). */
+  widthScale: number;
+}
+
+function limitsOrThrow(id: string, l: AngleLimits | null | undefined): AngleLimits | undefined {
+  if (l == null) return undefined;
+  const out: AngleLimits = {};
+  if (l.min !== undefined) out.min = finite(l.min, `limits.min of "${id}"`);
+  if (l.max !== undefined) out.max = finite(l.max, `limits.max of "${id}"`);
+  if (out.min !== undefined && out.max !== undefined && out.min > out.max) {
+    throw new Error(`SkeletonModel: limits of "${id}" need min <= max (got min ${out.min}, max ${out.max})`);
+  }
+  return out.min === undefined && out.max === undefined ? undefined : out;
 }
 
 function finite(v: unknown, what: string): number {
@@ -102,6 +125,7 @@ export class SkeletonModel {
   private _root: [number, number] = [0, 0];
   private _rotation = 0;
   private _scale = 1;
+  private _widthTouched = false;
   private _fk: { version: number; start: Map<string, [number, number]>; end: Map<string, [number, number]>; world: Map<string, number> } | null = null;
 
   constructor(bones: BoneSpec[], placement: Placement = {}) {
@@ -113,6 +137,7 @@ export class SkeletonModel {
       finite(b.length, `bone "${b.id}" length`);
       if (b.angle !== undefined) finite(b.angle, `bone "${b.id}" angle`);
       if (b.bend !== undefined) finite(b.bend, `bone "${b.id}" bend`);
+      limitsOrThrow(b.id, b.limits);
       byId.set(b.id, b);
     }
     for (const b of bones) {
@@ -133,7 +158,7 @@ export class SkeletonModel {
     for (const id of order) {
       const b = byId.get(id)!;
       const spec = { length: b.length, angle: b.angle ?? 0, bend: b.bend ?? 0, width: b.width, zIndex: b.zIndex };
-      this._bones.set(id, { id, parent: b.parent ?? null, children: [], spec, angle: spec.angle, length: spec.length, bend: spec.bend });
+      this._bones.set(id, { id, parent: b.parent ?? null, children: [], spec, angle: spec.angle, length: spec.length, bend: spec.bend, limits: limitsOrThrow(id, b.limits), widthScale: 1 });
     }
     for (const id of order) {
       const p = this._bones.get(id)!.parent;
@@ -167,7 +192,26 @@ export class SkeletonModel {
   /** The build-time (rest) spec of a bone, including view hints `width`/`zIndex`. */
   specOf(id: string): Readonly<BoneSpec> {
     const b = this._get(id);
-    return { id, parent: b.parent, ...b.spec };
+    const out: BoneSpec = { id, parent: b.parent, ...b.spec };
+    if (b.limits) out.limits = { ...b.limits };
+    return out;
+  }
+  /** Joint limits of a bone's local angle, or undefined when it has none. */
+  limitsOf(id: string): AngleLimits | undefined { const l = this._get(id).limits; return l ? { ...l } : undefined; }
+  /** Set (or clear with `null`) the joint limits of a bone. Does not move the pose. */
+  setLimits(id: string, limits: AngleLimits | null): this {
+    this._get(id).limits = limitsOrThrow(id, limits);
+    return this;
+  }
+  /** Runtime stroke-width multiplier of a bone (1 unless a constraint set it). */
+  getWidthScale(id: string): number { return this._get(id).widthScale; }
+  /** True once any bone width scale was written (lets views skip width work otherwise). */
+  get widthScaled(): boolean { return this._widthTouched; }
+  setWidthScale(id: string, scale: number): this {
+    this._get(id).widthScale = finite(scale, `width scale of "${id}"`);
+    this._widthTouched = true;
+    this.version++;
+    return this;
   }
 
   // --- reads --------------------------------------------------------------
@@ -264,6 +308,7 @@ export class SkeletonModel {
     const specs: BoneSpec[] = this.ids.map((id) => this.specOf(id) as BoneSpec);
     const m = new SkeletonModel(specs, { root: this.root, rotation: this._rotation, scale: this._scale });
     m.setPose(this.getPose());
+    for (const id of this.ids) if (this._bones.get(id)!.widthScale !== 1) m.setWidthScale(id, this._bones.get(id)!.widthScale);
     m.version = this.version;
     return m;
   }

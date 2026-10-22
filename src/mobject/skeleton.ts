@@ -16,7 +16,7 @@ import { ArcBetweenPoints } from "./arcs.ts";
 import { SkeletonModel, ROOT_JOINT, lerpPose } from "./skeleton_model.ts";
 import type { BoneSpec, Pose, PartialPose, Placement } from "./skeleton_model.ts";
 import { ConstraintSet } from "./skeleton_constraints.ts";
-import type { RigConstraint } from "./skeleton_constraints.ts";
+import type { RigConstraint, ConstraintSetOptions } from "./skeleton_constraints.ts";
 import { PoseLibrary } from "../animation/pose.ts";
 import type { KeyframeTrack } from "../animation/keyframe_track.ts";
 import type { ColorLike } from "../core/types.ts";
@@ -130,8 +130,15 @@ export class Skeleton extends VGroup {
   // --- rig constraints (skeleton_constraints.ts) -----------------------------
   /** The constraint set, or null when none was ever added (the unconstrained fast path). */
   get constraints(): ConstraintSet | null { return this._constraints; }
-  /** The constraint set, creating an empty one on first use. */
-  ensureConstraints(): ConstraintSet { return this._constraints ??= new ConstraintSet(this.model); }
+  /**
+   * The constraint set, creating an empty one on first use. `opts` (fixed-point
+   * `iterations` / `tolerance`, see `ConstraintSet`) are applied when given.
+   */
+  ensureConstraints(opts?: ConstraintSetOptions): ConstraintSet {
+    const cs = (this._constraints ??= new ConstraintSet(this.model, opts));
+    if (opts) cs.configure(opts);
+    return cs;
+  }
   /** Add a rig constraint (validated; throws on cycles/conflicts) and apply it now. */
   addConstraint(c: RigConstraint): this { this.ensureConstraints().add(c); return this.refresh(); }
   removeConstraint(id: string): boolean {
@@ -157,6 +164,7 @@ export class Skeleton extends VGroup {
         case "bone": {
           const s = m.boneStart(part.id), e = j[part.id];
           setLink(mob, s, e, m.getBend(part.id));
+          if (m.widthScaled) mob.strokeWidth = (m.specOf(part.id).width ?? this._cfg.strokeWidth) * m.getWidthScale(part.id);
           break;
         }
         case "fill": {

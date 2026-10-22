@@ -38,3 +38,9 @@ export type {
   MotionPath, KeyMarker, PathSegment, VectorGhost, CanvasFactory, RasterOnionOptions,
   MotionPathRenderOptions, OverlayHandle, OnionSkinOverlayOptions, MotionPathOverlayOptions,
 } from "./studio/overlays.ts";
+export {
+  rigToControls, applyRigControl, ikHandles, pickIKHandle, createIKDrag, attachIKDrag,
+} from "./studio/rig.ts";
+export type {
+  RigControl, RigControlTarget, IKHandle, IKDrag, IKDragOptions, AttachIKDragOptions,
+} from "./studio/rig.ts";

@@ -9,6 +9,16 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- IK / rig follow-ups (`@johnhenry/ecmanim/skeletal` and `/studio`, #92, stacked on
+  #91): per-bone joint limits (`BoneSpec.limits`, honoured by `solveTwoBone`,
+  `solveFABRIK` and `IKChain`), `IKChain` `effectorAngle` / `effectorBone`
+  (effector orientation lock) and `pole` (bend side for 2+ bone chains),
+  stretch-constraint `multipliers` and `widthResponse` / `widthBones`
+  (per-bone width scale applied by `Skeleton.refresh()`), opt-in constraint
+  fixed point (`ConstraintSet` `iterations` / `tolerance`, `apply()` now returns
+  `{ passes, residual }`), and studio helpers `rigToControls` /
+  `applyRigControl` / `createIKDrag` / `attachIKDrag`. All options default to
+  the previous behaviour.
 - Skeleton rig constraints (`@johnhenry/ecmanim/skeletal`, epic #61 child #75):
   `Skeleton.addConstraint()` / `ConstraintSet` with connector (joint at slide%
   between two anchors), weighted joint (origin + sum of weighted offsets),
