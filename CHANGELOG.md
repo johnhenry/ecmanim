@@ -66,6 +66,19 @@ compatibility rules" section of `AGENTS.md`.
   particle mobject instead of skipping silently; ThreeRenderer warns once per
   preset rather than per child. See `docs/particles.md`.
 
+- **Camera motion** (epic #61, #69; `docs/camera-motion.md`):
+  `camera.addEffect(fx, {start, duration, fadeIn, fadeOut})` / `removeEffect` /
+  `clearEffects` with seeded closed-form presets `CameraShake`, `Handheld`,
+  `CameraImpact`, `ZoomPulse`, evaluated from absolute scene time into the new
+  optional `effectOffset` / `effectRoll` / `effectLogZoom` camera fields
+  (consumed by `Camera.toPixel`, `ThreeDCamera` and `ThreeRenderer`; never
+  written into `frameCenter`). `CameraFollow` (dead zone, hysteresis,
+  look-ahead, critically damped smoothing, auto-zoom) is baked at a fixed dt
+  by `bakeCameraMotion` into a `KeyframeTrack`. `MovingCameraScene` gains
+  `shakeCamera()`, `followCamera()` and `stopFollowCamera()`. Effect state
+  salts `computeRenderConfigHash`, `hashAnimations` and the canvas camera
+  fingerprint. A camera with no effects is byte-identical to before.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL
