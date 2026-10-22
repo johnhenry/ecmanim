@@ -7,4 +7,9 @@ export type { BoneSpec, BonePose, Pose, PartialPose, Placement } from "./mobject
 export { Skeleton } from "./mobject/skeleton.ts";
 export type { SkeletonConfig, HeadSpec, FillSpec } from "./mobject/skeleton.ts";
 export { PoseTween, PoseLibrary, poseTrack } from "./animation/pose.ts";
-export type { PoseTarget } from "./animation/pose.ts";
+export type { PoseTarget, PoseTweenConfig, PoseTweenIK } from "./animation/pose.ts";
+export { solveTwoBone, solveFABRIK, IKChain, ikTarget, ikTargetXY } from "./mobject/ik.ts";
+export type {
+  Vec2 as IKVec2, BendSide, TwoBoneResult, TwoBoneOptions, FabrikOptions, FabrikResult,
+  IKTargetSource, IKTargetFn, IKChainConfig, IKSolveResult, IKSolver,
+} from "./mobject/ik.ts";

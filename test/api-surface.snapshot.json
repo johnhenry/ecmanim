@@ -3244,13 +3244,18 @@
     },
     "./skeletal": {
       "exports": {
+        "IKChain": "function",
         "PoseLibrary": "function",
         "PoseTween": "function",
         "ROOT_JOINT": "string",
         "Skeleton": "function",
         "SkeletonModel": "function",
+        "ikTarget": "function",
+        "ikTargetXY": "function",
         "lerpPose": "function",
         "poseTrack": "function",
+        "solveFABRIK": "function",
+        "solveTwoBone": "function",
         "wrapAngle": "function"
       }
     },
