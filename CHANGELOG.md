@@ -9,6 +9,14 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- Skeleton rig constraints (`@johnhenry/ecmanim/skeletal`, epic #61 child #75):
+  `Skeleton.addConstraint()` / `ConstraintSet` with connector (joint at slide%
+  between two anchors), weighted joint (origin + sum of weighted offsets),
+  angle lock (to parent or world, with multiplier/offset) and simplified
+  stretch (descendant lengths scaled by the clamped driver ratio). Evaluated in
+  topological order with cycle detection, after pose and IK on every
+  `refresh()`; skeletons without constraints are unchanged.
+
 - **Inverse kinematics for `Skeleton`** (epic #61, #66): pure `solveTwoBone`
   (analytic) and `solveFABRIK` solvers, `IKChain` (bone-id chain bound to a
   target, `bendSide: "left" | "right" | "auto"`, world-space `pin()`,

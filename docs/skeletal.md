@@ -172,7 +172,61 @@ fingerprint.
 
 Scope: the effector's own children rotate with their parent (FK); there is no
 effector-orientation lock, joint limits, pole targets or multi-chain solving
-yet (see rig constraints, epic #61).
+yet (an `angleLock` constraint on the effector bone covers orientation; see
+Rig constraints below).
+
+## Rig constraints (`mobject/skeleton_constraints.ts`)
+
+Constraints are declared on a rig and re-applied automatically. Evaluation
+order per frame: **pose -> IK -> constraints -> refresh**. `Skeleton.refresh()`
+applies the constraint set first, and `setPose`, `interpolate`, `PoseTween` and
+`IKChain.solve()` all end in `refresh()`, so constraints hold after every pose
+or IK write (including `PoseTween` with `{ ik }`). A skeleton with no
+constraints takes exactly the old path (`skeleton.constraints === null`).
+
+```ts
+fig.addConstraint({ type: "connector", id: "belt", bone: "belt", a: "hipL", b: "hipR", slide: 0.5 });
+fig.addConstraint({ type: "weighted", bone: "chest", origin: "spine",
+  anchors: [{ joint: "armL", weight: 0.5 }, { joint: "armR", weight: 0.5 }] });
+fig.addConstraint({ type: "angleLock", bone: "head", reference: "world", multiplier: 0 }); // stays upright
+fig.addConstraint({ type: "stretch", driver: "armL", min: 0.5, max: 2 });
+fig.constraints!.get("belt")!.slide = 0.25;   // value fields are live
+```
+
+Our own semantics (`joint` = a bone id, meaning that bone's end, or `"root"`):
+
+- **connector** `{ bone, a, b, slide }`: the end joint of `bone` sits at
+  `A + slide * (B - A)`. `slide` is a number or `() => number`; it is not
+  clamped. The bone keeps its start (its parent's end) and has its **angle and
+  length** driven to land there; its children follow.
+- **weighted** `{ bone, origin, anchors: [{ joint, weight }] }`: end joint =
+  `O + sum(w_i * (J_i - O))`, 1-16 distinct anchors, signed weights. Angle and
+  length driven like a connector.
+- **angleLock** `{ bone, reference = "parent", multiplier = 1, offset = 0 }`:
+  world angle = `offset + multiplier * R`, `R` = the parent bone's world angle
+  (the placement rotation for a root bone) or, for `"world"`, the figure's
+  placement rotation. Multiplier 1 is parallel to the reference; 0 pins the bone
+  at `offset` in world space.
+- **stretch** `{ driver, targets?, exclude?, restLength?, min?, max? }`:
+  `ratio = clamp(length(driver) / rest, min, max)` (`rest` = `restLength` or the
+  driver's authored length); each target's length becomes its authored length
+  times `ratio`. Targets default to all descendants of the driver; `exclude`
+  bones keep their length. The driver is never written (stretch it with a pose,
+  IK `allowStretch`, or a connector).
+
+**Graph.** Each constraint declares what it writes (bone angle/length) and
+reads (joint geometry, or a driver's length); one depends on another when it
+reads something the other writes. `ConstraintSet.order()` is a stable
+topological order (insertion order among ready constraints). Adding a
+constraint that forms a cycle -- including a constraint reading geometry its own
+write moves -- throws `ConstraintSet: cycle detected ...` naming the
+constraints and leaves the set unchanged. Two constraints cannot drive the same
+channel of one bone (error names the owner). `enabled` toggles a constraint;
+structural fields are fixed at `add()`.
+
+`ConstraintSet` also works on a bare `SkeletonModel` (`new ConstraintSet(model).add(...).apply()`).
+`Skeleton.copy()` copies the set rebound to the copy's model. IK/`PoseTween`
+cache fingerprints include constraint values when any exist.
 
 ## Renderer support
 
@@ -181,6 +235,7 @@ yet (see rig constraints, epic #61).
 | Bones (line/arc), joints, heads, fills | yes (golden-tested) | yes (plain `VMobject`s) | yes (plain `VMobject`s) |
 | Pose tweening / `setTime` | yes (model-level, renderer-independent) | same | same |
 | IK (`solveTwoBone`, `solveFABRIK`, `IKChain`) | yes (model-level; only writes angles/lengths, golden-tested) | same | same |
+| Rig constraints (connector, weighted, angle lock, stretch) | yes (model-level, renderer-independent; unit-tested) | same | same |
 
 Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
 `VMobject` geometry but are not separately pinned.
@@ -200,5 +255,11 @@ Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
   targets or shared-bone conflict detection; `"auto"` bend continuity is
   path-dependent (see above); long chains may keep a small residual at the
   iteration limit (`IKSolveResult.error`).
-- Pose operators, clips, Stick Nodes import, studio overlays and rig
-  constraints are separate follow-ups (epic #61).
+- Rig constraints are 2D, drive bone angle/length only (never placement), run
+  once per `refresh()` in dependency order (no iteration to a fixed point), and
+  have no studio/editor UI, per-target stretch multipliers or width response.
+  A constraint fighting IK on the same bone resolves to the constraint (it runs
+  last). Not yet: IK effector-orientation lock (angle lock on the effector
+  bone is the workaround), joint limits and pole targets.
+- Pose operators, clips, Stick Nodes import and studio overlays are separate
+  follow-ups (epic #61).

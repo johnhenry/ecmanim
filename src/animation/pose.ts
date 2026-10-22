@@ -89,7 +89,9 @@ export class PoseTween extends Animation {
 
   /** Cache-key salt: the tween's target pose and any IK it drives. */
   _hashExtra(): string {
-    return JSON.stringify(this.target) + this.ik.map((c) => c.ikFingerprint?.() ?? "ik").join("|");
+    const cs = (this.mobject as any)?.constraints;
+    const rig = cs && cs.size > 0 ? `rig[${cs.fingerprint()}]` : "";
+    return JSON.stringify(this.target) + this.ik.map((c) => c.ikFingerprint?.() ?? "ik").join("|") + rig;
   }
 
   begin(): this {

@@ -13,3 +13,8 @@ export type {
   Vec2 as IKVec2, BendSide, TwoBoneResult, TwoBoneOptions, FabrikOptions, FabrikResult,
   IKTargetSource, IKTargetFn, IKChainConfig, IKSolveResult, IKSolver,
 } from "./mobject/ik.ts";
+export { ConstraintSet, MAX_WEIGHTED_ANCHORS } from "./mobject/skeleton_constraints.ts";
+export type {
+  RigConstraint, BoundConstraint, ConnectorConstraint, WeightedJointConstraint, WeightedAnchor,
+  AngleLockConstraint, StretchConstraint,
+} from "./mobject/skeleton_constraints.ts";
