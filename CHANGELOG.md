@@ -9,6 +9,9 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **CLI `--format apng|zip` and `--encoder ffmpeg|js`** (epic #61, #83): `ecmanim render`
+  can emit the JS-encoded formats and an ffmpeg-free GIF; `--encoder js` with
+  mp4/webm/mov/png or an unknown encoder exits 1 with a message. No existing flag changed.
 - **Isomorphic APNG + frame-ZIP encoders, ffmpeg-free GIF in Node** (epic #61,
   #70): `src/encoders/` (`ApngEncoder`, `ZipSequenceEncoder`, `ZipWriter`,
   `GifEncoder`, `crc32`, `createFrameEncoder`), exposed as the new

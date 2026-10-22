@@ -102,7 +102,8 @@ Render options:
   -q, --quality <preset>     low | medium | high | fourk | production  (default: medium)
   -r, --resolution <WxH>     Explicit resolution, e.g. 1920x1080 (overrides quality)
       --fps <n>              Frames per second (overrides preset)
-  -f, --format <fmt>         mp4 | webm | gif | mov | png  (default: mp4)
+  -f, --format <fmt>         mp4 | webm | gif | mov | png | apng | zip  (default: mp4)
+      --encoder <enc>        ffmpeg | js  (default: ffmpeg; js = no-ffmpeg gif/apng/zip)
   -s, --save_last_frame      Write only the final frame as a PNG (no video)
   -t, --transparent          Preserve alpha (mp4 falls back to .mov / ProRes 4444)
   -a, --write_all            Render every exported Scene in the file
@@ -405,6 +406,14 @@ async function cmdRender(args: any) {
     args.from_upto ? parseFromUpto(args.from_upto) : { from: null, upto: null };
   const disableCaching = !!args.disable_caching;
   const saveSections = !!args.save_sections;
+  let encoderOpt: { encoder?: "ffmpeg" | "js" };
+  try {
+    const { cliEncoderOption } = await import(nodePath("../src/core/cli_encoder.ts"));
+    encoderOpt = cliEncoderOption({ encoder: args.encoder, format });
+  } catch (e: any) {
+    console.error(`render: ${e.message}`);
+    process.exit(1);
+  }
 
   // Choose output extension.
   const extFor = (fmt: string) => {
@@ -439,6 +448,7 @@ async function cmdRender(args: any) {
         outPath: output,
         quality,
         format,
+        ...encoderOpt,
         resolution,
         background: args.bg ?? undefined,
         fps: args.fps ? Number(args.fps) : undefined,
@@ -453,6 +463,7 @@ async function cmdRender(args: any) {
       output,
       quality,
       format,
+      ...encoderOpt,
       resolution,
       background: args.bg ?? undefined,
       fps: args.fps ? Number(args.fps) : undefined,
