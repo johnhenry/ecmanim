@@ -53,6 +53,19 @@ compatibility rules" section of `AGENTS.md`.
   two copies in `node.ts` / `node-parallel.ts`. New runtime dependency:
   `fflate` (MIT) for deflate. See `docs/encoders.md`.
 
+- **Particle presets + ParticleSystem options** (epic #61, #71): `Aura`,
+  `Explosion`, `Smoke`, `Beam` (each a `Group` of `ParticleSystem` layers with
+  named styles and a single deterministic clock, `setTime(t)`; base class
+  `ParticlePreset`), and optional `ParticleSystemConfig` fields
+  `turbulence` (closed-form simplex displacement of spawn position + age,
+  seek-safe), `blendMode` (`"normal" | "add" | "screen"` -> existing
+  `compositeOperation`) and `material` (`"circle" | "square" | "soft" |
+  "star"`; `shape` stays as an alias). With none of the new options set,
+  particle output is byte-identical to before (RNG draw order untouched,
+  pinned by `test/particles-defaults.test.ts`). SVGRenderer now warns once per
+  particle mobject instead of skipping silently; ThreeRenderer warns once per
+  preset rather than per child. See `docs/particles.md`.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL

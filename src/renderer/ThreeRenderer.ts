@@ -397,12 +397,16 @@ export class ThreeRenderer {
     for (const root of mobjects) {
       const family = typeof root?.getFamily === "function" ? root.getFamily() : [root];
       for (const m of family) {
-        if (!m || this._warnedUnsupported.has(m)) continue;
+        if (!m) continue;
+        // Preset children (Aura/Explosion/...) share one warning, keyed on the preset.
+        const owner = m._isParticles ? (m._presetOwner ?? m) : m;
+        if (this._warnedUnsupported.has(owner)) continue;
         if (m._isParticles) {
-          this._warnedUnsupported.add(m);
+          this._warnedUnsupported.add(owner);
           console.warn(
-            "[ecmanim] ThreeRenderer (WebGL): ParticleSystem is not supported and will not render " +
-            "(see docs/renderers.md). Use the Canvas-2D or SVG backend for particle effects.",
+            `[ecmanim] ThreeRenderer (WebGL): ${owner === m ? "ParticleSystem" : owner.constructor?.name ?? "particle preset"} ` +
+            "is not supported and will not render (see docs/particles.md and docs/renderers.md). " +
+            "Use the Canvas-2D backend for particle effects.",
           );
         } else if (m.effects && m.effects.length) {
           this._warnedUnsupported.add(m);

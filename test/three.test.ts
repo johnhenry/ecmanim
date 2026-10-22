@@ -209,3 +209,21 @@ test("ThreeRenderer 3D: frame center/size/roll reach the perspective camera (#62
   assert.ok(Math.abs(t.position.x - tb.position.x - 1) < 1e-9);
   assert.ok(t.fov < tb.fov);
 });
+
+test("ThreeRenderer warns once per particle PRESET, not once per child system", async () => {
+  const { Aura } = await import("../src/mobject/particle_presets.ts");
+  const THREE = mockTHREE();
+  const r = new ThreeRenderer(THREE, { camera: new Camera({ pixelWidth: 640, pixelHeight: 360 }), canvas: {} });
+  const aura = new Aura();
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    r._warnUnsupported([aura]);
+    r._warnUnsupported([aura]);
+  } finally {
+    console.warn = origWarn;
+  }
+  assert.equal(warnings.length, 1, JSON.stringify(warnings));
+  assert.match(warnings[0], /Aura/);
+});
