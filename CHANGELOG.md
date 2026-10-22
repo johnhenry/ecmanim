@@ -29,6 +29,25 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+## 0.12.0 — 2026-10-22
+
+**The first release published under both names in lockstep:**
+`@johnhenry/ecmanim` and unscoped `ecmanim`, at the same version, with
+identical contents from the same commit. The library code is the same as
+0.2.0. The version jumps from 0.2.0 to 0.12.0 because unscoped `ecmanim`
+already used 0.1.0–0.11.1, so 0.12.0 is the first number free on both names.
+Every release from here on has the same version on both.
+
+### Changed
+
+- Every release is now also published as unscoped
+  [`ecmanim`](https://www.npmjs.com/package/ecmanim), which had been frozen
+  at 0.11.1. Use either name, but not both in one app: they're separate
+  copies, so `instanceof` checks between them fail. (#104)
+- Releases are now tagged `@johnhenry/ecmanim@X.Y.Z` automatically, instead of
+  being skipped because the old unscoped package already owns the `vX.Y.Z`
+  tags. (#102, #104)
+
 ## 0.2.0 — 2026-10-21
 
 Epic #61: skeletal animation and motion tooling, built clean-room (from prose
