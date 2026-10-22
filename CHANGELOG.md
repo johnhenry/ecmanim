@@ -135,6 +135,22 @@ compatibility rules" section of `AGENTS.md`.
   closed-form, seek-safe). The presets' continuous layers now use `"alive"`
   so they run indefinitely. See `docs/particles.md`.
 
+- **Stick Nodes import** (epic #61, #73): `loadStickNodes(bytes, config)` and
+  the pure `parseStickNodes(bytes)` in `@johnhenry/ecmanim/skeletal` read
+  `.nodes` figures (raw and zlib-wrapped, version-aware) into a `Skeleton`,
+  a `PoseLibrary` (`pose` / `default`), a one-key pose track and metadata with
+  an explicit `warnings` list for unsupported features. Layout follows
+  MIT sticknodes-rs (attribution in `THIRD_PARTY_NOTICES.md`); compressed files
+  are inflated with `fflate` under a 64 MiB output cap. Projects/movieclips are
+  not supported.
+  See `docs/skeletal.md`.
+
+- **Stick Nodes import cross-validation** (#89): 14 `.nodes` figures written by
+  sticknodes-rs (MIT) across versions/builds 250-423/72, read back by it, and
+  asserted field-by-field against `parseStickNodes` (`test/fixtures/sticknodes/`,
+  `test/sticknodes-crossval.test.ts`); no loader discrepancy found. The loader's
+  own inflate (`src/loaders/inflate.ts`, internal) was replaced by `fflate`.
+
 ### Fixed
 
 - **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL

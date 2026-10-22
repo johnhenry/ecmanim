@@ -1,0 +1,408 @@
+{
+  "build": 72,
+  "color": {
+    "alpha": 0,
+    "blue": 0,
+    "green": 0,
+    "red": 0
+  },
+  "geometry": {
+    "0": {
+      "globalAngle": 0.0,
+      "globalEnd": [
+        0.0,
+        0.0
+      ],
+      "globalStart": [
+        0.0,
+        0.0
+      ],
+      "localX": 0.0,
+      "localY": 0.0,
+      "parent": null
+    },
+    "1": {
+      "globalAngle": 45.0,
+      "globalEnd": [
+        42.42640686035156,
+        42.42640686035156
+      ],
+      "globalStart": [
+        0.0,
+        0.0
+      ],
+      "localX": 42.42640686035156,
+      "localY": 42.42640686035156,
+      "parent": 0
+    },
+    "2": {
+      "globalAngle": 60.0,
+      "globalEnd": [
+        72.42640686035156,
+        94.38793182373047
+      ],
+      "globalStart": [
+        42.42640686035156,
+        42.42640686035156
+      ],
+      "localX": 29.999998092651367,
+      "localY": 51.961524963378906,
+      "parent": 1
+    },
+    "3": {
+      "globalAngle": 30.0,
+      "globalEnd": [
+        94.38793182373047,
+        72.42640686035156
+      ],
+      "globalStart": [
+        42.42640686035156,
+        42.42640686035156
+      ],
+      "localX": 51.961524963378906,
+      "localY": 30.0,
+      "parent": 1
+    },
+    "4": {
+      "globalAngle": 122.0,
+      "globalEnd": [
+        10.631246566772461,
+        93.30928802490234
+      ],
+      "globalStart": [
+        42.42640686035156,
+        42.42640686035156
+      ],
+      "localX": -31.7951602935791,
+      "localY": 50.88288116455078,
+      "parent": 1
+    }
+  },
+  "nodes": [
+    {
+      "angle_lock_mode": "None",
+      "angle_lock_relative_multiplier": 1,
+      "children": [
+        {
+          "angle_lock_mode": "None",
+          "angle_lock_relative_multiplier": 1,
+          "children": [
+            {
+              "angle_lock_mode": "None",
+              "angle_lock_relative_multiplier": 1,
+              "children": [],
+              "circle_is_hollow": false,
+              "circle_outline_color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "connector_data": null,
+              "curve_circulization": false,
+              "default_angle": 77.0,
+              "default_length": 60.0,
+              "default_local_angle": 77.0,
+              "default_thickness": 32,
+              "do_not_apply_smart_stretch": true,
+              "drag_lock_angle": 33.5,
+              "draw_order_index": 4,
+              "gradient_color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "gradient_mode": "Normal",
+              "half_arc": false,
+              "is_drag_locked": true,
+              "is_floaty": true,
+              "is_smart_stretch": true,
+              "is_static": false,
+              "is_stretchy": false,
+              "length": 60.0,
+              "local_angle": 77.0,
+              "node_type": "RoundedSegment",
+              "num_polygon_vertices": 0,
+              "reverse_gradient": false,
+              "scale": 1.0,
+              "segment_curve_polyfill_precision": 1,
+              "segment_curve_radius_and_default_curve_radius": 0,
+              "smart_stretch_multiplier": 1.75,
+              "smart_stretch_reset_impulse": true,
+              "thickness": 32,
+              "trapezoid_is_rounded_end": false,
+              "trapezoid_is_rounded_start": false,
+              "trapezoid_thickness_end": 16.0,
+              "trapezoid_thickness_start": 32.0,
+              "triangle_flipped": false,
+              "triangle_type": "Isosceles",
+              "triangle_upside_down": false,
+              "use_circle_outline": false,
+              "use_gradient": false,
+              "use_segment_color": false,
+              "use_segment_scale": false,
+              "use_trapezoid_thickness_end": true,
+              "use_trapezoid_thickness_start": true
+            },
+            {
+              "angle_lock_mode": "Relative",
+              "angle_lock_relative_multiplier": 2,
+              "children": [],
+              "circle_is_hollow": false,
+              "circle_outline_color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "connector_data": null,
+              "curve_circulization": false,
+              "default_angle": -15.0,
+              "default_length": 60.0,
+              "default_local_angle": -15.0,
+              "default_thickness": 32,
+              "do_not_apply_smart_stretch": false,
+              "drag_lock_angle": 0.0,
+              "draw_order_index": 3,
+              "gradient_color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "gradient_mode": "Normal",
+              "half_arc": false,
+              "is_drag_locked": false,
+              "is_floaty": false,
+              "is_smart_stretch": false,
+              "is_static": false,
+              "is_stretchy": false,
+              "length": 60.0,
+              "local_angle": -15.0,
+              "node_type": "RoundedSegment",
+              "num_polygon_vertices": 0,
+              "reverse_gradient": false,
+              "scale": 1.0,
+              "segment_curve_polyfill_precision": 1,
+              "segment_curve_radius_and_default_curve_radius": 0,
+              "smart_stretch_multiplier": 1.0,
+              "smart_stretch_reset_impulse": false,
+              "thickness": 32,
+              "trapezoid_is_rounded_end": false,
+              "trapezoid_is_rounded_start": false,
+              "trapezoid_thickness_end": 16.0,
+              "trapezoid_thickness_start": 32.0,
+              "triangle_flipped": false,
+              "triangle_type": "Isosceles",
+              "triangle_upside_down": false,
+              "use_circle_outline": false,
+              "use_gradient": false,
+              "use_segment_color": false,
+              "use_segment_scale": false,
+              "use_trapezoid_thickness_end": true,
+              "use_trapezoid_thickness_start": true
+            },
+            {
+              "angle_lock_mode": "Absolute",
+              "angle_lock_relative_multiplier": 1,
+              "children": [],
+              "circle_is_hollow": false,
+              "circle_outline_color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "connector_data": null,
+              "curve_circulization": false,
+              "default_angle": 15.0,
+              "default_length": 60.0,
+              "default_local_angle": 15.0,
+              "default_thickness": 32,
+              "do_not_apply_smart_stretch": false,
+              "drag_lock_angle": 0.0,
+              "draw_order_index": 2,
+              "gradient_color": {
+                "alpha": 0,
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "gradient_mode": "Normal",
+              "half_arc": false,
+              "is_drag_locked": false,
+              "is_floaty": false,
+              "is_smart_stretch": false,
+              "is_static": false,
+              "is_stretchy": false,
+              "length": 60.0,
+              "local_angle": 15.0,
+              "node_type": "RoundedSegment",
+              "num_polygon_vertices": 0,
+              "reverse_gradient": false,
+              "scale": 1.0,
+              "segment_curve_polyfill_precision": 1,
+              "segment_curve_radius_and_default_curve_radius": 0,
+              "smart_stretch_multiplier": 1.0,
+              "smart_stretch_reset_impulse": false,
+              "thickness": 32,
+              "trapezoid_is_rounded_end": false,
+              "trapezoid_is_rounded_start": false,
+              "trapezoid_thickness_end": 16.0,
+              "trapezoid_thickness_start": 32.0,
+              "triangle_flipped": false,
+              "triangle_type": "Isosceles",
+              "triangle_upside_down": false,
+              "use_circle_outline": false,
+              "use_gradient": false,
+              "use_segment_color": false,
+              "use_segment_scale": false,
+              "use_trapezoid_thickness_end": true,
+              "use_trapezoid_thickness_start": true
+            }
+          ],
+          "circle_is_hollow": false,
+          "circle_outline_color": {
+            "alpha": 0,
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "color": {
+            "alpha": 0,
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "connector_data": null,
+          "curve_circulization": false,
+          "default_angle": 45.0,
+          "default_length": 60.0,
+          "default_local_angle": 45.0,
+          "default_thickness": 20,
+          "do_not_apply_smart_stretch": false,
+          "drag_lock_angle": 0.0,
+          "draw_order_index": 1,
+          "gradient_color": {
+            "alpha": 0,
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "gradient_mode": "Normal",
+          "half_arc": false,
+          "is_drag_locked": false,
+          "is_floaty": false,
+          "is_smart_stretch": false,
+          "is_static": false,
+          "is_stretchy": false,
+          "length": 60.0,
+          "local_angle": 45.0,
+          "node_type": "RoundedSegment",
+          "num_polygon_vertices": 0,
+          "reverse_gradient": false,
+          "scale": 1.0,
+          "segment_curve_polyfill_precision": 1,
+          "segment_curve_radius_and_default_curve_radius": 0,
+          "smart_stretch_multiplier": 1.0,
+          "smart_stretch_reset_impulse": false,
+          "thickness": 20,
+          "trapezoid_is_rounded_end": false,
+          "trapezoid_is_rounded_start": false,
+          "trapezoid_thickness_end": 16.0,
+          "trapezoid_thickness_start": 32.0,
+          "triangle_flipped": false,
+          "triangle_type": "Isosceles",
+          "triangle_upside_down": false,
+          "use_circle_outline": false,
+          "use_gradient": false,
+          "use_segment_color": false,
+          "use_segment_scale": false,
+          "use_trapezoid_thickness_end": true,
+          "use_trapezoid_thickness_start": true
+        }
+      ],
+      "circle_is_hollow": false,
+      "circle_outline_color": {
+        "alpha": 255,
+        "blue": 128,
+        "green": 128,
+        "red": 128
+      },
+      "color": {
+        "alpha": 255,
+        "blue": 32,
+        "green": 32,
+        "red": 32
+      },
+      "connector_data": null,
+      "curve_circulization": false,
+      "default_angle": 0.0,
+      "default_length": 0.0,
+      "default_local_angle": 0.0,
+      "default_thickness": 32,
+      "do_not_apply_smart_stretch": false,
+      "drag_lock_angle": 0.0,
+      "draw_order_index": 0,
+      "gradient_color": {
+        "alpha": 255,
+        "blue": 128,
+        "green": 128,
+        "red": 128
+      },
+      "gradient_mode": "Normal",
+      "half_arc": false,
+      "is_drag_locked": false,
+      "is_floaty": false,
+      "is_smart_stretch": false,
+      "is_static": false,
+      "is_stretchy": false,
+      "length": 0.0,
+      "local_angle": 0.0,
+      "node_type": "RootNode",
+      "num_polygon_vertices": 5,
+      "reverse_gradient": false,
+      "scale": 1.0,
+      "segment_curve_polyfill_precision": 1,
+      "segment_curve_radius_and_default_curve_radius": 0,
+      "smart_stretch_multiplier": 1.0,
+      "smart_stretch_reset_impulse": false,
+      "thickness": 32,
+      "trapezoid_is_rounded_end": false,
+      "trapezoid_is_rounded_start": false,
+      "trapezoid_thickness_end": 16.0,
+      "trapezoid_thickness_start": 32.0,
+      "triangle_flipped": false,
+      "triangle_type": "Isosceles",
+      "triangle_upside_down": false,
+      "use_circle_outline": false,
+      "use_gradient": false,
+      "use_segment_color": false,
+      "use_segment_scale": false,
+      "use_trapezoid_thickness_end": true,
+      "use_trapezoid_thickness_start": true
+    }
+  ],
+  "polyfills": [],
+  "scale": 1.0,
+  "version": 423
+}
