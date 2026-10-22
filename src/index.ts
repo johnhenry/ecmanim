@@ -93,6 +93,19 @@ export { VectorScene, LinearTransformationScene } from "./scene/vector_space_sce
 export { MultiCamera } from "./camera/multi_camera.ts";
 export { MappingCamera } from "./camera/mapping_camera.ts";
 export {
+  CameraShake, Handheld, CameraImpact, ZoomPulse,
+  evaluateCameraEffects, effectWeight,
+} from "./camera/camera_effects.ts";
+export type {
+  CameraEffectSample, CameraEffectFn, CameraEffectObject, CameraEffectLike,
+  CameraEffectOptions, CameraEffectEntry, CameraShakeConfig, HandheldConfig,
+  CameraImpactConfig, ZoomPulseConfig,
+} from "./camera/camera_effects.ts";
+export { CameraFollow, bakeCameraMotion } from "./camera/camera_follow.ts";
+export type {
+  CameraFollowConfig, CameraFollowTarget, CameraFollowSample, BakeCameraMotionOptions,
+} from "./camera/camera_follow.ts";
+export {
   Surface, ParametricSurface, Sphere, Torus, Cylinder, Cone, Box, Cube,
   Prism, Dot3D, Line3D, Arrow3D, ThreeDVMobject,
 } from "./mobject/surface.ts";

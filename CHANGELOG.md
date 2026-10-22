@@ -9,6 +9,18 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Added
 
+- **Camera motion** (epic #61, #69; `docs/camera-motion.md`):
+  `camera.addEffect(fx, {start, duration, fadeIn, fadeOut})` / `removeEffect` /
+  `clearEffects` with seeded closed-form presets `CameraShake`, `Handheld`,
+  `CameraImpact`, `ZoomPulse`, evaluated from absolute scene time into the new
+  optional `effectOffset` / `effectRoll` / `effectLogZoom` camera fields
+  (consumed by `Camera.toPixel`, `ThreeDCamera` and `ThreeRenderer`; never
+  written into `frameCenter`). `CameraFollow` (dead zone, hysteresis,
+  look-ahead, critically damped smoothing, auto-zoom) is baked at a fixed dt
+  by `bakeCameraMotion` into a `KeyframeTrack`. `MovingCameraScene` gains
+  `shakeCamera()`, `followCamera()` and `stopFollowCamera()`. Effect state
+  salts `computeRenderConfigHash`, `hashAnimations` and the canvas camera
+  fingerprint. A camera with no effects is byte-identical to before.
 - **API-compatibility guardrails** (epic #61, #63): `test/api-surface.test.ts`
   snapshots the runtime `name: typeof` export surface of every `package.json`
   `exports` subpath into `test/api-surface.snapshot.json` (removals and kind

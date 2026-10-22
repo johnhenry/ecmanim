@@ -82,6 +82,13 @@ export class ThreeDCamera extends Camera {
     ];
     const spun = V.rotateVector(rel, -(this.theta + 90 * V.DEGREES), Z_AXIS);
     const tilted = V.rotateVector(spun, -this.phi, X_AXIS);
+    if (this.effectOffset !== undefined) {
+      // Camera-motion effects: roll adds to gamma; the offset is a screen-
+      // aligned (camera-space) shift applied after the roll, matching
+      // ThreeRenderer's eye/target shift along the rolled camera axes.
+      const rolled = V.rotateVector(tilted, -(this.gamma + (this.effectRoll ?? 0)), Z_AXIS);
+      return [rolled[0] - this.effectOffset[0], rolled[1] - this.effectOffset[1], rolled[2]];
+    }
     if (this.gamma === 0) return tilted;
     // Roll: rotate about the camera-space z-axis (the view axis). A positive
     // gamma rolls the world clockwise, so the projected image rolls by -gamma.
@@ -98,7 +105,8 @@ export class ThreeDCamera extends Camera {
   toPixel(p: number[]): [number, number] {
     const [cx, cy, cz] = this.toCameraSpace(p);
     const denom = this.focalDistance - cz;
-    const factor = (this.focalDistance / (Math.abs(denom) < 1e-3 ? 1e-3 * Math.sign(denom || 1) : denom)) * this.zoom;
+    const zoom = this.effectLogZoom === undefined ? this.zoom : this.zoom * Math.exp(this.effectLogZoom);
+    const factor = (this.focalDistance / (Math.abs(denom) < 1e-3 ? 1e-3 * Math.sign(denom || 1) : denom)) * zoom;
     const screenX = cx * factor;
     const screenY = cy * factor;
     return [
