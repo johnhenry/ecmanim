@@ -122,8 +122,9 @@ data out (sync, no I/O, no `node:` imports, no mobjects). `loadStickNodes` is
 sync and pure of I/O like `loadLottie`: read the file yourself.
 
 - **Formats.** `.nodes` figures: raw big-endian (versions 160-423) and
-  zlib-wrapped little-endian files, via a small built-in synchronous inflate
-  (`DecompressionStream` is async; no dependency added). Per-version/build
+  zlib-wrapped little-endian files, inflated synchronously with `fflate`
+  (`DecompressionStream` is async) under a 64 MiB output cap that rejects
+  decompression bombs. Per-version/build
   field differences follow sticknodes-rs up to Stick Nodes 4.2.3 build 72;
   newer files are read best-effort with a warning. Malformed input throws
   `StickNodesParseError`.
@@ -139,16 +140,22 @@ sync and pure of I/O like `loadLottie`: read the file yourself.
   build, `boneIdByDrawIndex`, the full parsed figure, `warnings`).
 - **Provenance.** The layout follows MIT-licensed
   [sticknodes-rs](https://github.com/vinceTheProgrammer/sticknodes-rs); see
-  `THIRD_PARTY_NOTICES.md`. Test fixtures are built by a test-only encoder
-  (`test/helpers/sticknodes_encoder.ts`); no third-party sample files are
-  committed.
+  `THIRD_PARTY_NOTICES.md`. Two kinds of test fixture: synthetic ones from a
+  test-only encoder (`test/helpers/sticknodes_encoder.ts`) and a cross-validation
+  set in `test/fixtures/sticknodes/` — figures of our own design written by
+  sticknodes-rs itself, read back by it, with its decoded values dumped to JSON;
+  `test/sticknodes-crossval.test.ts` asserts `parseStickNodes` matches that dump
+  field-by-field (see the folder's README for provenance and regeneration).
+  No files saved by the Stick Nodes app are committed.
 
 ### Stick Nodes import: honest divergences
 
-- **Figures only, one pose.** sticknodes-rs documents `.nodes`; project
-  (`.stknds`) and movieclip (`.nodemc`) files are listed there as future work,
-  so animation frames are **not** imported (a zip container is rejected with a
-  clear error). `track` has a single key.
+- **Figures only, one pose.** `.nodes` is the only format read. Projects
+  (`.stknds`, a zip container) and movieclips (`.nodemc`) are rejected with a
+  clear error: no permissive layout reference exists (sticknodes-rs lists them
+  as future work) and none has been verified against a file saved by the app, so
+  no frames are imported and `track` has a single key. Tracked as blocked
+  upstream.
 - **Not simulated** (listed in `meta.warnings` with draw indices; the stored
   pose is kept): smart stretch, floaty motion, stretchy/static flags, angle
   locks, drag locks, connectors, per-segment scale.
@@ -157,9 +164,20 @@ sync and pure of I/O like `loadLottie`: read the file yourself.
   (polyfill data stays in `meta.figure.polyfills`). Compressed files' polyfill
   and connector-end tables are not read (as in sticknodes-rs); trailing bytes
   are reported.
-- **Orientation/units.** The reference does not specify Stick Nodes' axis
-  orientation: angles import as-is (CCW, y-up); pass `flipY: true` to mirror.
-  The header `scale` is recorded in `meta.figure` but not applied.
+- **Orientation/units.** Angles import as-is: counter-clockwise, y-up, matching
+  sticknodes-rs, whose writer derives each node's stored `localX/localY` as
+  `length * (cos, sin)` of the summed ancestor angles (our parser agrees with it
+  on every cross-validation fixture). That proves the reference's
+  self-consistency, **not** how the Stick Nodes app orients its canvas: it has
+  not been checked against a file saved by the app, so the figure may appear
+  mirrored. Pass `flipY: true` to mirror. The header `scale` is recorded in
+  `meta.figure` but not applied.
+- **Reference quirks (sticknodes-rs).** Cross-validation found three places
+  where the reference's *writer* is not round-trippable, so fixtures avoid them:
+  build 36 (writes 8 zero bytes where its reader consumes 10), a connector node
+  that shares a parent with a plain sibling (connector flags are written in
+  child order but the children in reverse), and it discards the root node's own
+  fields on read. Our parser follows the reader.
 - **Per-bone styling** (segment colour, alpha) is set on the bone mobjects at
   load and, like all Skeleton styles, is not interpolated by `interpolate()`.
   Renderer matrix: the result is an ordinary `Skeleton`, so Canvas-2D, SVG and

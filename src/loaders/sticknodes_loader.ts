@@ -27,13 +27,17 @@ import type { BoneSpec, Pose } from "../mobject/skeleton_model.ts";
 import { PoseLibrary, poseTrack } from "../animation/pose.ts";
 import type { KeyframeTrack } from "../animation/keyframe_track.ts";
 import { Color } from "../core/color.ts";
-import { inflateZlib } from "./inflate.ts";
+import { unzlibSync } from "fflate";
 
 // Newest layout sticknodes-rs reads (Stick Nodes 4.2.3 build 72).
 const KNOWN_VERSION = 423;
 const KNOWN_BUILD = 72;
 const MAX_NODES = 10000;
 const MAX_DEPTH = 2000;
+// Decompression-bomb guard for zlib-wrapped files. MAX_NODES nodes at ~300
+// bytes is ~3 MiB, so 64 MiB is generous. fflate truncates silently at a
+// fixed `out` buffer, so we hand it cap + 1 bytes and treat a full buffer as overflow.
+const MAX_INFLATED_BYTES = 64 * 1024 * 1024;
 // ecmanim stroke widths are "px at 1080p"; the default frame is 8 units tall.
 const STROKE_PX_PER_WORLD_UNIT = 1080 / 8;
 
@@ -267,9 +271,14 @@ export function parseStickNodes(bytes: Uint8Array): StickNodesFigure {
   // known range means the whole file is a zlib stream holding a little-endian body.
   const be = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getInt32(0, false);
   if (be > KNOWN_VERSION || be < 160) {
-    try { data = inflateZlib(bytes); } catch (e) {
+    let inflated: Uint8Array;
+    try { inflated = unzlibSync(bytes, { out: new Uint8Array(MAX_INFLATED_BYTES + 1) }); } catch (e) {
       throw new StickNodesParseError(`not a valid .nodes file (${(e as Error).message})`);
     }
+    if (inflated.length > MAX_INFLATED_BYTES) {
+      throw new StickNodesParseError(`decompressed data exceeds the ${MAX_INFLATED_BYTES} byte limit`);
+    }
+    data = inflated;
     compressed = true;
   }
   const r = new Reader(data, compressed);

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { deflateSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { parseStickNodes, loadStickNodes, StickNodesParseError } from "../src/loaders/sticknodes_loader.ts";
-import { inflateZlib } from "../src/loaders/inflate.ts";
+import { unzlibSync, zlibSync } from "fflate";
 import { encodeNodes, zlibStored } from "./helpers/sticknodes_encoder.ts";
 import type { EncFigure, EncNode } from "./helpers/sticknodes_encoder.ts";
 import { Skeleton } from "../src/mobject/skeleton.ts";
@@ -42,7 +42,7 @@ test("parses a zlib-wrapped little-endian figure (stored and real deflate)", () 
   assert.equal(f.version, 430);
   assert.equal(f.nodes.length, 4);
   // same payload through node's real deflate (dynamic/fixed huffman paths)
-  const inner = inflateZlib(raw);
+  const inner = unzlibSync(raw);
   const real = parseStickNodes(new Uint8Array(deflateSync(inner)));
   assert.deepEqual(real.nodes, f.nodes);
 });
@@ -178,19 +178,23 @@ test("zlib-wrapped figures load through loadStickNodes too", () => {
   assert.equal(r.skeleton.model.ids.length, 3);
 });
 
-test("inflate: stored, fixed and dynamic blocks round-trip; corrupt input throws", () => {
-  const data = new Uint8Array(5000).map((_, i) => (i * 7 + (i >> 5)) & 255);
-  assert.deepEqual(inflateZlib(zlibStored(data)), data);
-  for (const level of [1, 6, 9]) assert.deepEqual(inflateZlib(new Uint8Array(deflateSync(data, { level }))), data);
-  const text = new TextEncoder().encode("abcabcabc".repeat(500));
-  assert.deepEqual(inflateZlib(new Uint8Array(deflateSync(text))), text);
-  const bad = new Uint8Array(deflateSync(data)); bad[bad.length - 1] ^= 1;
-  assert.throws(() => inflateZlib(bad), /adler|checksum/i);
-  assert.throws(() => inflateZlib(new Uint8Array([0x78, 0x9c, 0x07])), /invalid|truncated/i);
+test("zlib bodies: stored, fixed and dynamic blocks all load; corrupt or oversized input is rejected", () => {
+  const raw = encodeNodes(fig(430, 80, { compress: true }));
+  const inner = unzlibSync(raw);
+  const want = parseStickNodes(raw).nodes;
+  for (const level of [1, 6, 9] as const) assert.deepEqual(parseStickNodes(zlibSync(inner, { level })).nodes, want);
+  assert.deepEqual(parseStickNodes(zlibStored(inner)).nodes, want);
+  assert.throws(() => parseStickNodes(new Uint8Array([0x78, 0x9c, 0x07])), StickNodesParseError);
+  const truncated = raw.slice(0, raw.length - 12);
+  assert.throws(() => parseStickNodes(truncated), StickNodesParseError);
+  // decompression bomb: ~70 MiB of zeros compresses to ~70 KiB
+  const bomb = zlibSync(new Uint8Array(70 * 1024 * 1024), { level: 9 });
+  assert.ok(bomb.length < 1024 * 1024);
+  assert.throws(() => parseStickNodes(bomb), /limit/);
 });
 
 test("loader source is node-free and credits sticknodes-rs", () => {
-  for (const f of ["src/loaders/sticknodes_loader.ts", "src/loaders/inflate.ts"]) {
+  for (const f of ["src/loaders/sticknodes_loader.ts"]) {
     const s = readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
     assert.ok(!/from\s+["']node:/.test(s), `${f} imports node:`);
   }
