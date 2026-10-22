@@ -7,15 +7,30 @@
 //
 // Rendering: raster-drawn directly to the canvas by CanvasRenderer's
 // drawParticles (ImageMobject tier — thousands of VMobjects would crawl).
-// SVG/WebGL backends skip particles (documented in docs/renderers.md).
+// SVG/WebGL backends skip particles and warn once (docs/particles.md, docs/renderers.md).
 
 import { Mobject } from "./Mobject.ts";
 import type { MobjectConfig } from "./Mobject.ts";
-import { mulberry32 } from "../core/noise.ts";
+import { mulberry32, simplex3D, fbm3 } from "../core/noise.ts";
 import { Color } from "../core/color.ts";
 import type { ColorLike } from "../core/types.ts";
 
 export type Range = number | [number, number];
+
+/** Sprite used to draw each particle. */
+export type ParticleMaterial = "circle" | "square" | "soft" | "star";
+
+/** Closed-form turbulence displacement field (see {@link ParticleSystemConfig.turbulence}). */
+export interface ParticleTurbulence {
+  /** Peak displacement per axis is up to ~2x this, world units. */
+  amplitude: number;
+  /** Noise frequency in 1/world-unit (space) and 1/second (time). */
+  frequency: number;
+  /** Noise seed (default: the system's own seed). */
+  seed?: number;
+  /** fBm octaves (default 1 = plain simplex). */
+  octaves?: number;
+}
 
 export interface ParticleSystemConfig extends MobjectConfig {
   /** Emitter center (default origin). */
@@ -50,6 +65,14 @@ export interface ParticleSystemConfig extends MobjectConfig {
   /** Hard cap on continuous-stream particles (default 2000). */
   maxParticles?: number;
   shape?: "circle" | "square";
+  /** Particle sprite (default: `shape`, i.e. "circle"). `shape` stays as an alias. */
+  material?: ParticleMaterial;
+  /** Compositing: "add" -> canvas "lighter", "screen" -> "screen"; "normal"/unset leaves
+   *  `compositeOperation` alone. Canvas-2D only. */
+  blendMode?: "normal" | "add" | "screen";
+  /** Seek-safe noise displacement: a closed-form function of (spawn position, age),
+   *  zero at birth. Consumes NO random draws, so unset = byte-identical. */
+  turbulence?: ParticleTurbulence;
   /** Advance the clock with scene time via an updater (default true). */
   autoAdvance?: boolean;
 }
@@ -82,6 +105,9 @@ export class ParticleSystem extends Mobject {
   /** The explicit clock (seconds since the system started emitting). */
   time = 0;
   shape: "circle" | "square";
+  /** Resolved sprite (`material` ?? `shape` ?? "circle"). */
+  material: ParticleMaterial;
+  private readonly _turb?: { amp: number; freq: number; noise: (x: number, y: number, z: number) => number };
   private readonly _cfg: ParticleSystemConfig;
   private readonly _seed: number;
   private readonly _rate: number;
@@ -108,7 +134,19 @@ export class ParticleSystem extends Mobject {
     this._drag = config.drag ?? 0;
     this._ramp = (config.colorRamp?.length ? config.colorRamp : ["#FFFFFF"]).map((c) => Color.parse(c));
     this._max = config.maxParticles ?? 2000;
-    this.shape = config.shape ?? "circle";
+    this.material = config.material ?? config.shape ?? "circle";
+    this.shape = config.shape ?? (this.material === "square" ? "square" : "circle");
+    const tb = config.turbulence;
+    if (tb && tb.amplitude !== 0) {
+      const base = simplex3D(tb.seed ?? this._seed);
+      this._turb = {
+        amp: tb.amplitude,
+        freq: tb.frequency,
+        noise: (tb.octaves ?? 1) > 1 ? fbm3(base, { octaves: tb.octaves }) : base,
+      };
+    }
+    if (config.blendMode === "add") this.compositeOperation = "lighter";
+    else if (config.blendMode === "screen") this.compositeOperation = "screen";
     this._buildBox();
     if (config.autoAdvance ?? true) {
       this.addUpdater((_m: any, dt: number) => { this.time += dt; });
@@ -150,7 +188,9 @@ export class ParticleSystem extends Mobject {
     const travel = this._drag > 0
       ? (maxSpeed + g * maxLife) / this._drag
       : maxSpeed * maxLife + (g * maxLife * maxLife) / 2;
-    const r = reach + travel + this._size[0] / 2 + this._size[1] / 2;
+    // Turbulence adds at most ~2*amplitude per axis (field minus its birth value).
+    const turbReach = this._turb ? 2 * Math.abs(this._turb.amp) : 0;
+    const r = reach + travel + this._size[0] / 2 + this._size[1] / 2 + turbReach;
     this.points = [
       [ex - r, ey + r, 0],
       [ex + r, ey + r, 0],
@@ -209,6 +249,15 @@ export class ParticleSystem extends Mobject {
     } else {
       x = x0 + vx * age + (gx * age * age) / 2;
       y = y0 + vy * age + (gy * age * age) / 2;
+    }
+
+    if (this._turb) {
+      // Closed-form displacement of (spawn pos, age), relative to birth so
+      // particles start exactly at their spawn point. No RNG draws.
+      const { amp, freq, noise } = this._turb;
+      const sx = x0 * freq, sy = y0 * freq, z = age * freq;
+      x += amp * (noise(sx, sy, z) - noise(sx, sy, 0));
+      y += amp * (noise(sx + 17.3, sy + 5.1, z) - noise(sx + 17.3, sy + 5.1, 0));
     }
 
     const life = age / lifetime;

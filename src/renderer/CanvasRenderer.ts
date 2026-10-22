@@ -955,22 +955,82 @@ export class CanvasRenderer {
     const [x0] = camera.toPixel([0, 0, 0]);
     const [x1] = camera.toPixel([1, 0, 0]);
     const pxPerUnit = Math.abs(x1 - x0) || 1;
-    const square = mob.shape === "square";
+    const material: string = mob.material ?? mob.shape ?? "circle";
     ctx.save();
     for (const p of particles) {
       const alpha = p.opacity * mobOpacity;
       if (alpha <= 0) continue;
       const [px, py] = camera.toPixel([p.x, p.y, 0]);
       const d = Math.max(0.5, p.size * pxPerUnit);
+      if (material === "soft") {
+        this._drawSoftParticle(px, py, d, p.color, alpha);
+        continue;
+      }
       ctx.fillStyle = p.color.toRGBAString(alpha);
-      if (square) {
+      if (material === "square") {
         ctx.fillRect(px - d / 2, py - d / 2, d, d);
+      } else if (material === "star") {
+        ctx.beginPath();
+        const R = d / 2, r = R * 0.45;
+        for (let k = 0; k < 10; k++) {
+          const rad = k % 2 === 0 ? R : r;
+          const a = -Math.PI / 2 + (k * Math.PI) / 5;
+          const sx = px + rad * Math.cos(a), sy = py + rad * Math.sin(a);
+          if (k === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+        }
+        ctx.closePath();
+        ctx.fill();
       } else {
         ctx.beginPath();
         ctx.arc(px, py, d / 2, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+    ctx.restore();
+  }
+
+  // "soft" material: a radial-falloff blob. When an offscreen backend exists
+  // the tinted sprite is rendered once per quantized color and cached; else
+  // the same gradient is drawn directly (identical look, no cache).
+  private _softSprites = new Map<string, any>();
+  private _drawSoftParticle(px: number, py: number, d: number, color: any, alpha: number): void {
+    const { ctx } = this;
+    const SPRITE = 64;
+    const hex = color.toHex();
+    let sprite = this._softSprites.get(hex);
+    if (sprite === undefined) {
+      const cv = this._makeOffscreen(SPRITE, SPRITE);
+      sprite = null;
+      if (cv) {
+        const c2 = cv.getContext("2d");
+        if (c2) {
+          const g = c2.createRadialGradient(SPRITE / 2, SPRITE / 2, 0, SPRITE / 2, SPRITE / 2, SPRITE / 2);
+          g.addColorStop(0, color.toRGBAString(1));
+          g.addColorStop(0.4, color.toRGBAString(0.5));
+          g.addColorStop(1, color.toRGBAString(0));
+          c2.fillStyle = g;
+          c2.fillRect(0, 0, SPRITE, SPRITE);
+          sprite = cv;
+        }
+      }
+      if (this._softSprites.size > 256) this._softSprites.clear();
+      this._softSprites.set(hex, sprite);
+    }
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, alpha * (ctx.globalAlpha ?? 1));
+    if (sprite) {
+      try {
+        ctx.drawImage(sprite, px - d / 2, py - d / 2, d, d);
+        ctx.restore();
+        return;
+      } catch { /* fall through to the direct gradient */ }
+    }
+    const g = ctx.createRadialGradient(px, py, 0, px, py, d / 2);
+    g.addColorStop(0, color.toRGBAString(1));
+    g.addColorStop(0.4, color.toRGBAString(0.5));
+    g.addColorStop(1, color.toRGBAString(0));
+    ctx.fillStyle = g;
+    ctx.fillRect(px - d / 2, py - d / 2, d, d);
     ctx.restore();
   }
 

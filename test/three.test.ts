@@ -145,3 +145,21 @@ test("ThreeRenderer does NOT warn for an ordinary mobject with no effects", () =
 
   assert.deepEqual(warnings, []);
 });
+
+test("ThreeRenderer warns once per particle PRESET, not once per child system", async () => {
+  const { Aura } = await import("../src/mobject/particle_presets.ts");
+  const THREE = mockTHREE();
+  const r = new ThreeRenderer(THREE, { camera: new Camera({ pixelWidth: 640, pixelHeight: 360 }), canvas: {} });
+  const aura = new Aura();
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: any[]) => { warnings.push(String(args[0])); };
+  try {
+    r._warnUnsupported([aura]);
+    r._warnUnsupported([aura]);
+  } finally {
+    console.warn = origWarn;
+  }
+  assert.equal(warnings.length, 1, JSON.stringify(warnings));
+  assert.match(warnings[0], /Aura/);
+});

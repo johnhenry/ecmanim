@@ -259,10 +259,12 @@ CanvasRenderer rasterizes each live particle directly (`drawParticles`), in
 (seed, index, time) — scrubbing, backward seeks, and the render cache all
 work unmodified, and per-mobject effects compose with it (the offscreen
 effects path draws particles too). SVGRenderer and ThreeRenderer skip
-particle systems (same silent-skip convention as Mesh3D on the CPU tier) --
-ThreeRenderer additionally warns once (via `console.warn`) the first time it
-sees a `ParticleSystem`, so a WebGL export doesn't silently drop it with no
-signal.
+particle systems (same silent-skip convention as Mesh3D on the CPU tier), but
+both now **warn once** (`console.warn`) per particle mobject -- once per
+preset for `Aura`/`Explosion`/`Smoke`/`Beam`, not once per child layer -- so
+an SVG or WebGL export never drops particles with no signal. See
+[particles.md](particles.md) for presets, `turbulence`, `blendMode`,
+`material` and the full renderer matrix.
 
 ## GPU post-processing (ThreeRenderer)
 
