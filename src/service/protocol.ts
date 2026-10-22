@@ -34,7 +34,7 @@ export const RENDER_OPTION_ALLOWLIST: Record<string, "string" | "number" | "bool
 
 /** Formats the v1 service can produce. `renderer: "webgl"` (renderGL) is
  *  rejected at validation — the service image ships no Chrome (documented). */
-export const ALLOWED_FORMATS = new Set(["mp4", "webm", "mov", "png", "gif"]);
+export const ALLOWED_FORMATS = new Set(["mp4", "webm", "mov", "png", "gif", "apng", "zip"]);
 
 export interface WebhookSpec {
   url: string;
@@ -210,5 +210,6 @@ export function validateJobSpec(raw: any): { spec?: JobSpec; errors: string[] } 
 export function artifactExtension(spec: JobSpec): string {
   const format = spec.render?.format ?? "mp4";
   if (spec.render?.saveLastFrame || spec.render?.stillFrame != null || format === "png") return "png";
+  if (format === "apng" || format === "zip") return format;
   return format === "gif" ? "gif" : format === "webm" ? "webm" : format === "mov" ? "mov" : "mp4";
 }

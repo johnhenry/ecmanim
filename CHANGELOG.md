@@ -27,6 +27,18 @@ compatibility rules" section of `AGENTS.md`.
   `saveState` and `Transform` work, and exposes `setTime(t)` for time-pure
   evaluation. See `docs/skeletal.md`. `Skeleton` and `PoseTween` register via
   `registerBuiltins()`.
+- **Isomorphic APNG + frame-ZIP encoders, ffmpeg-free GIF in Node** (epic #61,
+  #70): `src/encoders/` (`ApngEncoder`, `ZipSequenceEncoder`, `ZipWriter`,
+  `GifEncoder`, `crc32`, `createFrameEncoder`), exposed as the new
+  `@johnhenry/ecmanim/encoders` subpath. `RenderOptions.encoder?: "ffmpeg" |
+  "js"` (default `"ffmpeg"`; `"js"` + mp4/webm/mov throws); new Node formats
+  `"apng"` and `"zip"`; browser `recordApng` / `recordZip` / `downloadApng` /
+  `downloadZip` and `RecordVideoOptions.format` widened to include
+  `"apng" | "zip"`; render-service `format` accepts `apng` / `zip`. Format
+  resolution is now one shared function (`core/render_format.ts`) instead of
+  two copies in `node.ts` / `node-parallel.ts`. New runtime dependency:
+  `fflate` (MIT) for deflate. See `docs/encoders.md`.
+
 - **API-compatibility guardrails** (epic #61, #63): `test/api-surface.test.ts`
   snapshots the runtime `name: typeof` export surface of every `package.json`
   `exports` subpath into `test/api-surface.snapshot.json` (removals and kind

@@ -58,6 +58,13 @@ test("validateJobSpec: normalizes defaults; segments parallelism reserved", () =
   assert.match(wh.errors.join(), /webhook\.url/);
   assert.equal(artifactExtension({ scene: "x", render: { format: "webm" } } as any), "webm");
   assert.equal(artifactExtension({ scene: "x", render: { saveLastFrame: true } } as any), "png");
+  // epic #61 #70: JS-encoded formats
+  assert.equal(artifactExtension({ scene: "x", render: { format: "apng" } } as any), "apng");
+  assert.equal(artifactExtension({ scene: "x", render: { format: "zip" } } as any), "zip");
+  assert.deepEqual(sanitizeRenderOptions({ format: "apng" }, []).format, "apng");
+  const bad: string[] = [];
+  assert.equal(sanitizeRenderOptions({ format: "zip" }, bad).format, "zip");
+  assert.deepEqual(bad, []);
 });
 
 // ---------------------------------------------------------------------------
