@@ -2,7 +2,13 @@ name: Publish to npm
 
 # Publish model: main is the release branch. A push to main publishes only if
 # package.json's version isn't on npm yet (otherwise a clean no-op), then tags
-# v<version> and creates a GitHub Release. See johnhenry/workflows' README.
+# @johnhenry/ecmanim@<version> and creates a GitHub Release. See
+# johnhenry/workflows' README.
+#
+# Two names, one release: from 0.12.0 every version is published as BOTH
+# @johnhenry/ecmanim (job `publish`) and unscoped `ecmanim` (job
+# `publish-unscoped`), from the same commit with identical contents; only
+# `name` differs. See the era table at the top of CHANGELOG.md.
 on:
   push:
     branches: [main]
@@ -21,7 +27,7 @@ jobs:
     with:
       node-version: "24"
       # v0.1.0-v0.11.1 tags belong to the old unscoped `ecmanim` package (and
-      # v1.0.0/v1.1.0 to manim-js), so scoped releases are tagged
+      # v1.0.0/v1.1.0 to manim-js), so releases are tagged
       # @johnhenry/ecmanim@X.Y.Z. See the era table in CHANGELOG.md.
       tag-prefix: "@johnhenry/ecmanim@"
       install-command: sudo apt-get update && sudo apt-get install -y ffmpeg && npm ci
@@ -29,4 +35,28 @@ jobs:
         npm run type-check
         npm test
         npm run build
+    secrets: inherit
+
+  # The same commit and version, published under the unscoped name. It runs
+  # after `publish` (whose gate already ran the full suite on this commit) and
+  # is idempotent: it publishes only if ecmanim@<version> isn't on npm yet, so
+  # rerunning after a partial failure fills in whichever name is missing.
+  # create-release is off because both names share the
+  # @johnhenry/ecmanim@<version> tag and Release. `contents: write` and
+  # `secrets: inherit` are still required by the fleet workflow lint.
+  # Auth is the same as `publish`: NPM_TOKEN if set, otherwise trusted
+  # publishing. The token must be able to write the `ecmanim` package too.
+  publish-unscoped:
+    needs: publish
+    permissions:
+      contents: write
+      id-token: write # npm provenance
+    uses: johnhenry/workflows/.github/workflows/npm-publish.yml@v1
+    with:
+      node-version: "24"
+      install-command: npm ci && npm pkg set name=ecmanim
+      gate-commands: |
+        test "$(node -p 'require("./package.json").name')" = ecmanim
+        npm run build
+      create-release: false
     secrets: inherit
