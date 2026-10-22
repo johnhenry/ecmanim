@@ -110,12 +110,17 @@ export class ThreeRenderer {
   // Position the Three camera to reproduce ThreeDCamera's phi/theta/focal view.
   syncCamera(): void {
     const { camera, threeCamera } = this;
+    // Sync frameCenter/Width/Height/rotation from a MovingCameraScene frame
+    // mobject (no-op when `camera.frame` is unset), as Canvas/SVG renderers do.
+    camera.preRender?.();
     const center = camera.frameCenter ?? [0, 0, 0];
+    // Camera roll (radians) from a rotated frame; 0 when unset.
+    const roll = camera.rotation ?? 0;
     if (this.is3D()) {
       // Inverse of ThreeDCamera.toCameraSpace: rotate camera-space basis into
       // world. gamma (roll) is applied first about the view axis (camera-space z),
       // then the phi/theta rotations, matching toCameraSpace's inverse order.
-      const gamma = camera.gamma ?? 0;
+      const gamma = (camera.gamma ?? 0) + roll;
       const rot = (v: number[]) => V.rotateVector(
         V.rotateVector(V.rotateVector(v, gamma, [0, 0, 1]), camera.phi, [1, 0, 0]),
         camera.theta + 90 * V.DEGREES, [0, 0, 1],
@@ -129,7 +134,14 @@ export class ThreeRenderer {
       threeCamera.zoom = camera.zoom ?? 1;
     } else {
       threeCamera.position.set(center[0], center[1], 100);
-      threeCamera.up.set(0, 1, 0);
+      // Camera rolled by +roll: its up axis is the world +y rotated by +roll.
+      if (roll !== 0) threeCamera.up.set(-Math.sin(roll), Math.cos(roll), 0);
+      else threeCamera.up.set(0, 1, 0);
+      // Frustum follows the (possibly animated) frame size; identical to the
+      // constructor's values when no frame is set.
+      const hw = camera.frameWidth / 2, hh = camera.frameHeight / 2;
+      threeCamera.left = -hw; threeCamera.right = hw;
+      threeCamera.top = hh; threeCamera.bottom = -hh;
       threeCamera.lookAt(center[0], center[1], 0);
       threeCamera.zoom = camera.zoom ?? 1;
     }
