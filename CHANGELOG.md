@@ -22,6 +22,17 @@ compatibility rules" section of `AGENTS.md`.
   message)` (`src/core/deprecate.ts`): a warn-once-per-id helper for the
   deprecation convention documented in `AGENTS.md`.
 
+### Fixed
+
+- **`ThreeRenderer` now honours `camera.preRender()`** (#62): the WebGL
+  backend previously never synced the camera frame mobject, so
+  `MovingCameraScene` frame motion (`frame.animate...`, `CameraFrameTween`,
+  `centerOn`, `rotateCamera`) had no effect under `browser-three`. The
+  orthographic camera now follows the frame's center/size (frustum) and
+  roll; the perspective (`ThreeDCamera`) camera follows center, height (fov)
+  and roll. Scenes without a camera frame produce identical three camera
+  parameters to before.
+
 ## 0.1.0 — 2026-09-28
 
 First release since the `@johnhenry/ecmanim` scope restart at 0.0.0. Adds
