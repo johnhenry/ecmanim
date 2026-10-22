@@ -13,3 +13,5 @@ export type {
   Vec2 as IKVec2, BendSide, TwoBoneResult, TwoBoneOptions, FabrikOptions, FabrikResult,
   IKTargetSource, IKTargetFn, IKChainConfig, IKSolveResult, IKSolver,
 } from "./mobject/ik.ts";
+export { breakdown, blendToNeighbor, relax, push, applyPoseOp, insertBreakdown } from "./animation/pose_ops.ts";
+export type { PoseOpSpec } from "./animation/pose_ops.ts";

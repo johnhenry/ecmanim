@@ -16,6 +16,7 @@ compatibility rules" section of `AGENTS.md`.
   adapters, all from `@johnhenry/ecmanim/skeletal`. `PoseTween` accepts an
   optional `ik` config so IK stays live while `play()` suspends updaters, and
   now salts its cache key with its target pose. See `docs/skeletal.md`.
+
 - **Skeletal animation** (epic #61, #64): new `@johnhenry/ecmanim/skeletal`
   subpath with `Skeleton` (a `VGroup` rebuilt from a pure `SkeletonModel`:
   bone hierarchy with stable ids, forward kinematics, joint world positions
@@ -85,6 +86,10 @@ compatibility rules" section of `AGENTS.md`.
   `shakeCamera()`, `followCamera()` and `stopFollowCamera()`. Effect state
   salts `computeRenderConfigHash`, `hashAnimations` and the canvas camera
   fingerprint. A camera with no effects is byte-identical to before.
+
+- **Pose operators** (epic #61, #67): `breakdown`, `blendToNeighbor`, `relax`,
+  `push`, `applyPoseOp`, `insertBreakdown` from `./skeletal`; pure shortest-arc
+  in-between tools on `Pose` after Blender's In-Betweens manual.
 
 ### Fixed
 

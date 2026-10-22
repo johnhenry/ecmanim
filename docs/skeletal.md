@@ -174,12 +174,26 @@ Scope: the effector's own children rotate with their parent (FK); there is no
 effector-orientation lock, joint limits, pole targets or multi-chain solving
 yet (see rig constraints, epic #61).
 
+## Pose operators (`animation/pose_ops.ts`)
+
+Pure `Pose -> Pose` in-between tools after Blender's In-Betweens manual
+(Breakdowner / Blend to Neighbour / Relax / Push); angles take the shortest arc.
+
+- `breakdown(prev, next, t)`: 0 = prev, 1 = next.
+- `blendToNeighbor(prev, cur, next, amount)`: -1 prev, 0 cur, +1 next (clamped).
+- `relax(prev, cur, next, tPrev, tCur, tNext, factor)`: move `cur` toward the
+  in-between at `cur`'s proportional time (`factor` 1 = exactly it).
+- `push(...)`: same args; reflects the relax displacement (exaggerates). `scale`
+  and bone `length` are floored at 0.
+- `applyPoseOp(track, index, {op, amount})` rewrites a `poseTrack` key from its
+  strict neighbours; `insertBreakdown(track, t, amount)` adds a key.
+
 ## Renderer support
 
 | Feature | Canvas-2D (Node/browser) | SVG | WebGL (Three) |
 |---|---|---|---|
 | Bones (line/arc), joints, heads, fills | yes (golden-tested) | yes (plain `VMobject`s) | yes (plain `VMobject`s) |
-| Pose tweening / `setTime` | yes (model-level, renderer-independent) | same | same |
+| Pose tweening / `setTime` / pose operators | yes (model-level, renderer-independent) | same | same |
 | IK (`solveTwoBone`, `solveFABRIK`, `IKChain`) | yes (model-level; only writes angles/lengths, golden-tested) | same | same |
 
 Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
@@ -200,5 +214,5 @@ Only the Canvas-2D path has a golden-frame test; SVG/WebGL draw the same
   targets or shared-bone conflict detection; `"auto"` bend continuity is
   path-dependent (see above); long chains may keep a small residual at the
   iteration limit (`IKSolveResult.error`).
-- Pose operators, clips, Stick Nodes import, studio overlays and rig
+- Pose operators work on whole poses (no per-bone filter, no easing curve on the amount, unlike Blender's Graph Editor). Clips, Stick Nodes import, studio overlays and rig
   constraints are separate follow-ups (epic #61).
