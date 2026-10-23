@@ -49,7 +49,9 @@ export class BarChart extends Axes {
     const xLength = config.xLength ?? Math.max(1, nBars);
     const yLength = config.yLength ?? 6;
 
+    // CE BarChart passes tips=False; keep tip-less axes unless asked.
     super({
+      tips: false,
       ...config,
       xRange,
       yRange,
