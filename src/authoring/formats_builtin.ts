@@ -123,7 +123,7 @@ export const explainerFormat: Format = {
           for (const item of items) {
             await scene.play(new idx.FadeIn(item, { shift: [0.4, 0, 0] }), { _playConfig: true, runTime: 0.35 });
           }
-          if (board) await scene.play(new idx.Create(board), { _playConfig: true, runTime: 1 });
+          if (board) await scene.play(new idx.Create(board, { lagRatio: 0 }), { _playConfig: true, runTime: 1 });
         });
         const all = new idx.VGroup(...[heading, ...items, board].filter((m): m is NonNullable<typeof m> => m != null));
         await scene.play(new idx.FadeOut(all), { _playConfig: true, runTime: 0.4 });

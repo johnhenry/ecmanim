@@ -239,7 +239,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
             fig.addUpdater(() => fig.setTime(scene.time - t0), { hashExtra: () => `spin:${(scene.time - t0).toFixed(3)}` });
           }
         } else {
-          anims.push(kind === "text" || kind === "math" ? new idx.Write(r.mob, { runTime: 0.9 }) : kind === "diagram" ? new idx.Create(r.mob, { runTime: 0.9 }) : new idx.FadeIn(r.mob, { shift: [0, 0.3, 0], runTime: 0.7 }));
+          anims.push(kind === "text" || kind === "math" ? new idx.Write(r.mob, { runTime: 0.9, lagRatio: 0.1 }) : kind === "diagram" ? new idx.Create(r.mob, { runTime: 0.9, lagRatio: 0 }) : new idx.FadeIn(r.mob, { shift: [0, 0.3, 0], runTime: 0.7 }));
         }
       } else {
         const f = s / r.scale;
