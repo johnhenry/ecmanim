@@ -13,6 +13,7 @@
 //   6. ollamaLLMProvider                              (global fetch only)
 //   7. the Format itself (compose renders; heavy modules are imported lazily)
 
+import { normalizeUnicodeScripts } from "../core/unicode_scripts.ts";
 import { registerFormat } from "./formats.ts";
 import type { Format, FormatContext, Provider } from "./formats.ts";
 import type { QualityGate, QualityContext } from "./quality.ts";
@@ -176,8 +177,6 @@ function normChart(content: unknown): Array<{ label: string; value: number }> | 
   return out.length ? out.slice(0, 8) : null;
 }
 
-const SUP: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "⁼": "=", "⁽": "(", "⁾": ")", "ⁿ": "n", "ⁱ": "i" };
-const SUB: Record<string, string> = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9", "₊": "+", "₋": "-", "₌": "=", "₍": "(", "₎": ")" };
 const MAX_TEXT_CHARS = 140;
 
 /** Math repair: strip $..$ / \(..\) delimiters, Unicode super/subscripts -> ^{..} / _{..} (runs merged). */
@@ -190,8 +189,7 @@ export function normalizeMath(src: string): { value: string; notes: string[] } {
     notes.push("math delimiters stripped");
   }
   const before = v;
-  v = v.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱ]+/g, (m) => `^{${[...m].map((c) => SUP[c]).join("")}}`)
-       .replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎]+/g, (m) => `_{${[...m].map((c) => SUB[c]).join("")}}`);
+  v = normalizeUnicodeScripts(v);
   if (v !== before) notes.push("Unicode super/subscripts converted to LaTeX");
   return { value: v, notes };
 }
