@@ -164,7 +164,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
     }
     if (v.kind === "text") {
       mob = new idx.Text(wrap(v.content, 26), { fontSize: 0.7, lineSpacing: 1.7, color: "#FFFFFF" });
-      maxScale = 0.95;
+      maxScale = 0.75;
     } else if (v.kind === "math") {
       mob = new idx.MathTex(v.content, { fontSize: 1.5, color: "#FFFFFF" });
       maxScale = 1.1;
@@ -385,7 +385,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
 
   // --- run ---------------------------------------------------------------------------
   scene.nextSection("intro");
-  const title = new idx.Text(wrap(plan.title, 60), { fontSize: 0.36, color: "#FFD700", point: [0, 3.5, 0] });
+  const title = new idx.Text(wrap(plan.title, 60), { fontSize: 0.36, lineSpacing: 1.6, color: "#FFD700", point: [0, 3.5, 0] });
   await play([new idx.Write(title)], 0.8);
   for (const [bi, beat] of plan.beats.entries()) await runBeat(beat, bi);
   await scene.wait(1);

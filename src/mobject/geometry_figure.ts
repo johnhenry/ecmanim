@@ -283,9 +283,12 @@ export class GeometryFigure extends VGroup {
     if (rightMobs.length) { this._register("rightAngles", "group", rightMobs); this._register("right", "group", [rightMobs[0]]); }
     // ticks
     const tickMobs: VMobject[] = [];
+    // A side with both ticks and parallel chevrons: ticks sit at 35%, chevrons at 65% so they do not overlap.
+    const parSides = new Set(mp.parallels.map((q) => q.side));
+    const tickSides = new Set(mp.ticks.map((q) => q.side));
     for (const { side, count } of mp.ticks) {
       const a = V[side], b = V[(side + 1) % n];
-      const mid = mul(add(a, b), 0.5);
+      const mid = add(a, mul(sub(b, a), parSides.has(side) ? 0.33 : 0.5));
       const d = unit(sub(b, a)), nrm = perp(d);
       const gap = 0.13 * u, half = 0.17 * u;
       for (let t = 0; t < count; t++) {
@@ -300,7 +303,7 @@ export class GeometryFigure extends VGroup {
     const arrowMobs: VMobject[] = [];
     for (const { side, count, ref } of mp.parallels) {
       const a = V[side], b = V[(side + 1) % n];
-      const mid = mul(add(a, b), 0.5);
+      const mid = add(a, mul(sub(b, a), tickSides.has(side) ? 0.67 : 0.5));
       const d = unit(sub(V[(ref + 1) % n], V[ref])), nrm = perp(d);
       const l = 0.17 * u, w = 0.13 * u, gap = 0.16 * u;
       for (let t = 0; t < count; t++) {
