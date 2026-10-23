@@ -55,7 +55,7 @@ class ShowcaseSignals extends Scene {
 
     // signals[0] lights up, then fades back; SIGNALS types on (per-glyph
     // reveal, our typewriter for MC's label().text('SIGNALS', 1, linear)).
-    signals[0].setFill(BLUE);
+    signals[0].setFill(BLUE, 1);
     this.spawn(function* () {
       yield tweenTo(signals[0], { opacity: 1 }, 0.1);
       yield 1.7 - 0.1;

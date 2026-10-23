@@ -184,6 +184,7 @@ export {
 export {
   AnimationGroup, LaggedStart, LaggedStartMap, Succession, makeAnimateBuilder,
 } from "./animation/composition.ts";
+export type { AnimateOptions, AnimateFn } from "./animation/composition.ts";
 export {
   GrowFromPoint, GrowFromCenter, GrowFromEdge, SpinInFromNothing, ShrinkToCenter,
   Rotating, Rotate, MoveAlongPath, Indicate, Flash, Wiggle, Circumscribe, FocusOn,

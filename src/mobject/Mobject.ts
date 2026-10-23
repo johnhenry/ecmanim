@@ -415,6 +415,8 @@ export class Mobject {
   }
 
   // Ergonomic animation builder: `scene.play(mob.animate.shift(RIGHT).scale(2))`.
+  // Also callable with animation options (CE `mob.animate(run_time=2)`):
+  // `mob.animate({ runTime: 2, rateFunc: linear }).shift(RIGHT)`; see AnimateOptions.
   get animate(): any {
     return makeAnimateBuilder(this);
   }

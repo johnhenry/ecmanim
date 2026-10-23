@@ -127,8 +127,21 @@ export class LaggedStartMap extends LaggedStart {
 // --- the `.animate` builder ------------------------------------------------
 // Returns a chainable proxy; each method call mutates a copy of the mobject.
 // When handed to Scene.play it is converted to a Transform via build().
+//
+// The proxy is ALSO callable (manim CE `_AnimationBuilder.__call__`,
+// mobject.py ~3575): `mob.animate({runTime: 2, rateFunc: linear}).shift(UP)`.
+// Like CE, animation options may be passed once and only BEFORE any method;
+// otherwise it throws. Additive extra (ManimGX): `mob.animate(m => m.grow(2))`
+// applies the function to the animated copy, and counts as a method call.
+
+/** Options accepted by the callable `.animate(...)` form. */
+export type AnimateOptions = AnimationConfig;
+/** A function applied to the animated copy: `box.animate((b) => b.scale(2))`. */
+export type AnimateFn<T = any> = (target: T) => unknown;
+
 export function makeAnimateBuilder(mob: any, config: AnimationConfig = {}): any {
   const target = mob.copy();
+  let cannotPassArgs = false;
   const state: any = {
     _isAnimateBuilder: true,
     _mob: mob,
@@ -138,12 +151,27 @@ export function makeAnimateBuilder(mob: any, config: AnimationConfig = {}): any 
       return new Transform(mob, target, this._config);
     },
   };
-  const proxy: any = new Proxy(state, {
-    get(t: any, prop: string | symbol) {
-      if (prop in t) return t[prop];
+  const call = (arg?: AnimateOptions | AnimateFn): any => {
+    if (cannotPassArgs) {
+      throw new Error(
+        "Animation arguments must be passed before accessing methods and can only be passed once",
+      );
+    }
+    cannotPassArgs = true;
+    if (typeof arg === "function") {
+      arg(target);
+    } else if (arg != null) {
+      for (const [k, v] of Object.entries(arg)) if (v !== undefined) state._config[k] = v;
+    }
+    return proxy;
+  };
+  const proxy: any = new Proxy(call, {
+    get(_t: any, prop: string | symbol) {
+      if (prop in state) return state[prop];
       const value = target[prop];
       if (typeof value === "function") {
         return (...args: any[]) => {
+          cannotPassArgs = true;
           value.apply(target, args);
           return proxy;
         };
