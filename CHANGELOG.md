@@ -31,6 +31,10 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Fixed
 
+- `MathTex`/`Tex` no longer render Unicode superscripts/subscripts (`a²`, `x₁`) as
+  invisible glyphs that still take up space: they are rewritten to `^{…}`/`_{…}`
+  (runs merged) before MathJax. In `Tex` text mode, script runs become real math
+  scripts. Inputs without such characters are unchanged (#108).
 - Inline diagram DSL (`diagram()` / `buildBoard()`): node boxes now grow to fit
   long labels (label width + padding) instead of letting text overflow, and
   layer/row/ring spacing widens to keep wider boxes apart (#109). Labels that

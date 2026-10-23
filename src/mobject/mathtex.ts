@@ -15,6 +15,7 @@ import { VMobject, VGroup } from "./VMobject.ts";
 import { TransformMatchingTex } from "../animation/transform_matching.ts";
 import { Color, WHITE } from "../core/color.ts";
 import { parsePathToSubpaths } from "./svg_path.ts";
+import { normalizeUnicodeScripts, hasUnicodeScripts } from "../core/unicode_scripts.ts";
 import type { ColorLike } from "../core/types.ts";
 
 /** Configuration accepted by MathTex / Tex / texToVGroup. */
@@ -172,7 +173,7 @@ function loadCdnMathJax(
 // `await initMathTex()` must have resolved first.
 export async function texToSVG(tex: string, config: MathTexConfig = {}): Promise<string> {
   await initMathTex();
-  const wrapped = String(wrapEnvironment(String(tex), config.texEnvironment));
+  const wrapped = String(wrapEnvironment(normalizeUnicodeScripts(String(tex)), config.texEnvironment));
 
   // Node / bundled-liteAdaptor path.
   if (_mj) {
@@ -490,7 +491,7 @@ export class SingleStringMathTex extends VGroup {
     this.texEnvironment = config.texEnvironment ?? "align*";
     this.fillColor = Color.parse(config.color ?? config.fillColor ?? WHITE);
     this.strokeColor = Color.parse(config.strokeColor ?? config.color ?? WHITE);
-    const glyphs = texToGlyphList(this.tex, { ...config, texEnvironment: this.texEnvironment });
+    const glyphs = texToGlyphList(normalizeUnicodeScripts(this.tex), { ...config, texEnvironment: this.texEnvironment });
     this.add(...glyphs);
     this.fillOpacity = config.fillOpacity ?? 1;
     this.strokeWidth = config.strokeWidth ?? 0;
@@ -643,7 +644,8 @@ export class MathTex extends VGroup {
 
   // Hook for subclasses (Tex) to transform a tex piece before rendering.
   protected preprocessTex(tex: string): string {
-    return tex;
+    // MathJax draws Unicode super/subscripts (a², x₁) as blank glyphs.
+    return normalizeUnicodeScripts(tex);
   }
 
   // --- flat glyph access (kept for compatibility & animations) --------------
@@ -779,11 +781,23 @@ export class Tex extends MathTex {
 // sequences (\LaTeX, \alpha, ...) OUT of the wrapper -- base MathJax does
 // not expand macros inside \text{} (that needs the textmacros extension),
 // so \text{This is some \LaTeX} renders an error box instead of the logo.
+// Plain prose -> \text{...}; Unicode script runs are lifted out of the \text
+// wrapper into real math scripts (\text{a}^{2}) so they actually render.
+function wrapPlain(part: string): string {
+  if (!hasUnicodeScripts(part)) return `\\text{${part}}`;
+  const norm = normalizeUnicodeScripts(part);
+  return norm
+    .split(/([_^]\{[^}]*\})/)
+    .filter((x) => x.length)
+    .map((x) => (/^[_^]\{/.test(x) ? x : `\\text{${x}}`))
+    .join("");
+}
+
 function wrapProse(run: string): string {
   const parts = run.split(/(\\[a-zA-Z]+\s*)/);
   return parts
     .filter((part) => part.length)
-    .map((part) => (part.startsWith("\\") ? part : `\\text{${part}}`))
+    .map((part) => (part.startsWith("\\") ? part : wrapPlain(part)))
     .join("");
 }
 
@@ -807,7 +821,8 @@ function toTextMode(tex: string): string {
     const ch = tex[i];
     if (ch === "$") {
       if (inMath) {
-        out.push(buf); // math run, verbatim
+        out.push(normalizeUnicodeScripts(buf)); // math run
+
       } else if (buf.length) {
         out.push(wrapProse(buf));
       }
@@ -817,7 +832,7 @@ function toTextMode(tex: string): string {
       buf += ch;
     }
   }
-  if (buf.length) out.push(inMath ? buf : wrapProse(buf));
+  if (buf.length) out.push(inMath ? normalizeUnicodeScripts(buf) : wrapProse(buf));
   return out.join("");
 }
 
