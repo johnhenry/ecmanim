@@ -244,6 +244,12 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
           if (cue.pose === "wave") {
             for (const f of [24, 58, 28]) await play([new sk.PoseTween(ctrl as any, { bones: { foreR: { angle: (f * Math.PI) / 180 } } }, { runTime: 0.22 })], 0.22);
           }
+        } else if (cue.do === "show") {
+          const rec = recs.get(cue.target!) ?? null;
+          if (rec?.shown) return;
+          const { pre: out, main } = revealAnims([cue.target!]);
+          if (out.length) await play(out, 0.4);
+          if (main.length) await play(main, 0.8);
         } else if (cue.do === "point") {
           const rec = recs.get(cue.target!);
           if (!rec) return;

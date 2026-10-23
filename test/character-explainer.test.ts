@@ -12,6 +12,7 @@ import {
 import { runQualityGates } from "../src/authoring/quality.ts";
 import { getFormat, runFormat } from "../src/authoring/formats.ts";
 import { manimRenderProvider } from "../src/authoring/showrunner.ts";
+import { readFileSync } from "node:fs";
 import { SkeletonModel } from "../src/mobject/skeleton_model.ts";
 
 const goodPlan = () => ({
@@ -87,7 +88,7 @@ test("validate: normalises case/whitespace of vocab values and defaults tts", ()
 
 test("vocabularies match the issue", () => {
   assert.deepEqual([...POSE_NAMES], ["neutral", "wave", "point", "think", "excited", "shrug", "celebrate"]);
-  assert.deepEqual([...CUE_DOS], ["point", "pose", "camera", "fx"]);
+  assert.deepEqual([...CUE_DOS], ["point", "pose", "camera", "fx", "show"]);
   assert.deepEqual([...CAMERA_KINDS], ["impact", "pulse", "shake"]);
   assert.deepEqual([...FX_KINDS], ["aura", "explosion", "smoke", "beam"]);
   assert.deepEqual([...VISUAL_KINDS], ["text", "math", "diagram", "chart"]);
@@ -99,7 +100,7 @@ const QWEN = {"title":"The Pythagorean Theorem","visuals":[{"id":"triangle","kin
 test("normalise: real qwen output keeps its camera cue (impact:true) with a warning", () => {
   const r = validateCharacterPlan(structuredClone(QWEN));
   assert.equal(r.usable, true);
-  assert.deepEqual(r.plan.beats[0].cues, [{ at: "triangle", do: "camera", camera: "impact" }]);
+  assert.deepEqual(r.plan.beats[0].cues![0], { at: "triangle", do: "camera", camera: "impact" });
   assert.equal(r.plan.beats[1].cues![0].target, "eq");
   assert.ok(r.plan.warnings.some((w) => /normali[sz]ed/i.test(w) && /impact/.test(w)));
 });
@@ -112,8 +113,9 @@ test("normalise: common cue shapes map onto the schema", () => {
   assert.deepEqual(mk({ do: "celebrate" }), { at: "start", do: "pose", pose: "celebrate" });
   assert.deepEqual(mk({ do: "zoom" }), { at: "start", do: "camera", camera: "pulse" });
   assert.deepEqual(mk({ do: "shake" }), { at: "start", do: "camera", camera: "shake" });
-  assert.equal(mk({ do: "camera", impact: false }), undefined);
-  assert.equal(mk({ do: "camera" }), undefined);
+  const noCam = (cue: any) => validateCharacterPlan({ beats: [{ narration: "hi", cues: [{ at: "start", ...cue }] }] }).plan.beats[0].cues!.every((c) => c.do !== "camera");
+  assert.ok(noCam({ do: "camera", impact: false }));
+  assert.ok(noCam({ do: "camera" }));
 });
 
 // --- visual content repair -------------------------------------------------------------
@@ -159,7 +161,71 @@ test("prompt states the math/text/diagram conventions", () => {
   const { prompt } = buildPlanPrompt("x");
   assert.match(prompt, /never Unicode superscripts/);
   assert.match(prompt, /12 words/);
+  assert.match(prompt, /"show"/);
+  assert.match(prompt, /"kind":"math"/);
   assert.match(prompt, /A\[Label\] --> B\[Label\]/);
+});
+
+// --- show cues, never-shown visuals, default cues ----------------------------------------
+const qwenSaved = () => JSON.parse(readFileSync(new URL("./fixtures/character-explainer-qwen-plan.json", import.meta.url), "utf8"));
+
+test("show cue: reveals a visual at a bookmark; reveal/display normalise to show", () => {
+  const base = (cue: any) => validateCharacterPlan({
+    visuals: [{ id: "a", kind: "text", content: "A" }, { id: "b", kind: "text", content: "B" }],
+    beats: [{ narration: "One <bookmark mark='m'/> two.", show: ["a"], cues: [{ at: "m", ...cue }] }],
+  });
+  const r = base({ do: "show", target: "b" });
+  assert.deepEqual(r.plan.beats[0].cues![0], { at: "m", do: "show", target: "b" });
+  assert.deepEqual(r.plan.beats[0].cues![1], { at: "m", do: "point", target: "b" }); // default gesture
+  assert.ok(!r.plan.warnings.some((w) => /never shown/.test(w)));
+  assert.equal(base({ do: "reveal", target: "b" }).plan.beats[0].cues![0].do, "show");
+  assert.equal(base({ do: "display", target: "b" }).plan.beats[0].cues![0].do, "show");
+  assert.ok(base({ do: "show", target: "zzz" }).plan.beats[0].cues!.every((c) => c.do !== "show"));
+});
+
+test("saved qwen plan + its show cues: diagram is revealed, every beat has a cue", () => {
+  const raw = qwenSaved();
+  raw.beats[2].cues = [{ at: "start", do: "show", target: "diagram" }];
+  raw.beats[3].cues.push({ at: "start", do: "show", target: "diagram" });
+  const r = validateCharacterPlan(raw);
+  assert.equal(r.usable, true);
+  assert.equal(r.plan.beats[2].cues![0].do, "show");
+  assert.ok(r.plan.beats.every((b) => (b.cues?.length ?? 0) > 0));
+  assert.ok(!r.plan.warnings.some((w) => /never shown/.test(w)));
+});
+
+test("never-shown visual attaches to the beat that mentions it, else the next reveal-less beat", () => {
+  const r = validateCharacterPlan(qwenSaved());
+  const idx = r.plan.beats.findIndex((b) => b.show?.includes("diagram"));
+  assert.equal(idx, 2);
+  assert.ok(r.plan.warnings.some((w) => /diagram/.test(w) && /attached/.test(w)));
+  const r2 = validateCharacterPlan({
+    visuals: [{ id: "a", kind: "text", content: "Alpha" }, { id: "z", kind: "chart", content: [{ label: "p", value: 1 }] }],
+    beats: [{ narration: "First.", show: ["a"] }, { narration: "Second beat." }, { narration: "Third beat." }],
+  });
+  assert.deepEqual(r2.plan.beats.map((b) => b.show ?? []), [["a"], ["z"], []]);
+  const r3 = validateCharacterPlan({
+    visuals: [{ id: "v", kind: "text", content: "Gravity pulls things down" }],
+    beats: [{ narration: "Hello." }, { narration: "Everything feels gravity daily." }],
+  });
+  assert.deepEqual(r3.plan.beats.map((b) => b.show ?? []), [[], ["v"]]);
+});
+
+test("cue-less beats get a default: point at what they reveal, else alternating think/excited", () => {
+  const r = validateCharacterPlan({
+    visuals: [{ id: "a", kind: "text", content: "A" }],
+    beats: [{ narration: "Look <bookmark mark='m'/> here.", show: ["a"] }, { narration: "Plain." }, { narration: "Plain two." }, { narration: "Plain three." }],
+  });
+  assert.deepEqual(r.plan.beats[0].cues, [{ at: "m", do: "point", target: "a" }]);
+  assert.deepEqual(r.plan.beats[1].cues, [{ at: "start", do: "pose", pose: "think" }]);
+  assert.deepEqual(r.plan.beats[2].cues, [{ at: "start", do: "pose", pose: "excited" }]);
+  assert.deepEqual(r.plan.beats[3].cues, [{ at: "start", do: "pose", pose: "think" }]);
+  assert.equal(r.plan.warnings.filter((w) => /default cue/.test(w)).length, 4);
+});
+
+test("narration-only formulas are left alone", () => {
+  const r = validateCharacterPlan({ beats: [{ narration: "A squared plus B squared equals C squared.", cues: [{ at: "start", do: "pose", pose: "wave" }] }] });
+  assert.deepEqual(r.plan.visuals, []);
 });
 
 // --- fallback -------------------------------------------------------------------

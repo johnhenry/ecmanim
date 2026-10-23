@@ -22,7 +22,7 @@ import type { BoneSpec, PartialPose } from "../mobject/skeleton_model.ts";
 // --- 1. vocabularies + types -------------------------------------------------------
 
 export const POSE_NAMES = ["neutral", "wave", "point", "think", "excited", "shrug", "celebrate"] as const;
-export const CUE_DOS = ["point", "pose", "camera", "fx"] as const;
+export const CUE_DOS = ["point", "pose", "camera", "fx", "show"] as const;
 export const CAMERA_KINDS = ["impact", "pulse", "shake"] as const;
 export const FX_KINDS = ["aura", "explosion", "smoke", "beam"] as const;
 export const VISUAL_KINDS = ["text", "math", "diagram", "chart"] as const;
@@ -52,7 +52,7 @@ export interface CharacterCue {
   /** A bookmark name from the beat's narration, or "start" | "end". */
   at: string;
   do: CueDo;
-  /** point / fx: a visual id. */
+  /** point / fx / show: a visual id. */
   target?: string;
   pose?: PoseName;
   camera?: CameraKind;
@@ -114,6 +114,7 @@ function normalizeCue(c: any): { doo: string; value?: string; notes: string[] } 
     else if (isIn(CAMERA_KINDS, doo)) { value = doo; doo = "camera"; }
     else if (isIn(FX_KINDS, doo)) { value = doo; doo = "fx"; }
     else if (doo === "zoom") { value = "pulse"; doo = "camera"; }
+    else if (doo === "reveal" || doo === "display") doo = "show";
     if (isIn(CUE_DOS, doo)) notes.push(`do "${c?.do}" normalized to ${doo}${value ? ` "${value}"` : ""}`);
     return { doo, value, notes };
   }
@@ -228,6 +229,69 @@ export function capText(src: string): { value: string; truncated: boolean } {
   return { value: (sp > 20 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, "") + "…", truncated: true };
 }
 
+const STOP = new Set(["that", "this", "with", "what", "from", "have", "your", "about", "into", "when", "will", "they", "then", "than"]);
+const revealsOf = (b: CharacterBeat): string[] => [...(b.show ?? []), ...(b.cues ?? []).filter((c) => c.do === "show").map((c) => c.target!)];
+
+/** Words from a visual that a narration might mention (id, content words, chart/diagram labels). */
+function mentionWords(v: CharacterVisual): string[] {
+  const words = new Set<string>();
+  if (v.id.length >= 3) words.add(v.id.toLowerCase());
+  const src = v.kind === "chart" ? (v.content as Array<{ label: string }>).map((d) => d.label).join(" ")
+    : v.kind === "diagram" ? [...String(v.content).matchAll(/\[([^\]]*)\]/g)].map((m) => m[1]).join(" ")
+    : v.kind === "text" ? String(v.content) : "";
+  for (const w of src.toLowerCase().match(/[a-z]{4,}/g) ?? []) if (!STOP.has(w)) words.add(w);
+  return [...words];
+}
+
+/** Repair: a visual that no beat reveals is attached to the beat that mentions it, else the next reveal-less beat. */
+function attachUnshown(visuals: CharacterVisual[], beats: CharacterBeat[], warnings: string[]): void {
+  const revealed = new Set(beats.flatMap(revealsOf));
+  let prev = -1; // beat index of the previous visual's reveal
+  for (const v of visuals) {
+    if (revealed.has(v.id)) {
+      const at = beats.findIndex((b) => revealsOf(b).includes(v.id));
+      prev = Math.max(prev, at);
+      continue;
+    }
+    const words = mentionWords(v);
+    let idx = beats.findIndex((b) => words.some((w) => new RegExp(`\\b${w.replace(/[^a-z0-9]/g, "")}`, "i").test(b.narration)));
+    let how = "mentioned in its narration";
+    if (idx < 0) {
+      idx = beats.findIndex((b, i) => i > prev && revealsOf(b).length === 0);
+      how = "next beat without a reveal";
+      if (idx < 0) { idx = beats.length - 1; how = "last beat"; }
+    }
+    beats[idx].show = [...(beats[idx].show ?? []), v.id];
+    revealed.add(v.id);
+    prev = Math.max(prev, idx);
+    warnings.push(`visual "${v.id}" was never shown; attached to beat #${idx} (${how})`);
+  }
+}
+
+/**
+ * Repair: a beat with no gesture cue (point / pose) gets a default one appended:
+ * point at what it reveals, else a think/excited pose (alternating).
+ */
+function addDefaultCues(beats: CharacterBeat[], warnings: string[]): void {
+  let alt = 0;
+  beats.forEach((b, i) => {
+    if (b.cues?.some((c) => c.do === "point" || c.do === "pose")) return;
+    const showCue = b.cues?.find((c) => c.do === "show");
+    const target = showCue?.target ?? b.show?.[0];
+    const cues = b.cues ?? (b.cues = []);
+    const had = cues.length ? "no gesture cue" : "no cues";
+    if (target) {
+      const at = showCue?.at ?? splitBookmarks(b.narration).marks[0]?.name ?? "end";
+      cues.push({ at, do: "point", target });
+      warnings.push(`beat #${i}: ${had}; added default cue (point at "${target}")`);
+    } else {
+      const pose: PoseName = alt++ % 2 === 0 ? "think" : "excited";
+      cues.push({ at: "start", do: "pose", pose });
+      warnings.push(`beat #${i}: ${had}; added default cue (${pose} pose)`);
+    }
+  });
+}
+
 /**
  * Validate + repair a raw plan (from params or a model). Invalid cues, visuals
  * and references are dropped with a message in `plan.warnings`; this never
@@ -318,6 +382,9 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
       if (doo === "point") {
         if (!target || !seen.has(target)) { warnings.push(`${tag}: point target "${c?.target}" is not a visual, dropped`); continue; }
         cue.target = target;
+      } else if (doo === "show") {
+        if (!target || !seen.has(target)) { warnings.push(`${tag}: show target "${c?.target}" is not a visual, dropped`); continue; }
+        cue.target = target;
       } else if (doo === "pose") {
         const p = nc.value ?? norm(c.pose);
         if (!isIn(POSE_NAMES, p)) { warnings.push(`${tag}: unknown pose "${c?.pose}", dropped`); continue; }
@@ -337,17 +404,20 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
       cues.push(cue);
     }
     // Pointing / fx at a visual that has not been revealed yet: reveal it here.
+    const revealedByCue = new Set(cues.filter((c) => c.do === "show").map((c) => c.target!));
     for (const c of cues) {
-      if (c.target && !shownSoFar.has(c.target) && !show.includes(c.target)) {
+      if (c.do !== "show" && c.target && !shownSoFar.has(c.target) && !show.includes(c.target) && !revealedByCue.has(c.target)) {
         show.push(c.target);
         warnings.push(`beat #${bi}: "${c.target}" was targeted before being shown, added to show`);
       }
     }
     for (const id of show) shownSoFar.add(id);
+    for (const id of revealedByCue) shownSoFar.add(id);
     beats.push({ narration, ...(show.length ? { show } : {}), ...(cues.length ? { cues } : {}) });
   }
   if (!beats.length) { warnings.push("no valid beats"); return empty(); }
-  for (const v of visuals) if (!shownSoFar.has(v.id)) warnings.push(`visual "${v.id}" is never shown`);
+  attachUnshown(visuals, beats, warnings);
+  addDefaultCues(beats, warnings);
 
   const plan: CharacterExplainerPlan & { warnings: string[] } = {
     title: typeof r.title === "string" && r.title.trim() ? r.title.trim() : defaults.title ?? "Untitled",
@@ -394,11 +464,11 @@ export function buildFallbackPlan(topic: string, opts: { tts?: string; style?: s
 }
 
 const EXAMPLE_PLAN = {
-  title: "Why the sky is blue",
-  visuals: [{ id: "q", kind: "text", content: "Why is the sky blue?" }],
+  title: "Energy and mass",
+  visuals: [{ id: "eq", kind: "math", content: "E = m c^2" }, { id: "note", kind: "text", content: "Mass is energy" }],
   beats: [
-    { narration: "Hello! <bookmark mark=\"q\"/> Why is the sky blue?", show: ["q"], cues: [{ at: "start", do: "pose", pose: "wave" }, { at: "q", do: "point", target: "q" }] },
-    { narration: "Air scatters blue light most.", cues: [{ at: "end", do: "pose", pose: "celebrate" }] },
+    { narration: "Hello! <bookmark mark=\"e\"/> This is the famous equation.", show: ["eq"], cues: [{ at: "start", do: "pose", pose: "wave" }, { at: "e", do: "point", target: "eq" }] },
+    { narration: "Mass is <bookmark mark=\"n\"/> a kind of energy.", cues: [{ at: "n", do: "show", target: "note" }, { at: "end", do: "pose", pose: "celebrate" }] },
   ],
 };
 
@@ -407,9 +477,9 @@ export function buildPlanPrompt(topic: string): { system: string; prompt: string
   const system = "You write scripts for an animated stick-figure presenter. Reply with ONE JSON object only.";
   const prompt = [
     `Plan a 30-45 second explainer about: ${topic}`,
-    `Schema: {"title":str,"visuals":[{"id":str,"kind":${q(VISUAL_KINDS)},"content":...,"at"?:${q(VISUAL_REGIONS)}}],"beats":[{"narration":str,"show"?:[visual ids],"cues"?:[{"at":bookmark|"start"|"end","do":${q(CUE_DOS)},"target"?:visual id,"pose"?:${q(POSE_NAMES)},"camera"?:${q(CAMERA_KINDS)},"fx"?:${q(FX_KINDS)}}]}]}`,
+    `Schema: {"title":str,"visuals":[{"id":str,"kind":${q(VISUAL_KINDS)},"content":...,"at"?:${q(VISUAL_REGIONS)}}],"beats":[{"narration":str,"show"?:[visual ids],"cues"?:[{"at":bookmark|"start"|"end","do":${q(CUE_DOS)},"target"?:visual id (point/show/fx),"pose"?:${q(POSE_NAMES)},"camera"?:${q(CAMERA_KINDS)},"fx"?:${q(FX_KINDS)}}]}]}`,
     `content: text=at most 12 words; math=LaTeX with ^ for exponents (a^2), never Unicode superscripts; diagram=one edge per line in the A[Label] --> B[Label] DSL; chart=[{"label","value"}].`,
-    `Rules: 3-5 beats of 1-2 short sentences; put <bookmark mark="name"/> in narration and cue at those names; "point" needs a target shown by then; max 3 visuals; every beat gets a cue.`,
+    `Rules: 3-5 beats of 1-2 short sentences; put <bookmark mark="name"/> in narration and cue at those names; "point" needs a target shown by then; "show" reveals a visual at a bookmark; max 3 visuals; every beat gets a cue.`,
     `Example: ${JSON.stringify(EXAMPLE_PLAN)}`,
     `Output JSON for: ${topic}`,
   ].join("\n");
