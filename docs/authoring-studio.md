@@ -62,6 +62,82 @@ const res = await runFormat("explainer", {
 });
 ```
 
+### `character-explainer` — a stick-figure presenter synced to narration
+
+An animated presenter (built-in `Skeleton` rig, IK pointing, named poses) narrates a
+topic while visuals appear on the right. Gestures, pointing, camera beats and
+particle effects are scheduled on **voiceover bookmarks**. The plan is *choices
+from fixed vocabularies, never code*, so an LLM can write it safely.
+
+```ts
+import { runFormat, manimRenderProvider, ollamaLLMProvider } from "@johnhenry/ecmanim/authoring";
+
+await runFormat("character-explainer", {
+  params: {
+    title: "The Pythagorean Theorem",
+    tts: "system",                                   // silent | system | openai | elevenlabs
+    visuals: [
+      { id: "formula", kind: "math", content: "a^2 + b^2 = c^2" },
+      { id: "squares", kind: "chart", content: [{ label: "a squared", value: 9 }, { label: "b squared", value: 16 }] },
+    ],
+    beats: [
+      { narration: "It says <bookmark mark=\"f\"/> a squared plus b squared equals c squared.",
+        show: ["formula"],
+        cues: [{ at: "start", do: "pose", pose: "wave" }, { at: "f", do: "point", target: "formula" }] },
+      { narration: "Nine plus sixteen <bookmark mark=\"s\"/> is twenty five!",
+        show: ["squares"],
+        cues: [{ at: "s", do: "point", target: "squares" }, { at: "s", do: "camera", camera: "impact" },
+               { at: "end", do: "pose", pose: "celebrate" }, { at: "end", do: "fx", fx: "explosion", target: "squares" }] },
+    ],
+    renderOptions: { output: "out.mp4", quality: "medium" },
+  },
+  providers: { render: manimRenderProvider },
+});
+```
+
+**Plan schema** (`CharacterExplainerPlan`):
+
+| field | meaning |
+|---|---|
+| `title` | shown small at the top |
+| `visuals[]` | `{ id, kind, content, at? }`. `text`/`math`/`diagram`: a string (math = LaTeX; diagram = the inline diagram DSL used by `explainer`). `chart`: `[{label, value>=0}]` (or `{data: [...]}`), drawn as a small bar chart. `shape`: a [GeometryFigure](geometry-figures.md) spec such as `{ "type": "rhombus" }` or `{ "type": "right-triangle", "a": 3, "b": 4, "squares": true }` (textbook marks are automatic). Kinds `triangle`, `geometry`, `polygon`, `quadrilateral`, `solid` or a type name (`rhombus`) are normalized to `shape`. `at`: `"right"` (default) / `"top"` / `"bottom"`. |
+| `beats[]` | `{ narration, show?, cues? }`. `narration` may hold `<bookmark mark="x"/>` tags. `show` = visual ids revealed in this beat. |
+| `cues[]` | `{ at, do, target?, pose?, camera?, fx? }`. `at` = a bookmark name from *this* beat's narration, `"start"`, or `"end"` (fires `END_LEAD` = 0.5 s before the line ends so the gesture lands on it). |
+| `tts` | voiceover provider name (`silent` is the default). |
+
+**Vocabularies:** `do`: `point` (needs `target`), `show` (needs `target`: reveals that visual at the cue time, in addition to the beat-level `show` list; `reveal`/`display` are accepted as aliases), `pose`, `camera`, `fx` (optional `target`). `pose`: `neutral wave point think excited shrug celebrate`. `camera`: `impact pulse shake` (`CameraImpact` / `ZoomPulse` / `CameraShake`). `fx`: `aura explosion smoke beam` (particle presets, at the target visual, or at the presenter when there is none). Visual `kind`: `text math diagram chart shape`. `highlight` (needs `target`) flashes the target or a part of it. **Targets** are `visualId` or, for shapes, `visualId.part`: sides `a b c` (triangles) or `AB`, vertices `A`, `angleA`, `diagonalAC`, marks `ticks arrows arcs right`, `squareA/B/C`, `height`, solids `face0 edge0 vertex0`; unknown parts fall back to the whole visual with a warning, and the pointing hand aims at the named part (e.g. the midpoint of side `tri.a`).
+
+**How a cue plays.** Each beat runs under `voiceover()`. `scheduleCues(beat, bookmarkTimes, duration)` (pure, exported) turns cues into time-ordered events: exact when the TTS provider returns word boundaries, proportional to character position otherwise (the `silent` and `system` providers are proportional, so expect a few hundred ms of drift). `point` blends an `IKChain` on the right arm toward the nearest edge point of the target visual (the figure steps and leans toward far targets, and the arm stays straight and aims when the target is out of reach), holds ~2.4 s, then eases back. `pose` is a `PoseTween` to a named pose of `createPresenterPoseLibrary()`. The presenter never freezes: breathing, sway and head drift are layered on top of whatever pose is active.
+
+**Validation and repair.** `validateCharacterPlan(raw)` never throws: unknown poses / cameras / fx / `do`, cues whose `at` is not a bookmark in the narration, `point` targets that are not visuals, unknown `show` ids and malformed visuals are **dropped**, and each repair is recorded in `plan.warnings`. A visual that is pointed at before being shown is auto-added to that beat's `show`. A visual no beat reveals is attached to the first beat whose narration mentions it (its id, or a word from its content/labels), else the next beat without a reveal. A beat left without a gesture cue (`point` or `pose`) gets a default one appended (point at what it reveals, else a `think`/`excited` pose, alternating). Each of these repairs adds a warning; narration-only formulas are never turned into visuals. If nothing usable survives, the format falls back to `buildFallbackPlan(topic)`, a deterministic 3-beat plan built from the topic alone. With no `llm` provider and no `params.beats`, that fallback is the plan (zero network).
+
+**Quality gates.** `compose` returns the render result plus `quality`: the default gates and `characterExplainerGates(plan)` — `targets_exist` (error: every cue target / `show` id is a visual) and `beat_has_cue` (warn) — with `promise: "motion-led"`.
+
+**Offline LLM planning with Ollama.**
+
+```ts
+const llm = ollamaLLMProvider({ model: "qwen2.5:3b", baseUrl: "http://localhost:11434", timeoutMs: 300_000 });
+await runFormat("character-explainer", {
+  topic: "Why the sky is blue",
+  params: { tts: "system", renderOptions: { output: "sky.mp4" } },
+  providers: { render: manimRenderProvider, llm },
+});
+```
+
+`ollamaLLMProvider({ model, baseUrl, timeoutMs, keepAlive, options })` is a `kind: "llm"` provider: `available()` pings `/api/tags`; `invoke({ prompt, system?, json? })` POSTs `/api/generate` (`stream: false`, `format: "json"` when `json`) and returns parsed JSON or text. It uses the global `fetch` (pass `{ fetch }` to inject one), streams the response (Node's fetch gives up on a request whose headers take over 300 s, which `stream: false` hits on slow CPUs), aborts after `timeoutMs` (default 15 minutes), sends `keep_alive: "15m"` so the model stays loaded, and passes `options` through to Ollama (default `{ num_predict: 1024 }`; add `num_ctx`, `temperature`, ...), and throws on HTTP errors or non-JSON output in JSON mode; the format catches that and falls back. The prompt (`buildPlanPrompt(topic)`) contains the schema, the allowed values and one short example.
+
+**CPU latency.** On a CPU-only host a 3B model generates roughly 1-2 tokens/s (about 1 tok/s on a loaded 4-core box), and prompt evaluation alone can take a minute or more, so planning can take several minutes. The example's `--llm` prints a progress line and accepts `--model <name>` and `--timeout <sec>`. Planning can never block output: if the call times out, fails, or returns unusable JSON, the format falls back to `buildFallbackPlan` and still renders (the reason is in `plan.warnings`). Repair also fixes common model mistakes instead of dropping them: Unicode superscripts in math become `^{..}`, `$..$` delimiters are stripped, text over 140 characters is truncated, invalid diagram DSL becomes a text visual, and near-miss cue shapes (e.g. `{do:"camera", impact:true}`, `{do:"celebrate"}`, `{do:"zoom"}`) instead of dropping them, noting each in `plan.warnings`.
+
+Runnable examples in `examples/character-explainer/`: `pythagoras.ts` (3-4-5 triangle with squares, pointing at each side), `quadrilaterals.ts` (the quadrilateral family with its marks; `--llm` plans it with Ollama) and `platonic-solids.ts` (five spinning solids). For example `node examples/character-explainer/pythagoras.ts` (about 40 s, espeak-ng narration; add `--llm` to plan from just the topic with Ollama; `QUALITY=low` for a fast draft).
+
+**Honest limitations.**
+- Small local models (3B) often produce plans that need repair; expect dropped cues and some fallback. The result is valid but can be generic.
+- The presenter is one fixed rig and one look; there is no lip-sync, facial expression or walking. Pointing aims at the *edge of a whole visual*, not at a part of it (you cannot point at just the `b^2` term).
+- At most two visuals per region are shown at once; older ones fade out when a third arrives. There is no per-beat layout control beyond `at`.
+- With `silent` / `system` TTS, bookmark times are proportional estimates, not word-aligned. A cue plays after the previous gesture finishes (gestures are sequential), so dense cues can run late.
+- Camera effects and particle presets need the Canvas-2D renderer (SVG/WebGL warn or ignore them).
+- The `motion-led` gate counts the idle sway as motion (`motionFraction` is a heuristic from the share of `play` frames, not a measured frame diff), so it is a weak slideshow check.
+
 ## `ecmanim/studio`
 
 ### Live-preview dev server

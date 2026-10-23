@@ -1,0 +1,91 @@
+{
+ "title": "The Pythagorean theorem",
+ "visuals": [
+  {
+   "id": "q",
+   "kind": "text",
+   "content": "What's the Pythagorean theorem about?"
+  },
+  {
+   "id": "diagram",
+   "kind": "diagram",
+   "content": "A[Leg] --> B[Perpendicular Leg]\nB[Perpendicular Leg] --> C[Diagonal]",
+   "at": "bottom"
+  },
+  {
+   "id": "chart",
+   "kind": "chart",
+   "content": [
+    {
+     "label": "A",
+     "value": 3
+    },
+    {
+     "label": "B",
+     "value": 4
+    },
+    {
+     "label": "C",
+     "value": 5
+    }
+   ]
+  }
+ ],
+ "beats": [
+  {
+   "narration": "Pythagoras and his theorem? <bookmark mark=\"q\"/>",
+   "show": [
+    "q"
+   ],
+   "cues": [
+    {
+     "at": "start",
+     "do": "camera",
+     "camera": "impact"
+    },
+    {
+     "at": "q",
+     "do": "point",
+     "target": "q"
+    }
+   ]
+  },
+  {
+   "narration": "It's about right triangles.",
+   "cues": [
+    {
+     "at": "start",
+     "do": "camera",
+     "camera": "pulse"
+    }
+   ]
+  },
+  {
+   "narration": "Look at the triangle diagram."
+  },
+  {
+   "narration": "A squared plus B squared equals C squared.",
+   "cues": [
+    {
+     "at": "start",
+     "do": "camera",
+     "camera": "shake"
+    }
+   ]
+  },
+  {
+   "narration": "That's it! <bookmark mark=\"end\"/>",
+   "show": [
+    "chart"
+   ],
+   "cues": [
+    {
+     "at": "end",
+     "do": "pose",
+     "pose": "celebrate"
+    }
+   ]
+  }
+ ],
+ "tts": "system"
+}

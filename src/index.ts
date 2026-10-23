@@ -112,6 +112,13 @@ export {
 export {
   Polyhedron, Tetrahedron, Octahedron, Icosahedron, Dodecahedron, ConvexHull3D,
 } from "./mobject/polyhedra.ts";
+export { GeometryFigure, GeometryReveal, HighlightPart } from "./mobject/geometry_figure.ts";
+export type { GeometryFigureConfig, FigurePart } from "./mobject/geometry_figure.ts";
+export {
+  normalizeShapeSpec, canonicalShapeType, planarLayout, marksPlan, shapePartNames, resolvePartName, solidCounts, shapeCategory,
+  SHAPE_TYPES, SHAPE_ALIASES, SHAPE_DEFAULTS, TRIANGLE_TYPES, QUAD_TYPES, POLYGON_TYPES, SOLID_TYPES,
+} from "./mobject/geometry_spec.ts";
+export type { ShapeSpec, ShapeType, ShapeCategory, MarkOverrides, LabelSpec, PlanarLayout, MarksPlan, NormalizedShape } from "./mobject/geometry_spec.ts";
 export {
   loadMeshOBJ, extractMeshData, extractMeshDataFromGeometry, isMeshLoaderAvailable,
 } from "./loaders/mesh_obj.ts";
