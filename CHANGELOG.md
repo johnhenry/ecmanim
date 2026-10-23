@@ -29,6 +29,24 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Changed (breaking)
+
+- `Arrow` / `Vector` / `LabeledArrow` / `DoubleArrow` default tip length is now
+  **0.35** (Manim CE `DEFAULT_ARROW_TIP_LENGTH`, `constants.py`), up from 0.25, so
+  existing arrows get visibly larger heads (`NumberLine`/`Axes` arrow tips, graph
+  edges, vector fields and `LinearTransformationScene` basis vectors included).
+  The drawn tip is clamped to `maxTipLengthToLengthRatio` (0.25) times the arrow's
+  shaft length (CE `Arrow.get_default_tip_length`, `line.py`), measured on the
+  buff-trimmed shaft as CE does (previously the untrimmed length), so short
+  arrows get slightly smaller heads than before; `arrow.tipLength` now keeps the
+  configured value instead of being overwritten by the clamp. `DoubleArrow` gains
+  the same clamp (`maxTipLengthToLengthRatio`), so short double arrows shrink
+  their tips. Pass `tipLength: 0.25` to keep the old size (#119).
+- `Line` now honours `pathArc` (bends into an `ArcBetweenPoints`; previously
+  silently ignored, so lines stayed straight) and `buff` (trims both ends, ignored
+  when shorter than `2 * buff`), matching CE `Line(buff=0, path_arc=0)`. Default
+  values are unchanged, so only scenes that passed these options change (#119).
+
 ### Fixed
 
 - `MathTex`/`Tex` no longer render Unicode superscripts/subscripts (`a²`, `x₁`) as

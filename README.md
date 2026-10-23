@@ -381,7 +381,7 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | Scene | `class S(Scene): def construct` | `class S extends Scene { async construct() }` | `await this.play(...)`, `await this.wait(t)` |
 | Play | `self.play(a, b, run_time=2)` | `await this.play(a, b, { _playConfig: true, runTime: 2 })` | parallel by default |
 | `.animate` | `mob.animate.shift(RIGHT)` | `mob.animate.shift([1,0,0])` | chainable proxy |
-| Geometry | Circle, Square, Line, Polygon, … | ✅ same | Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon RegularPolygon Triangle Rectangle Square |
+| Geometry | Circle, Square, Line, Polygon, … | ✅ same | Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon RegularPolygon Triangle Rectangle Square; `Line` takes `buff`/`pathArc`, arrow tips default to CE's 0.35 (clamped to 0.25 × shaft length) |
 | Tips / arcs | ArrowTip, ArcBetweenPoints, CurvedArrow, Sector, Angle | ✅ same | tips.ts, arcs.ts — Sector/AnnularSector/Angle/RightAngle |
 | Polygrams | Polygram, RegularPolygram, Star, RoundedRectangle | ✅ same | polygram.ts |
 | Boolean ops | Union, Difference, Intersection, Exclusion | ✅ same | via `polygon-clipping` |
@@ -432,6 +432,9 @@ Deeper module map, rendering pipeline, and registry mechanics:
 
 ### Honest divergences
 
+- **`DoubleArrow` is a plain `Line` with two tips.** It has no default `buff` (CE:
+  0.25) and does not retract the shaft to the tip bases; `Arrow` also leaves the
+  shaft running to the tip point. Tip length/width defaults and the length ratio clamp do match CE.
 - **`DecimalNumber` is raster-backed.** It extends `RasterText` (Canvas glyphs),
   not vector glyphs, so number labels are drawn as bitmap text rather than Béziers.
 - **`MathTex` / `VText` in the browser need a font/bundler.** They expect MathJax
