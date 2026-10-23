@@ -31,7 +31,7 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Changed (breaking)
 
-Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117).
+Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117, #119).
 
 - `Create` (and `Uncreate`) default to `lagRatio: 1`, as in CE `creation.py`. A multi-part
   mobject now draws its children one after another instead of all at once; pass
@@ -75,6 +75,21 @@ Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Mani
 - `add()` throws when a mobject is added to itself (CE `ValueError`) or when the
   added mobject already contains the parent, instead of silently creating a cycle
   that made `getFamily()` recurse forever.
+- `Arrow` / `Vector` / `LabeledArrow` / `DoubleArrow` default tip length is now
+  **0.35** (Manim CE `DEFAULT_ARROW_TIP_LENGTH`, `constants.py`), up from 0.25, so
+  existing arrows get visibly larger heads (`NumberLine`/`Axes` arrow tips, graph
+  edges, vector fields and `LinearTransformationScene` basis vectors included).
+  The drawn tip is clamped to `maxTipLengthToLengthRatio` (0.25) times the arrow's
+  shaft length (CE `Arrow.get_default_tip_length`, `line.py`), measured on the
+  buff-trimmed shaft as CE does (previously the untrimmed length), so short
+  arrows get slightly smaller heads than before; `arrow.tipLength` now keeps the
+  configured value instead of being overwritten by the clamp. `DoubleArrow` gains
+  the same clamp (`maxTipLengthToLengthRatio`), so short double arrows shrink
+  their tips. Pass `tipLength: 0.25` to keep the old size (#119).
+- `Line` now honours `pathArc` (bends into an `ArcBetweenPoints`; previously
+  silently ignored, so lines stayed straight) and `buff` (trims both ends, ignored
+  when shorter than `2 * buff`), matching CE `Line(buff=0, path_arc=0)`. Default
+  values are unchanged, so only scenes that passed these options change (#119).
 
 ### Added
 

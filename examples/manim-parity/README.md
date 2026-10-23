@@ -38,7 +38,7 @@ segment content hash.
 |---|---|---|---|
 | 01 | ManimCELogo | ✅ ready | — (Tex text-node crash fixed en route) |
 | 02 | BraceAnnotation | gap → ✅ | `Line.getUnitVector`; Brace rebuilt (real curly geometry + rotate-frame placement) |
-| 03 | VectorArrow | ✅ ready | — |
+| 03 | VectorArrow | ✅ ready | arrow head now CE's 0.35 default (was 0.25, #119) |
 | 04 | GradientImageFromArray | gap → ✅ | `imageFromArray` (pixel arrays → bitmap), pixelated upscaling |
 | 05 | BooleanOperations | gap → ✅ | boolean-op trailing style config; `fontSizePt` |
 | 06 | PointMovingOnShapes | ✅ ready | — |
