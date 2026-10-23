@@ -29,6 +29,15 @@ export interface BoundingBox {
   max: number[];
 }
 
+/** Keyword options for `Mobject.nextTo` / `Mobject.arrange` (Manim CE `next_to` kwargs). */
+export interface NextToOptions {
+  buff?: number;
+  alignedEdge?: number[];
+  submobjectToAlign?: Mobject | null;
+  indexOfSubmobjectToAlign?: number | null;
+  coorMask?: number[];
+}
+
 export class Mobject {
   id: number;
   points: number[][];
@@ -88,7 +97,23 @@ export class Mobject {
 
   // --- tree ---------------------------------------------------------------
   add(...mobs: (Mobject | Mobject[])[]): this {
-    for (const m of mobs.flat()) {
+    const list = mobs.flat();
+    // Manim CE raises ValueError when a mobject is added to itself
+    // (mobject.py Mobject.add / _assert_valid_submobjects). We also reject
+    // adding an ancestor, which would create a cycle and make getFamily()
+    // recurse forever.
+    list.forEach((m, i) => {
+      if (!m) return;
+      if (m === this) {
+        throw new Error(`Cannot add ${this.constructor.name} as a submobject of itself (at index ${i}).`);
+      }
+      if (m.submobjects.length > 0 && m.getFamily().includes(this)) {
+        throw new Error(
+          `Cannot add ${m.constructor.name} as a submobject of ${this.constructor.name}: it already contains it (cycle, at index ${i}).`,
+        );
+      }
+    });
+    for (const m of list) {
       if (m && !this.submobjects.includes(m)) this.submobjects.push(m);
     }
     return this;
@@ -289,15 +314,48 @@ export class Mobject {
     return this.shift(V.neg(this.getCenter()));
   }
 
-  nextTo(mobjectOrPoint: Mobject | number[], direction: number[] = V.RIGHT, buff = 0.25, aligned: any = null): this {
-    const anchor = mobjectOrPoint instanceof Mobject
-      ? mobjectOrPoint.getBoundaryPoint(direction)
-      : mobjectOrPoint;
-    const ref = this.getBoundaryPoint(V.neg(direction));
-    const target = V.add(anchor, V.scale(direction, buff));
-    let delta = V.sub(target, ref);
-    // Keep the perpendicular components aligned to the anchor's center.
-    return this.shift(delta);
+  // Manim CE Mobject.next_to (mobject.py ~1809):
+  //   target_point = target.get_critical_point(aligned_edge + direction)
+  //   point_to_align = aligner.get_critical_point(aligned_edge - direction)
+  //   self.shift((target_point - point_to_align + buff * direction) * coor_mask)
+  // Accepts positional args (`nextTo(b, RIGHT, 0.25, UP)`) or an options
+  // object in the buff or alignedEdge slot (`nextTo(b, RIGHT, { buff, alignedEdge })`),
+  // which is what py2ts folds Python keyword args into.
+  nextTo(
+    mobjectOrPoint: Mobject | number[],
+    direction: number[] = V.RIGHT,
+    buff: number | NextToOptions = 0.25,
+    alignedEdge: number[] | NextToOptions | null = null,
+    submobjectToAlign?: Mobject | null,
+    indexOfSubmobjectToAlign?: number | null,
+    coorMask?: number[],
+  ): this {
+    let opts: NextToOptions = {};
+    if (typeof buff === "object" && buff !== null) opts = { ...buff };
+    else opts.buff = buff;
+    if (alignedEdge && !Array.isArray(alignedEdge)) opts = { ...opts, ...alignedEdge };
+    else if (Array.isArray(alignedEdge)) opts.alignedEdge = alignedEdge;
+    if (submobjectToAlign != null) opts.submobjectToAlign = submobjectToAlign;
+    if (indexOfSubmobjectToAlign != null) opts.indexOfSubmobjectToAlign = indexOfSubmobjectToAlign;
+    if (coorMask != null) opts.coorMask = coorMask;
+    const edge = opts.alignedEdge ?? [0, 0, 0];
+    const gap = opts.buff ?? 0.25;
+    const mask = opts.coorMask ?? [1, 1, 1];
+
+    let targetPoint: number[];
+    if (mobjectOrPoint instanceof Mobject) {
+      const aligner = opts.indexOfSubmobjectToAlign != null
+        ? mobjectOrPoint.submobjects[opts.indexOfSubmobjectToAlign]
+        : mobjectOrPoint;
+      targetPoint = aligner.getBoundaryPoint(V.add(edge, direction));
+    } else {
+      targetPoint = mobjectOrPoint;
+    }
+    const alignMob = opts.submobjectToAlign
+      ?? (opts.indexOfSubmobjectToAlign != null ? this.submobjects[opts.indexOfSubmobjectToAlign] : this);
+    const pointToAlign = alignMob.getBoundaryPoint(V.sub(edge, direction));
+    const delta = V.add(V.sub(targetPoint, pointToAlign), V.scale(direction, gap));
+    return this.shift([delta[0] * mask[0], delta[1] * mask[1], delta[2] * mask[2]]);
   }
 
   // --- style --------------------------------------------------------------
@@ -710,9 +768,20 @@ export class Mobject {
   }
 
   // Lay out submobjects in a line along `direction`, then (by default) recenter.
-  arrange(direction: number[] = V.RIGHT, buff = 0.25, { center = true }: { center?: boolean } = {}): this {
+  // Manim CE Mobject.arrange(direction, buff, center=True, **next_to_kwargs)
+  // (mobject.py ~2738): every submobject is next_to'd its predecessor with the
+  // same kwargs, then the group is recentered.
+  arrange(
+    direction: number[] = V.RIGHT,
+    buff: number | (NextToOptions & { center?: boolean }) = 0.25,
+    options: NextToOptions & { center?: boolean } = {},
+  ): this {
+    const merged: NextToOptions & { center?: boolean } = typeof buff === "object" && buff !== null
+      ? { ...buff, ...options }
+      : { buff, ...options };
+    const { center = true, ...nextToOpts } = merged;
     for (let i = 1; i < this.submobjects.length; i++) {
-      this.submobjects[i].nextTo(this.submobjects[i - 1], direction, buff);
+      this.submobjects[i].nextTo(this.submobjects[i - 1], direction, nextToOpts);
     }
     if (center) this.center();
     return this;

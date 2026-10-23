@@ -31,6 +31,50 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Changed (breaking)
 
+Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117, #119).
+
+- `Create` (and `Uncreate`) default to `lagRatio: 1`, as in CE `creation.py`. A multi-part
+  mobject now draws its children one after another instead of all at once; pass
+  `{ lagRatio: 0 }` for the old simultaneous draw. Only family members that have
+  points take a slot in the sequence (empty `VGroup` shells no longer do).
+- `Write` takes its defaults from the mobject, as CE does: `runTime` is 1 below 15 drawing
+  members and 2 from 15 up (was always 1.5), and `lagRatio` is `min(4 / max(1, n), 0.2)`
+  (was always 0.1). The rate function stays `linear`. Existing `Write`s therefore run
+  for a different time, and long texts stagger tighter. Explicit `runTime`/`lagRatio` are
+  unchanged.
+- `Write` now looks like CE's `DrawBorderThenFill`: each member's outline is traced first
+  (width 2, in its stroke colour, or its fill colour when it has no stroke) with no fill,
+  then the fill fades in. It used to fade the fill in while the stroke was still drawing.
+  Raster `Text` still reveals as a typewriter.
+- `UpdateFromFunc` and `UpdateFromAlphaFunc` default to `suspendMobjectUpdating: false`
+  (was `true`). The target's own updaters now keep running during the animation; pass
+  `{ suspendMobjectUpdating: true }` for the old behaviour.
+- `thereAndBackWithPause(t, pauseRatio)` uses `a = 2 / (1 - pauseRatio)` (was
+  `1 / pauseRatio`). The curve is unchanged at the default `pauseRatio = 1/3` and differs
+  for any other value.
+- `runningStart(t, pullFactor)` evaluates CE's 7-point Bezier `[0, 0, p, p, 1, 1, 1]`
+  (was a 5-point `[0, 0, p, p, 1]`), so the dip and the approach to 1 are shaped differently.
+
+- `setFill` / `setStroke` / `setStyle` / `setSheen` / `setSheenDirection` /
+  `setBackgroundStroke` now recurse into the whole family by default (CE
+  `family=True`, `vectorized_mobject.py`). Before, `new VGroup(a, b).setFill(RED, 0.5)`
+  changed only the (invisible) group, so children kept their own fill and stroke.
+  Scenes that styled a group and relied on children being left alone must pass
+  `family: false` (positional, or in the options object).
+- `VGroup.arrange(...)` now recenters the group at the origin (CE
+  `arrange(center=True)`, `mobject.py`). The `VMobject`-level override that skipped
+  centering is gone, so a `VGroup` row/column that used to start at its first
+  child's position is now centered; pass `{ center: false }` for the old placement.
+  `arrange` also forwards `alignedEdge`, `submobjectToAlign`,
+  `indexOfSubmobjectToAlign`, `coorMask` to `nextTo`.
+- `nextTo` now honours `alignedEdge` (CE `next_to`, `mobject.py`): the aligned edge
+  of the mobject is flushed with the same edge of the target instead of always
+  centering across the perpendicular axis. Also takes `submobjectToAlign`,
+  `indexOfSubmobjectToAlign`, `coorMask`, and an options-object form
+  (`nextTo(b, RIGHT, { buff, alignedEdge })`).
+- `add()` throws when a mobject is added to itself (CE `ValueError`) or when the
+  added mobject already contains the parent, instead of silently creating a cycle
+  that made `getFamily()` recurse forever.
 - `Arrow` / `Vector` / `LabeledArrow` / `DoubleArrow` default tip length is now
   **0.35** (Manim CE `DEFAULT_ARROW_TIP_LENGTH`, `constants.py`), up from 0.25, so
   existing arrows get visibly larger heads (`NumberLine`/`Axes` arrow tips, graph
@@ -46,6 +90,11 @@ compatibility rules" section of `AGENTS.md`.
   silently ignored, so lines stayed straight) and `buff` (trims both ends, ignored
   when shorter than `2 * buff`), matching CE `Line(buff=0, path_arc=0)`. Default
   values are unchanged, so only scenes that passed these options change (#119).
+
+### Added
+
+- `Write` accepts `reverse: true` (CE `Write(reverse=True)`): members draw last-to-first, and
+  the animation becomes a remover (not an introducer) unless `remover` is set explicitly.
 
 ### Fixed
 

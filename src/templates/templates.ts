@@ -58,7 +58,7 @@ export function titleCard(title: string, options: TitleCardOptions = {}): Templa
   return {
     group, title: titleText, subtitle: subtitleText, rule,
     animateIn: () => new LaggedStart(
-      [new Write(titleText), new Create(rule), ...(subtitleText ? [new FadeIn(subtitleText, { shift: [0, -0.3, 0] })] : [])],
+      [new Write(titleText, { runTime: 1.5 }), new Create(rule, { lagRatio: 0 }), ...(subtitleText ? [new FadeIn(subtitleText, { shift: [0, -0.3, 0] })] : [])],
       { lagRatio: 0.3 },
     ),
     animateOut: () => new FadeOut(group),
@@ -284,7 +284,7 @@ export function outroCard(title: string, options: OutroCardOptions = {}): Templa
   return {
     group, title: titleText, handle: handleText, frame,
     animateIn: () => new LaggedStart(
-      [new Create(frame), new Write(titleText), ...(handleText ? [new FadeIn(handleText)] : [])],
+      [new Create(frame, { lagRatio: 0 }), new Write(titleText, { runTime: 1.5 }), ...(handleText ? [new FadeIn(handleText)] : [])],
       { lagRatio: 0.25 },
     ),
     animateOut: () => new FadeOut(group),
