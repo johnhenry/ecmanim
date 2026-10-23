@@ -6,7 +6,7 @@
 //   QUALITY=low node examples/character-explainer/pythagoras.ts
 // Output: examples/character-explainer/out/pythagoras.mp4 (out/ is gitignored)
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { runFormat, manimRenderProvider, ollamaLLMProvider } from "../../src/authoring.ts";
 import type { CharacterExplainerPlan } from "../../src/authoring.ts";
 
@@ -83,6 +83,9 @@ if (useLLM) {
 } else {
   res = await runFormat("character-explainer", { topic: plan.title, params: { ...plan, renderOptions }, providers: { render: manimRenderProvider } });
 }
+const planPath = output.replace(/\.mp4$/, ".plan.json");
+writeFileSync(planPath, JSON.stringify(res.plan, null, 2));
+console.log("plan saved to", planPath);
 for (const w of res.plan.warnings ?? []) console.warn("plan warning:", w);
 console.log(`wrote ${res.output.output} (${res.output.frames} frames, ${(res.output.frames / res.output.fps).toFixed(1)}s)`);
 console.log("quality:", res.output.quality.ok ? "ok" : "FAILED", res.output.quality.results.filter((r: any) => !r.ok).map((r: any) => `${r.gate}: ${r.message}`));

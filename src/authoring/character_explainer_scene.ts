@@ -116,7 +116,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
     let mob: any;
     let maxScale = 1.2;
     if (v.kind === "text") {
-      mob = new idx.Text(wrap(v.content, 24), { fontSize: 0.8, color: "#FFFFFF" });
+      mob = new idx.Text(wrap(v.content, 26), { fontSize: 0.7, lineSpacing: 1.7, color: "#FFFFFF" });
       maxScale = 1.25;
     } else if (v.kind === "math") {
       mob = new idx.MathTex(v.content, { fontSize: 1.5, color: "#FFFFFF" });
@@ -134,8 +134,11 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
   const fitScale = (r: VisualRec, box: Box) => Math.min(box.maxW / r.w0, box.maxH / r.h0, r.maxScale);
 
   // Show `ids` (new) and relayout. Returns animations to play together.
-  const revealAnims = (ids: string[]): any[] => {
+  // `pre` (fade-outs of evicted visuals) must finish before `main` starts, so
+  // an outgoing and an incoming visual never overlap in the same slot.
+  const revealAnims = (ids: string[]): { pre: any[]; main: any[] } => {
     const anims: any[] = [];
+    const pre: any[] = [];
     for (const id of ids) {
       if (!recs.has(id)) recs.set(id, makeVisual(plan.visuals.find((v) => v.id === id)!));
     }
@@ -148,7 +151,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       const inReg = order.filter((id) => region(id) === reg);
       while (inReg.length > MAX_PER_REGION) { const gone = inReg.shift()!; evicted.push(gone); order.splice(order.indexOf(gone), 1); }
     }
-    for (const id of evicted) { const r = recs.get(id)!; r.shown = false; anims.push(new idx.FadeOut(r.mob)); }
+    for (const id of evicted) { const r = recs.get(id)!; r.shown = false; pre.push(new idx.FadeOut(r.mob)); }
     const boxes = layoutVisuals(order.map((id) => ({ id, at: recs.get(id)!.def.at })));
     for (const id of order) {
       const r = recs.get(id)!;
@@ -165,7 +168,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
         if (moved) { anims.push(r.mob.animate.scale(f).moveTo([box.cx, box.cy, 0])); r.scale = s; }
       }
     }
-    return anims;
+    return { pre, main: anims };
   };
 
   // --- cue actions ----------------------------------------------------------------
@@ -219,7 +222,8 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       // Cues at t=0 that are poses fold into the reveal play (parallel).
       const early = events.filter((e) => e.time <= 1e-6 && e.cue.do === "pose");
       const rest = events.filter((e) => !early.includes(e));
-      const reveal = revealAnims(beat.show ?? []);
+      const { pre, main: reveal } = revealAnims(beat.show ?? []);
+      if (pre.length) await play(pre, 0.4);
       const earlyAnims = early.map((e) => poseTween(e.cue.pose!));
       if (early.length) state.lastWave = 0;
       if (reveal.length || earlyAnims.length) {

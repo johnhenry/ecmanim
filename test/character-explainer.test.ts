@@ -116,6 +116,52 @@ test("normalise: common cue shapes map onto the schema", () => {
   assert.equal(mk({ do: "camera" }), undefined);
 });
 
+// --- visual content repair -------------------------------------------------------------
+const vis = (v: any) => validateCharacterPlan({ visuals: [v], beats: [{ narration: "hi", show: [v.id] }] });
+
+test("math: Unicode super/subscripts become LaTeX, runs merge, delimiters stripped", () => {
+  let r = vis({ id: "m", kind: "math", content: "a² + b² = c²" });
+  assert.equal(r.plan.visuals[0].content, "a^{2} + b^{2} = c^{2}");
+  assert.ok(r.plan.warnings.some((w) => /LaTeX|delimiters/.test(w)));
+  assert.equal(vis({ id: "m", kind: "math", content: "x²³ + y₁₀ⁿ" }).plan.visuals[0].content, "x^{23} + y_{10}^{n}");
+  assert.equal(vis({ id: "m", kind: "math", content: "$$a^2$$" }).plan.visuals[0].content, "a^2");
+  assert.equal(vis({ id: "m", kind: "math", content: "\\(a^2+b^2\\)" }).plan.visuals[0].content, "a^2+b^2");
+  assert.equal(vis({ id: "m", kind: "math", content: "$e^{x}$" }).plan.visuals[0].content, "e^{x}");
+  const clean = vis({ id: "m", kind: "math", content: "a^2 + b^2 = c^2" });
+  assert.ok(!clean.plan.warnings.some((w) => /LaTeX|delimiters/.test(w)));
+});
+
+test("text: long text truncates at a word boundary with an ellipsis + warning", () => {
+  const long = "word ".repeat(60).trim();
+  const r = vis({ id: "t", kind: "text", content: long });
+  const c: string = r.plan.visuals[0].content;
+  assert.ok(c.length <= 141 && c.endsWith("…") && !c.endsWith(" …"));
+  assert.ok(c.slice(0, -1).split(" ").every((w) => w === "word"));
+  assert.ok(r.plan.warnings.some((w) => /truncated/.test(w)));
+  assert.equal(vis({ id: "t", kind: "text", content: "short" }).plan.visuals[0].content, "short");
+});
+
+test("diagram: invalid DSL converts to text, chains split into edges, valid untouched", () => {
+  const bad = validateCharacterPlan(structuredClone(QWEN));
+  const tri = bad.plan.visuals.find((v) => v.id === "triangle")!;
+  assert.equal(tri.kind, "text");
+  assert.ok(bad.plan.warnings.some((w) => /diagram/.test(w)));
+  assert.equal(vis({ id: "d", kind: "diagram", content: "just a sentence about triangles" }).plan.visuals[0].kind, "text");
+  const chain = vis({ id: "d", kind: "diagram", content: "A[Start] --> B[Mid] --> C[End]" });
+  assert.equal(chain.plan.visuals[0].kind, "diagram");
+  assert.equal(chain.plan.visuals[0].content, "A[Start] --> B[Mid]\nB[Mid] --> C[End]");
+  const ok = vis({ id: "d", kind: "diagram", content: "A[Leg a] --> C[Hyp]\nB[Leg b] --> C" });
+  assert.equal(ok.plan.visuals[0].content, "A[Leg a] --> C[Hyp]\nB[Leg b] --> C");
+  assert.deepEqual(ok.plan.warnings.filter((w) => /diagram/.test(w)), []);
+});
+
+test("prompt states the math/text/diagram conventions", () => {
+  const { prompt } = buildPlanPrompt("x");
+  assert.match(prompt, /never Unicode superscripts/);
+  assert.match(prompt, /12 words/);
+  assert.match(prompt, /A\[Label\] --> B\[Label\]/);
+});
+
 // --- fallback -------------------------------------------------------------------
 test("fallback plan is deterministic, valid, and cue-bearing", () => {
   const a = buildFallbackPlan("Photosynthesis");

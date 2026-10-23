@@ -172,6 +172,62 @@ function normChart(content: unknown): Array<{ label: string; value: number }> | 
   return out.length ? out.slice(0, 8) : null;
 }
 
+const SUP: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "⁼": "=", "⁽": "(", "⁾": ")", "ⁿ": "n", "ⁱ": "i" };
+const SUB: Record<string, string> = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9", "₊": "+", "₋": "-", "₌": "=", "₍": "(", "₎": ")" };
+const MAX_TEXT_CHARS = 140;
+
+/** Math repair: strip $..$ / \(..\) delimiters, Unicode super/subscripts -> ^{..} / _{..} (runs merged). */
+export function normalizeMath(src: string): { value: string; notes: string[] } {
+  const notes: string[] = [];
+  let v = src.trim();
+  const del = /^(\$\$[\s\S]*\$\$|\$[\s\S]*\$|\\\([\s\S]*\\\)|\\\[[\s\S]*\\\])$/.exec(v);
+  if (del) {
+    v = v.replace(/^(\$\$|\$|\\\(|\\\[)/, "").replace(/(\$\$|\$|\\\)|\\\])$/, "").trim();
+    notes.push("math delimiters stripped");
+  }
+  const before = v;
+  v = v.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱ]+/g, (m) => `^{${[...m].map((c) => SUP[c]).join("")}}`)
+       .replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎]+/g, (m) => `_{${[...m].map((c) => SUB[c]).join("")}}`);
+  if (v !== before) notes.push("Unicode super/subscripts converted to LaTeX");
+  return { value: v, notes };
+}
+
+const NODE_RE = /^[A-Za-z0-9_][\w .\-]{0,30}(\[[^\[\]<>]{0,40}\])?$/;
+
+/**
+ * Diagram repair: returns the (possibly rewritten) DSL, or null if it is not a
+ * usable diagram. `A --> B --> C` chains are split into one edge per line.
+ */
+export function normalizeDiagram(src: string): { value: string; changed: boolean } | null {
+  const out: string[] = [];
+  for (const raw of src.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.includes("<--") || line.includes("<->")) return null;
+    const toks = line.split(/\s*-->\s*/);
+    if (toks.length < 2) return null;
+    if (toks.some((t) => !NODE_RE.test(t))) return null;
+    for (let i = 0; i + 1 < toks.length; i++) out.push(`${toks[i]} --> ${toks[i + 1]}`);
+  }
+  if (!out.length) return null;
+  const value = out.join("\n");
+  return { value, changed: value !== src.trim() };
+}
+
+function diagramLabels(src: string): string {
+  const labels = [...src.matchAll(/\[([^\]]*)\]/g)].map((m) => m[1]);
+  return (labels.length ? labels.join(", ") : src).trim();
+}
+
+/** Text repair: cap length at a word boundary. */
+export function capText(src: string): { value: string; truncated: boolean } {
+  const t = src.trim().replace(/\s+/g, " ");
+  if (t.length <= MAX_TEXT_CHARS) return { value: t, truncated: t !== src.trim() && false };
+  const cut = t.slice(0, MAX_TEXT_CHARS - 1);
+  const sp = cut.lastIndexOf(" ");
+  return { value: (sp > 20 ? cut.slice(0, sp) : cut).replace(/[\s,;:.]+$/, "") + "…", truncated: true };
+}
+
 /**
  * Validate + repair a raw plan (from params or a model). Invalid cues, visuals
  * and references are dropped with a message in `plan.warnings`; this never
@@ -204,7 +260,27 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
     } else if (typeof content !== "string" || !content.trim()) {
       warnings.push(`visual "${id}": ${kind} content must be a non-empty string, dropped`); continue;
     }
-    const out: CharacterVisual = { id, kind, content };
+    let vkind: VisualKind = kind;
+    if (kind === "math") {
+      const n = normalizeMath(content);
+      content = n.value;
+      for (const note of n.notes) warnings.push(`visual "${id}": ${note}`);
+    } else if (kind === "text") {
+      const c = capText(content);
+      content = c.value;
+      if (c.truncated) warnings.push(`visual "${id}": text truncated to ${MAX_TEXT_CHARS} characters`);
+    } else if (kind === "diagram") {
+      const d = normalizeDiagram(content);
+      if (!d) {
+        warnings.push(`visual "${id}": diagram is not valid diagram DSL (A[Label] --> B[Label]), converted to text`);
+        vkind = "text";
+        content = capText(diagramLabels(content)).value;
+      } else {
+        if (d.changed) warnings.push(`visual "${id}": diagram chain split into one edge per line`);
+        content = d.value;
+      }
+    }
+    const out: CharacterVisual = { id, kind: vkind, content };
     if (v.at !== undefined) {
       const at = norm(v.at);
       if (isIn(VISUAL_REGIONS, at)) out.at = at; else warnings.push(`visual "${id}": unknown region "${v.at}", using default`);
@@ -332,7 +408,7 @@ export function buildPlanPrompt(topic: string): { system: string; prompt: string
   const prompt = [
     `Plan a 30-45 second explainer about: ${topic}`,
     `Schema: {"title":str,"visuals":[{"id":str,"kind":${q(VISUAL_KINDS)},"content":...,"at"?:${q(VISUAL_REGIONS)}}],"beats":[{"narration":str,"show"?:[visual ids],"cues"?:[{"at":bookmark|"start"|"end","do":${q(CUE_DOS)},"target"?:visual id,"pose"?:${q(POSE_NAMES)},"camera"?:${q(CAMERA_KINDS)},"fx"?:${q(FX_KINDS)}}]}]}`,
-    `content: text=short string; math=LaTeX; diagram=lines like "A[Start] --> B[End]"; chart=[{"label","value"}].`,
+    `content: text=at most 12 words; math=LaTeX with ^ for exponents (a^2), never Unicode superscripts; diagram=one edge per line in the A[Label] --> B[Label] DSL; chart=[{"label","value"}].`,
     `Rules: 3-5 beats of 1-2 short sentences; put <bookmark mark="name"/> in narration and cue at those names; "point" needs a target shown by then; max 3 visuals; every beat gets a cue.`,
     `Example: ${JSON.stringify(EXAMPLE_PLAN)}`,
     `Output JSON for: ${topic}`,
