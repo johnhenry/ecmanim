@@ -11,6 +11,7 @@ import { LinearBase } from "./graphing_scale.ts";
 import type { _ScaleBase } from "./graphing_scale.ts";
 import type { Vec3, ColorLike } from "../core/types.ts";
 import { Color } from "../core/color.ts";
+import { FRAME_X_RADIUS, FRAME_Y_RADIUS } from "../core/constants.ts";
 
 /** A "graph" is a VMobject that carries the function that generated it. */
 type Graphish = VMobject & { underlyingFunction?: (x: number) => number };
@@ -30,6 +31,10 @@ export interface NumberLineConfig {
   includeTip?: boolean;
   fontSize?: number;
   scaling?: _ScaleBase;
+  /** CE `numbers_to_exclude`: values never labelled by addNumbers (Axes default `[0]`). */
+  numbersToExclude?: number[];
+  /** CE `exclude_origin_tick`: drop the tick at 0 from the tick range (Axes sets this for linear axes). */
+  excludeOriginTick?: boolean;
   [key: string]: any;
 }
 
@@ -75,6 +80,41 @@ export function makeTickRange([start, stop, step]: number[]): number[] {
   return out;
 }
 
+/**
+ * numpy.arange(start, stop, step) for a positive/negative step (same element
+ * count formula, start + i*step values).
+ */
+function arange(start: number, stop: number, step: number): number[] {
+  const out: number[] = [];
+  if (step === 0) return out;
+  const n = Math.ceil((stop - start) / step);
+  for (let i = 0; i < n; i++) out.push(start + i * step);
+  return out;
+}
+
+/**
+ * Manim CE `NumberLine.get_tick_range` (number_line.py): ticks are anchored at
+ * 0 (so a range such as [-7.11, 7.11, 1] ticks at the integers), `x_max` is
+ * only included when there is no tip, and `excludeOriginTick` drops 0.
+ */
+export function ceTickRange(
+  [xMin, xMaxIn, xStep]: number[],
+  opts: { includeTip?: boolean; excludeOriginTick?: boolean } = {},
+): number[] {
+  const step = xStep ?? 1;
+  const xMax = opts.includeTip ? xMaxIn : xMaxIn + 1e-6;
+  let ticks: number[];
+  if ((xMin < xMax && xMax < 0) || (xMax > xMin && xMin > 0)) {
+    ticks = arange(xMin, xMax, step);
+  } else {
+    const startPoint = opts.excludeOriginTick ? step : 0;
+    const neg = arange(startPoint, Math.abs(xMin) + 1e-6, step).map((v) => -v);
+    const pos = arange(startPoint, xMax, step);
+    ticks = [...new Set([...neg, ...pos].map((v) => v + 0))].sort((a, b) => a - b);
+  }
+  return ticks;
+}
+
 export class NumberLine extends VGroup {
   xMin: number;
   xMax: number;
@@ -88,6 +128,12 @@ export class NumberLine extends VGroup {
   numbersToInclude: number[] | null;
   /** manim parity: draw these values' ticks 2x long. */
   numbersWithElongatedTicks: number[] | null;
+  /** CE `numbers_to_exclude`. */
+  numbersToExclude: number[];
+  /** CE `exclude_origin_tick`. */
+  excludeOriginTick: boolean;
+  /** Custom-label group built by Axes.addCoordinates({value: label}). */
+  labels?: VGroup;
   unit: number;
   _leftX: number;
   scaling: _ScaleBase;
@@ -114,6 +160,8 @@ export class NumberLine extends VGroup {
     this.tickSize = config.tickSize ?? 0.1;
     this.numbersToInclude = config.numbersToInclude ?? null;
     this.numbersWithElongatedTicks = config.numbersWithElongatedTicks ?? null;
+    this.numbersToExclude = config.numbersToExclude ?? [];
+    this.excludeOriginTick = config.excludeOriginTick ?? false;
     // numbersToInclude implies numbers on (manim behavior).
     this.includeNumbers = config.includeNumbers ?? (this.numbersToInclude != null);
     this.includeTip = config.includeTip ?? false;
@@ -131,7 +179,7 @@ export class NumberLine extends VGroup {
     const start = [this._leftX, 0, 0];
     const end = [this._leftX + this.length, 0, 0];
     this.axisLine = this.includeTip
-      ? new Arrow(start, end, { color: this.color, strokeColor: this.color })
+      ? new Arrow(start, end, { color: this.color, strokeColor: this.color, buff: 0 }) // CE add_tip: the tip ends at x_max (no buff)
       : new Line(start, end, { color: this.color, strokeColor: this.color });
     this.add(this.axisLine);
 
@@ -160,10 +208,13 @@ export class NumberLine extends VGroup {
     if (this.includeNumbers) this._addNumbers();
   }
 
-  _addNumbers() {
+  _addNumbers(explicit?: number[]) {
+    // CE add_numbers: x_values defaults to the tick range, minus numbers_to_exclude.
+    if (this.numbers) this.remove(this.numbers);
     this.numbers = new VGroup();
-    const values = this.numbersToInclude ?? this.getTickRange();
+    const values = explicit ?? this.numbersToInclude ?? this.getTickRange();
     for (const x of values) {
+      if (this.numbersToExclude.some((e) => Math.abs(e - x) < 1e-9)) continue;
       const p = this.numberToPoint(x);
       const label = new Text(this._formatNumber(x), {
         fontSize: this.fontSize,
@@ -182,7 +233,10 @@ export class NumberLine extends VGroup {
   }
 
   getTickRange(): number[] {
-    return makeTickRange([this.xMin, this.xMax, this.xStep]);
+    return ceTickRange([this.xMin, this.xMax, this.xStep], {
+      includeTip: this.includeTip,
+      excludeOriginTick: this.excludeOriginTick,
+    });
   }
 
   // Data number -> world point on the line. Applies the scale base first,
@@ -222,33 +276,49 @@ export class Axes extends VGroup {
   xAxis: NumberLine;
   yAxis: NumberLine;
 
+  /** Per-axis custom labels / number labels added by addCoordinates() (CE `coordinate_labels`). */
+  coordinateLabels!: VGroup;
+
   constructor(config: AxesConfig = {}) {
     super();
-    this.xRange = config.xRange ?? [-5, 5, 1];
-    this.yRange = config.yRange ?? [-5, 5, 1];
-    this.xLength = config.xLength ?? (this.xRange[1] - this.xRange[0]);
-    this.yLength = config.yLength ?? (this.yRange[1] - this.yRange[0]);
+    // Manim CE CoordinateSystem.__init__: x_range/y_range default to
+    // round(+-frame_x_radius) / round(+-frame_y_radius) with step 1 (two-term
+    // ranges get step 1); Axes.__init__: x_length = round(frame_width) - 2,
+    // y_length = round(frame_height) - 2 (12 x 6 at the 16:9 default frame).
+    const withStep = (r: number[]) => (r.length === 2 ? [r[0], r[1], 1] : r);
+    this.xRange = withStep(config.xRange ?? [Math.round(-FRAME_X_RADIUS), Math.round(FRAME_X_RADIUS), 1]);
+    this.yRange = withStep(config.yRange ?? [Math.round(-FRAME_Y_RADIUS), Math.round(FRAME_Y_RADIUS), 1]);
+    this.xLength = config.xLength ?? Math.round(FRAME_X_RADIUS * 2) - 2;
+    this.yLength = config.yLength ?? Math.round(FRAME_Y_RADIUS * 2) - 2;
     this.color = (config.color ?? "#FFFFFF") as any;
-    const axisConfig = config.axisConfig ?? {};
-    // manim parity: a top-level `tips` flag toggles arrow tips on both axes
-    // (axis_config.include_tip still wins when explicitly set).
-    const tip = axisConfig.includeTip ?? config.tips ?? false;
+    // CE Axes.__init__: axis_config = {include_tip: tips, numbers_to_exclude: [0]}
+    // (tips defaults to True); axis_config.include_tip still wins when set.
+    const axisConfig: NumberLineConfig = {
+      numbersToExclude: [0],
+      ...(config.axisConfig ?? {}),
+    };
+    const tip = axisConfig.includeTip ?? config.tips ?? true;
+    // CE: exclude_origin_tick is True for linear axes (the 0 tick is dropped),
+    // False for non-linear scalings (value 0 is not the lowest tick there).
+    const isLinear = (c: NumberLineConfig | undefined) => c?.scaling == null || c.scaling instanceof LinearBase;
+    const xCfg = { ...axisConfig, ...(config.xAxisConfig ?? {}) };
+    const yCfg = { ...axisConfig, ...(config.yAxisConfig ?? {}) };
 
     this.xAxis = new NumberLine({
       xRange: this.xRange,
       length: this.xLength,
       color: this.color,
       includeTip: tip,
-      ...axisConfig,
-      ...(config.xAxisConfig ?? {}),
+      ...xCfg,
+      excludeOriginTick: isLinear(xCfg),
     });
     this.yAxis = new NumberLine({
       xRange: this.yRange,
       length: this.yLength,
       color: this.color,
       includeTip: tip,
-      ...axisConfig,
-      ...(config.yAxisConfig ?? {}),
+      ...yCfg,
+      excludeOriginTick: isLinear(yCfg),
     });
     // Rotate the y-axis to be vertical (about the origin, its own zero-crossing).
     this.yAxis.rotate(Math.PI / 2, { axis: V.OUT, aboutPoint: V.ORIGIN });
@@ -293,10 +363,12 @@ export class Axes extends VGroup {
    *  regardless of the y-axis's post-construction rotation) -- shared by the
    *  constructor (when yAxisConfig.includeNumbers is set) and
    *  addCoordinates(). */
-  private _buildYNumbers(): VGroup {
+  private _buildYNumbers(explicit?: number[]): VGroup {
+    if (this.yAxis.numbers) this.yAxis.remove(this.yAxis.numbers);
     const numbers = new VGroup();
-    for (const y of makeTickRange(this.yRange)) {
-      if (Math.abs(y) < 1e-9) continue;
+    const values = explicit ?? this.yAxis.numbersToInclude ?? this.yAxis.getTickRange();
+    for (const y of values) {
+      if (this.yAxis.numbersToExclude.some((e) => Math.abs(e - y) < 1e-9)) continue;
       const p = this.coordsToPoint(0, y);
       const t = new Text(this.xAxis._formatNumber(y), {
         fontSize: this.yAxis.fontSize,
@@ -532,15 +604,46 @@ export class Axes extends VGroup {
     return lbl;
   }
 
-  /** Attach number labels to the axes (via each NumberLine's numbers). */
-  addCoordinates(...args: any[]): this {
-    this.xAxis.includeNumbers = true;
-    if (!this.xAxis.numbers) this.xAxis._addNumbers();
-    this.yAxis.includeNumbers = true;
-    // Build y numbers as free labels positioned by the axes mapping (the
-    // y-axis was rotated, so its own _addNumbers would place them wrong —
-    // see _buildYNumbers()'s doc comment / the constructor's matching fix).
-    if (!this.yAxis.numbers) this._buildYNumbers();
+  /**
+   * Attach number labels to the axes. Manim CE `Axes.add_coordinates(*axes_numbers)`
+   * (coordinate_systems.py): one argument per axis (x, then y); an array of
+   * values labels exactly those values, `null`/`undefined` keeps the axis's
+   * default labels (its tick range minus `numbersToExclude`), and a plain
+   * object `{value: label}` places custom labels (strings render as MathTex).
+   * With no arguments both axes get default labels. Calling it again replaces
+   * the previous labels. The labels are also collected in `coordinateLabels`.
+   */
+  addCoordinates(...axesNumbers: any[]): this {
+    const group = new VGroup();
+    const args = axesNumbers.length ? axesNumbers : [null, null];
+    const axes: Array<[NumberLine, boolean]> = [[this.xAxis, true], [this.yAxis, false]];
+    axes.forEach(([axis, isX], i) => {
+      if (i >= args.length) return;
+      const values = args[i];
+      if (axis.labels) { axis.remove(axis.labels); axis.labels = undefined; }
+      if (values != null && !Array.isArray(values) && typeof values === "object") {
+        const labels = new VGroup();
+        for (const [k, label] of Object.entries(values)) {
+          const v = Number(k);
+          const p = isX ? this.coordsToPoint(v, 0) : this.coordsToPoint(0, v);
+          const lbl = this._mkLabel(label);
+          lbl.nextTo(p, isX ? V.DOWN : V.LEFT, 0.25);
+          labels.add(lbl);
+        }
+        axis.labels = labels;
+        axis.add(labels);
+        group.add(labels);
+        return;
+      }
+      const list = values == null ? undefined : (values as number[]);
+      axis.includeNumbers = true;
+      // The y-axis was rotated, so its own _addNumbers would place labels
+      // wrong; build them in world space (see _buildYNumbers()).
+      if (isX) axis._addNumbers(list);
+      else this._buildYNumbers(list);
+      group.add(axis.numbers);
+    });
+    this.coordinateLabels = group;
     return this;
   }
 
@@ -822,7 +925,20 @@ export class NumberPlane extends Axes {
   backgroundLines!: VGroup;
 
   constructor(config: NumberPlaneConfig = {}) {
-    super(config);
+    // Manim CE NumberPlane.__init__: x_range = (-frame_x_radius, frame_x_radius, 1),
+    // y_range = (-frame_y_radius, frame_y_radius, 1), x_length/y_length = None
+    // (=> one data unit is one world unit), and no axis tips.
+    const withStep = (r: number[]) => (r.length === 2 ? [r[0], r[1], 1] : r);
+    const xRange = withStep(config.xRange ?? [-FRAME_X_RADIUS, FRAME_X_RADIUS, 1]);
+    const yRange = withStep(config.yRange ?? [-FRAME_Y_RADIUS, FRAME_Y_RADIUS, 1]);
+    super({
+      tips: false,
+      ...config,
+      xRange,
+      yRange,
+      xLength: config.xLength ?? xRange[1] - xRange[0],
+      yLength: config.yLength ?? yRange[1] - yRange[0],
+    });
     const bg = config.backgroundLineStyle ?? {};
     // manim's key is stroke_color; accept both spellings.
     this.bgColor = bg.strokeColor ?? bg.color ?? "#29ABCA";
@@ -840,12 +956,13 @@ export class NumberPlane extends Axes {
     const xRight = this.coordsToPoint(this.xRange[1], 0)[0];
 
     // Vertical grid lines at each x step.
-    for (const x of makeTickRange(this.xRange)) {
+    // CE _get_lines_parallel_to_axis: lines are anchored at 0 (integers), not at x_min.
+    for (const x of ceTickRange(this.xRange)) {
       const px = this.coordsToPoint(x, 0)[0];
       grid.add(this._faintLine([px, yBot, 0], [px, yTop, 0]));
     }
     // Horizontal grid lines at each y step.
-    for (const y of makeTickRange(this.yRange)) {
+    for (const y of ceTickRange(this.yRange)) {
       const py = this._yWorld(y);
       grid.add(this._faintLine([xLeft, py, 0], [xRight, py, 0]));
     }
@@ -1016,24 +1133,51 @@ export class ComplexPlane extends NumberPlane {
   }
   p2n(point: number[]): { re: number; im: number } { return this.pointToNumber(point); }
 
-  /** Add real-axis numbers and imaginary-axis (i-suffixed) labels. */
-  addCoordinates(): this {
-    // Real axis: reuse NumberLine numbers.
-    this.xAxis.includeNumbers = true;
-    if (!this.xAxis.numbers) this.xAxis._addNumbers();
-
-    // Imaginary axis: `k i` labels placed along the (rotated) y-axis.
-    const numbers = new VGroup();
-    for (const y of makeTickRange(this.yRange)) {
-      if (Math.abs(y) < 1e-9) continue;
-      const p = this.coordsToPoint(0, y);
-      const txt = `${this.xAxis._formatNumber(y)}i`;
-      numbers.add(
-        new Text(txt, { fontSize: this.yAxis.fontSize, color: this.yAxis.color, point: [p[0] - 0.3, p[1], 0] })
-      );
+  /**
+   * Manim CE `ComplexPlane.add_coordinates(*numbers)`: each argument is a real
+   * number (labelled on the real axis) or a complex value (`{re, im}` or
+   * `[re, im]`; labelled on the imaginary axis as `<im>i` when |im| > |re|,
+   * else by its real part). With no arguments: the real axis's tick range,
+   * then the imaginary axis's non-zero ticks. Labels are collected in
+   * `coordinateLabels`; calling it again replaces them.
+   */
+  addCoordinates(...numbers: Array<number | ComplexNumber>): this {
+    const values: Array<number | ComplexNumber> = numbers.length
+      ? numbers
+      : [
+          ...this.xAxis.getTickRange(),
+          ...this.yAxis.getTickRange().filter((y) => y !== 0).map((y) => ({ re: 0, im: y })),
+        ];
+    const group = new VGroup();
+    const order: Array<["x" | "y", number]> = [];
+    for (const n of values) {
+      const [re, im] = typeof n === "number" ? [n, 0] : this._reIm(n);
+      if (Math.abs(im) > Math.abs(re)) { order.push(["y", im]); }
+      else { order.push(["x", re]); }
     }
-    this.yAxis.numbers = numbers;
-    this.yAxis.add(numbers);
+    if (this.xAxis.numbers) this.xAxis.remove(this.xAxis.numbers);
+    if (this.yAxis.numbers) this.yAxis.remove(this.yAxis.numbers);
+    const xs = new VGroup();
+    const ys = new VGroup();
+    for (const [axis, v] of order) {
+      if (axis === "x") {
+        const p = this.xAxis.numberToPoint(v);
+        const t = new Text(this.xAxis._formatNumber(v), {
+          fontSize: this.xAxis.fontSize, color: this.xAxis.color,
+          point: [p[0], p[1] - this.xAxis.tickSize - this.xAxis.fontSize, 0],
+        });
+        xs.add(t); group.add(t);
+      } else {
+        const p = this.coordsToPoint(0, v);
+        const t = new Text(`${this.xAxis._formatNumber(v)}i`, {
+          fontSize: this.yAxis.fontSize, color: this.yAxis.color, point: [p[0] - 0.3, p[1], 0],
+        });
+        ys.add(t); group.add(t);
+      }
+    }
+    this.xAxis.numbers = xs; this.xAxis.add(xs);
+    this.yAxis.numbers = ys; this.yAxis.add(ys);
+    this.coordinateLabels = group;
     return this;
   }
 }
