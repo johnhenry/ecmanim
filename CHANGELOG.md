@@ -31,7 +31,7 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Changed (breaking)
 
-Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117, #119).
+Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117, #118, #119).
 
 - `Create` (and `Uncreate`) default to `lagRatio: 1`, as in CE `creation.py`. A multi-part
   mobject now draws its children one after another instead of all at once; pass
@@ -54,6 +54,33 @@ Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Mani
   for any other value.
 - `runningStart(t, pullFactor)` evaluates CE's 7-point Bezier `[0, 0, p, p, 1, 1, 1]`
   (was a 5-point `[0, 0, p, p, 1]`), so the dip and the approach to 1 are shaped differently.
+- `new Axes()` defaults match CE (#118): `xRange` `[-7, 7, 1]`, `yRange` `[-4, 4, 1]` (was
+  `[-5, 5, 1]` for both) and, whatever the ranges, `xLength` 12 and `yLength` 6 (was the range
+  span, i.e. 1 data unit = 1 world unit). Scenes that relied on the span default (for example
+  `Axes({ xRange: [0, 5], yRange: [0, 6] })`, now 12 x 6 world units) look rescaled; pass
+  `xLength`/`yLength` to keep the old size. Two-term ranges get step 1.
+- `Axes` draw arrow tips by default (CE `tips=True`; was off). Pass `tips: false` or
+  `axisConfig: { includeTip: false }` for the old look. `BarChart` and `Candlestick` keep
+  tip-less axes (CE `BarChart` passes `tips=False`). A tipped axis now spans its full length
+  with the tip ending at the range end (the arrow used to be shortened by a 0.25 buff at both ends).
+- Axes drop the origin tick and never label 0 (CE `exclude_origin_tick`, `numbers_to_exclude=[0]`;
+  both are now `NumberLine` options, `excludeOriginTick` and `numbersToExclude`). With a tip the
+  last tick at the range end is dropped too, as in CE.
+- `NumberLine.getTickRange()` is anchored at 0 like CE (`[-1.5, 1.5, 1]` ticks at -1, 0, 1, not at
+  -1.5, -0.5, ...), which is what keeps `NumberPlane`'s grid on integer lines.
+- `new NumberPlane()` defaults to CE's `xRange` +-7.11 (the frame half-width), `yRange` `[-4, 4]`
+  (was +-5), one data unit per world unit, and no axis tips. Its grid lines are anchored at 0.
+- `Axes.addCoordinates(...)` honours its arguments (it ignored them before): one argument per
+  axis, an array labels exactly those values, `null` keeps that axis's defaults, and
+  `{ value: label }` places custom labels. Calling it again replaces the previous labels.
+  `ComplexPlane.addCoordinates(...numbers)` takes real numbers and complex values (`{re, im}`
+  or `[re, im]`) the same way.
+- `StreamLines.create()`, `startAnimation()` and `endAnimation()` are implemented (they were
+  no-op stubs returning `this`): `create()` returns an `AnimationGroup` of `Create`, one per line,
+  in a seeded shuffled order; `startAnimation({ warmUp, flowSpeed, timeWidth, rateFunc,
+  lineAnimationClass })` installs a deterministic flow updater; `endAnimation()` returns the
+  animation that settles the lines to fully drawn (and throws if no flow is running).
+  `create()` now returns an `AnimationGroup` rather than `this`.
 
 - `setFill` / `setStroke` / `setStyle` / `setSheen` / `setSheenDirection` /
   `setBackgroundStroke` now recurse into the whole family by default (CE

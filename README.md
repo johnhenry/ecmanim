@@ -396,12 +396,12 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | LaTeX | `MathTex`, `Tex` (shells out to LaTeX) | ✅ `MathTex`, `Tex`, `SingleStringMathTex` | **MathJax → SVG → Béziers, no LaTeX binary**; token/part model, text-mode `Tex` |
 | Code / prose | Code, Paragraph, Title, Variable | ✅ same | syntax-highlighted `Code`, `Paragraph`, `Title`, tracked `Variable` |
 | Lists | `BulletedList` (Tex only) | ✅ `BulletedList` + `TextList` | `TextList` is the plain-`Text` counterpart, with nested sub-lists and depth-aware markers |
-| Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)` |
+| Coordinates | Axes, NumberPlane, NumberLine, `plot` | ✅ same | `axes.c2p(x,y)`, `axes.plot(fn)`; CE defaults (Axes 12 x 6 over +-7 / +-4 with tips, NumberPlane +-frame radius), `addCoordinates(xLabels, yLabels)` incl. `{value: label}` |
 | Axes helpers | area, Riemann rects, secant/tangent, labels | ✅ same | `get_area`, Riemann rectangles, secant/tangent lines, axis labels |
 | Planes | PolarPlane, ComplexPlane, LogBase | ✅ same | polar/complex planes, log-scaled axes |
 | Function plots | ParametricFunction, FunctionGraph, ImplicitFunction | ✅ same | functions.ts |
 | Charts | BarChart, SampleSpace | ✅ same | probability.ts |
-| Vector fields | VectorField, ArrowVectorField, StreamLines | ✅ same | vector_field.ts |
+| Vector fields | VectorField, ArrowVectorField, StreamLines | ✅ same | vector_field.ts; `StreamLines.create()` / `startAnimation()` / `endAnimation()` (seeded, seek-safe) |
 | 3D | ThreeDScene, ThreeDAxes, move_camera | ✅ same | projection camera (φ/θ + perspective), `moveCamera`, ambient rotation, gamma/light, fixed-in-frame |
 | 3D solids | Sphere, Torus, Cylinder, Cone, Cube, Box, Prism | ✅ same | + caps, Dot3D, Line3D, Arrow3D, ThreeDVMobject |
 | Polyhedra | Tetrahedron, Octahedron, Icosahedron, Dodecahedron | ✅ same | + Polyhedron, ConvexHull3D |
@@ -439,6 +439,11 @@ Deeper module map, rendering pipeline, and registry mechanics:
 - **`DoubleArrow` is a plain `Line` with two tips.** It has no default `buff` (CE:
   0.25) and does not retract the shaft to the tip bases; `Arrow` also leaves the
   shaft running to the tip point. Tip length/width defaults and the length ratio clamp do match CE.
+- **`StreamLines` is not a line-for-line port.** The `create` / `startAnimation` / `endAnimation`
+  animations follow CE, but random choices (shuffle order, flow start offsets) use a seeded
+  generator so renders are repeatable, `endAnimation` is closed-form in its progress instead of
+  accumulating a fixed `1 / frame_rate`, and the lines themselves are still integrated with RK4
+  over `xRange`/`yRange` rather than CE's Euler steps over the frame.
 - **`DecimalNumber` is raster-backed.** It extends `RasterText` (Canvas glyphs),
   not vector glyphs, so number labels are drawn as bitmap text rather than Béziers.
 - **`MathTex` / `VText` in the browser need a font/bundler.** They expect MathJax

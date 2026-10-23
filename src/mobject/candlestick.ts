@@ -86,7 +86,9 @@ export class Candlestick extends Axes {
     const pad = span > 0 ? span * 0.05 : 1;
     const yRange = config.yRange ?? [minY - pad, maxY + pad, Math.max(1e-9, (span + 2 * pad) / 5)];
 
+    // CE BarChart passes tips=False; keep tip-less axes unless asked.
     super({
+      tips: false,
       ...config,
       xRange,
       yRange,
