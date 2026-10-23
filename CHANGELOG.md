@@ -31,7 +31,7 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Changed (breaking)
 
-Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117, #118, #119).
+Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #116, #117, #118, #119, #123).
 
 - `Create` (and `Uncreate`) default to `lagRatio: 1`, as in CE `creation.py`. A multi-part
   mobject now draws its children one after another instead of all at once; pass
@@ -81,6 +81,21 @@ Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Mani
   lineAnimationClass })` installs a deterministic flow updater; `endAnimation()` returns the
   animation that settles the lines to fully drawn (and throws if no flow is running).
   `create()` now returns an `AnimationGroup` rather than `this`.
+
+- `setFill(color)` without an opacity now keeps the current fill opacity (CE
+  `set_fill(color=None, opacity=None)`, `vectorized_mobject.py`: `update_rgbas_array` only
+  writes the alpha channel "if opacity was passed in"). It used to force opacity `1`, so
+  `new Circle().setFill(RED)` was solid; in CE (and now here) it stays unfilled because
+  `Circle` has `fillOpacity: 0`. Scenes that relied on the old behaviour must pass an
+  opacity: `setFill(RED, 1)`. `setStroke(color)` likewise keeps the current stroke opacity
+  (and width, as before) instead of resetting the opacity to `1` (CE `set_stroke`).
+  Internal and example callers that needed visible fill now pass the opacity explicitly.
+- `mob.animate` is now also callable with animation options before the first method, as in
+  CE `_AnimationBuilder.__call__` (`mobject.py`): `mob.animate({ runTime: 2, rateFunc: linear,
+  lagRatio, pathArc }).shift(UP)`. This was a `TypeError` before; every existing
+  `.animate.x()` chain is unchanged. Like CE, passing options after a method, or twice,
+  throws. Additive extra: `mob.animate((m) => m.scale(2))` applies a function to the
+  animated copy. (Listed under breaking only because the option call replaces a thrown error.)
 
 - `setFill` / `setStroke` / `setStyle` / `setSheen` / `setSheenDirection` /
   `setBackgroundStroke` now recurse into the whole family by default (CE

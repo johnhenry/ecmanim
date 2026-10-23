@@ -619,24 +619,30 @@ export class VMobject extends Mobject {
   // this mobject.
   setFill(
     color: ColorLike | null,
-    opacity: number | { opacity?: number; family?: boolean } = 1,
+    opacity?: number | null | { opacity?: number; family?: boolean },
     family = true,
   ): this {
-    if (typeof opacity === "object" && opacity.family != null) family = opacity.family;
+    if (opacity != null && typeof opacity === "object" && opacity.family != null) family = opacity.family;
     if (family) {
       for (const m of this.submobjects) {
         if (typeof (m as any).setFill === "function") (m as any).setFill(color, opacity, family);
       }
     }
     if (color != null) this.fillColor = Color.parse(color);
-    this.fillOpacity = typeof opacity === "object" ? (opacity.opacity ?? this.fillOpacity) : opacity;
+    // CE `opacity=None` keeps the current fill opacity (update_rgbas_array only
+    // writes the alpha channel "if opacity was passed in").
+    if (opacity != null) {
+      if (typeof opacity === "object") {
+        if (opacity.opacity != null) this.fillOpacity = opacity.opacity;
+      } else this.fillOpacity = opacity;
+    }
     return this;
   }
 
   setStroke(
     color: ColorLike | null,
     width?: number | { width?: number; opacity?: number; family?: boolean } | null,
-    opacity = 1,
+    opacity?: number | null,
     family = true,
   ): this {
     if (width != null && typeof width === "object" && width.family != null) family = width.family;
@@ -651,7 +657,7 @@ export class VMobject extends Mobject {
       if (width.opacity != null) this.strokeOpacity = width.opacity;
     } else {
       if (width != null) this.strokeWidth = width;
-      this.strokeOpacity = opacity;
+      if (opacity != null) this.strokeOpacity = opacity;
     }
     return this;
   }

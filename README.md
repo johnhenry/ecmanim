@@ -380,12 +380,12 @@ Deeper module map, rendering pipeline, and registry mechanics:
 |------|-------|----------|-------|
 | Scene | `class S(Scene): def construct` | `class S extends Scene { async construct() }` | `await this.play(...)`, `await this.wait(t)` |
 | Play | `self.play(a, b, run_time=2)` | `await this.play(a, b, { _playConfig: true, runTime: 2 })` | parallel by default |
-| `.animate` | `mob.animate.shift(RIGHT)` | `mob.animate.shift([1,0,0])` | chainable proxy |
+| `.animate` | `mob.animate.shift(RIGHT)`, `mob.animate(run_time=2).shift(RIGHT)` | `mob.animate.shift([1,0,0])`, `mob.animate({ runTime: 2 }).shift([1,0,0])` | chainable proxy; options go first and only once (else it throws, as in CE); also `mob.animate(m => m.scale(2))` (0.14.0, #116) |
 | Geometry | Circle, Square, Line, Polygon, … | ✅ same | Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon RegularPolygon Triangle Rectangle Square; `Line` takes `buff`/`pathArc`, arrow tips default to CE's 0.35 (clamped to 0.25 × shaft length) |
 | Tips / arcs | ArrowTip, ArcBetweenPoints, CurvedArrow, Sector, Angle | ✅ same | tips.ts, arcs.ts — Sector/AnnularSector/Angle/RightAngle |
 | Polygrams | Polygram, RegularPolygram, Star, RoundedRectangle | ✅ same | polygram.ts |
 | Boolean ops | Union, Difference, Intersection, Exclusion | ✅ same | via `polygon-clipping` |
-| Layout / style | `arrange`, `next_to(aligned_edge=…)`, `set_fill(family=True)` | ✅ same (0.14.0) | `arrange` recenters; `nextTo` takes `alignedEdge`/`coorMask`; style setters recurse into the family; `add(self)` throws (#115) |
+| Layout / style | `arrange`, `next_to(aligned_edge=…)`, `set_fill(family=True)` | ✅ same (0.14.0) | `arrange` recenters; `nextTo` takes `alignedEdge`/`coorMask`; style setters recurse into the family; `add(self)` throws (#115); `setFill(c)`/`setStroke(c)` keep the current opacity, so `new Circle().setFill(RED)` stays unfilled — pass `setFill(RED, 1)` (#123) |
 | Matrix | Matrix, IntegerMatrix, DecimalMatrix | ✅ same | brackets, entries, `get_rows/get_columns` |
 | Table | Table, MathTable, MobjectTable | ✅ same | row/col labels, lines, highlights |
 | Brace | Brace, BraceLabel, BraceBetweenPoints, BraceText | ✅ same | |
