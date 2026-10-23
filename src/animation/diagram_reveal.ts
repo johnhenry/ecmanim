@@ -214,7 +214,7 @@ export function revealDiagram(diagram: DiagramMobject, config: DiagramRevealConf
   const nodeAnim = (part: Part) =>
     tag(nodeAnimation ? nodeAnimation(part.group, part.id) : defaultNodeAnim(diagram, part), part.id);
   const edgeAnim = (part: Part) =>
-    tag(edgeAnimation ? edgeAnimation(part.group, part.id) : new Create(part.group, childConfig), part.id);
+    tag(edgeAnimation ? edgeAnimation(part.group, part.id) : new Create(part.group, { ...childConfig, lagRatio: 0 }), part.id);
 
   function defaultNodeAnim(d: DiagramMobject, part: Part): Animation {
     switch (d.diagramType) {

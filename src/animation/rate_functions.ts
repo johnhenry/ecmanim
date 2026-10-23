@@ -28,7 +28,8 @@ export const thereAndBack = (t: number, inflection = 10): number => {
 };
 
 export const thereAndBackWithPause = (t: number, pauseRatio = 1 / 3): number => {
-  const a = 1 / pauseRatio;
+  // CE rate_functions.py there_and_back_with_pause: a = 2 / (1 - pause_ratio).
+  const a = 2 / (1 - pauseRatio);
   if (t < 0.5 - pauseRatio / 2) return smooth(a * t);
   if (t < 0.5 + pauseRatio / 2) return 1;
   return smooth(a - a * t);
@@ -89,20 +90,11 @@ export function smoothererstep(t: number): number {
 
 /** Overshoots forward before settling. pullFactor < 0 dips below zero first. */
 export function runningStart(t: number, pullFactor = -0.5): number {
-  // Bezier through [0, 0, pullFactor, pullFactor, 1] evaluated at t.
-  const points = [0, 0, pullFactor, pullFactor, 1];
-  const n = points.length - 1;
-  let result = 0;
-  for (let i = 0; i <= n; i++) {
-    result += points[i] * binomial(n, i) * (1 - t) ** (n - i) * t ** i;
-  }
-  return result;
-}
-
-function binomial(n: number, k: number): number {
-  let result = 1;
-  for (let i = 0; i < k; i++) result = (result * (n - i)) / (i + 1);
-  return result;
+  // CE rate_functions.py running_start: Bezier through
+  // [0, 0, pull, pull, 1, 1, 1] evaluated at t (degree 6), in closed form.
+  const t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t, t6 = t5 * t;
+  const mt = 1 - t, mt2 = mt * mt, mt3 = mt2 * mt, mt4 = mt3 * mt;
+  return 15 * t2 * mt4 * pullFactor + 20 * t3 * mt3 * pullFactor + 15 * t4 * mt2 + 6 * t5 * mt + t6;
 }
 
 /** Applies `func` but never quite reaches 1 (scaled to `proportion` of the way). */

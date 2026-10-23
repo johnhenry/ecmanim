@@ -245,11 +245,31 @@ export class ReplacementTransform extends Transform {
 }
 
 // --- creation animations ---------------------------------------------------
+
+/**
+ * Family members that actually draw something (manim's
+ * `family_members_with_points()`): vector members with points, plus Text
+ * (which reveals as a unit). Empty VGroup shells are excluded, so they don't
+ * occupy a slot in the staggered (lagRatio) timeline.
+ */
+function familyWithPoints(mobject: any): any[] {
+  return mobject.getFamily().filter((m: any) => m._isText || (m.points && m.points.length > 0));
+}
+
+/** Configuration for {@link Write}. */
+export interface WriteConfig extends AnimationConfig {
+  /** Draw the family last-to-first (manim's `Write(reverse=True)`); also makes it a remover. */
+  reverse?: boolean;
+}
+
 export class Create extends Animation {
   origFill!: number[]; // assigned in setup() (begin() guarantees it runs first)
 
   constructor(mobject: Mobject, config: AnimationConfig = {}) {
-    super(mobject, { rateFunc: config.rateFunc ?? smooth, ...config, introducer: true });
+    // CE creation.py Create: lag_ratio defaults to 1.0 (children draw in sequence).
+    super(mobject, { rateFunc: config.rateFunc ?? smooth, lagRatio: config.lagRatio ?? 1, ...config, introducer: true });
+    // `...config` may carry an explicit `lagRatio: undefined`; re-apply the default.
+    if (config.lagRatio === undefined) this.lagRatio = 1;
   }
 
   setup(): void {
@@ -277,6 +297,24 @@ export class Create extends Animation {
     this.drawMember(submob, index, subAlpha);
   }
 
+  /** Draw order for the staggered timeline (Write(reverse) flips it). */
+  protected staggerOrder(members: any[]): any[] {
+    return members;
+  }
+
+  // Staggered path: only members with points take a slot (CE
+  // get_all_families_zipped -> family_members_with_points).
+  interpolate(alpha: number): void {
+    if (!(this.lagRatio > 0)) return super.interpolate(alpha);
+    const eased = this.rateFunc(Math.max(0, Math.min(1, alpha)));
+    const fam = this.mobject.getFamily();
+    const members = this.staggerOrder(familyWithPoints(this.mobject));
+    const n = members.length;
+    for (let j = 0; j < n; j++) {
+      this.drawMember(members[j], fam.indexOf(members[j]), this.getSubAlpha(eased, j, n));
+    }
+  }
+
   interpolateMobject(alpha: number): void {
     const fam = this.mobject.getFamily();
     fam.forEach((m: any, i: number) => this.drawMember(m, i, alpha));
@@ -294,16 +332,76 @@ export class Create extends Animation {
   }
 }
 
+/**
+ * manim CE `Write` (a DrawBorderThenFill): each member's outline is traced
+ * first (stroke width 2, in the member's stroke colour, or its fill colour when
+ * it has no stroke), then the fill fades in and the outline settles back to the
+ * member's own stroke. Defaults follow `_set_default_config_from_length`:
+ * `runTime = 1` below 15 drawing members, else 2; `lagRatio = min(4/max(1,n), 0.2)`.
+ */
 export class Write extends Create {
-  constructor(mobject: Mobject, config: AnimationConfig = {}) {
-    // Small default lag so multi-glyph / multi-submobject Write draws
-    // progressively; a single-submobject mobject still animates 0->1 exactly.
+  reverse: boolean;
+  private orig!: Array<{ sw: number; sc: Color; so: number; fc: Color } | null>;
+
+  constructor(mobject: Mobject, config: WriteConfig = {}) {
+    const length = familyWithPoints(mobject).length;
+    const reverse = config.reverse ?? false;
     super(mobject, {
-      runTime: config.runTime ?? 1.5,
-      rateFunc: config.rateFunc ?? linear,
-      lagRatio: config.lagRatio ?? 0.1,
       ...config,
+      runTime: config.runTime ?? (length < 15 ? 1 : 2),
+      rateFunc: config.rateFunc ?? linear,
+      lagRatio: config.lagRatio ?? Math.min(4 / Math.max(1, length), 0.2),
     });
+    this.reverse = reverse;
+    this.remover = config.remover ?? reverse;
+    this.introducer = config.introducer ?? !reverse;
+  }
+
+  setup(): void {
+    super.setup();
+    this.orig = this.mobject.getFamily().map((m: any) => {
+      if (m._isText || m.strokeWidth == null || !m.strokeColor) return null;
+      return { sw: m.strokeWidth, sc: m.strokeColor, so: m.strokeOpacity ?? 1, fc: m.fillColor ?? m.strokeColor };
+    });
+  }
+
+  protected staggerOrder(members: any[]): any[] {
+    return this.reverse ? [...members].reverse() : members;
+  }
+
+  protected drawMember(m: any, index: number, a: number): void {
+    if (m._isText) {
+      m.revealFraction = a;
+      return;
+    }
+    const o = this.orig[index];
+    // CE DrawBorderThenFill.get_outline: width 2, stroke colour if it has a
+    // visible stroke, else the member's own colour (its fill colour).
+    const outlineColor = o ? (o.sw > 0 ? o.sc : o.fc) : null;
+    if (a <= 0.5) {
+      m.strokeEnd = a * 2;
+      if (m.fillOpacity != null) m.fillOpacity = 0;
+      if (o && outlineColor) { m.strokeWidth = 2; m.strokeColor = outlineColor; m.strokeOpacity = o.sw > 0 ? o.so : 1; }
+    } else {
+      const k = (a - 0.5) * 2;
+      m.strokeEnd = 1;
+      if (m.fillOpacity != null) m.fillOpacity = this.origFill[index] * k;
+      if (o && outlineColor) {
+        m.strokeWidth = 2 + (o.sw - 2) * k;
+        m.strokeColor = Color.lerp(outlineColor, o.sc, k);
+        m.strokeOpacity = (o.sw > 0 ? o.so : 1) + (o.so - (o.sw > 0 ? o.so : 1)) * k;
+      }
+    }
+  }
+
+  finish(): this {
+    super.finish();
+    this.mobject.getFamily().forEach((m: any, i: number) => {
+      const o = this.orig?.[i];
+      if (!o) return;
+      m.strokeWidth = o.sw; m.strokeColor = o.sc; m.strokeOpacity = o.so;
+    });
+    return this;
   }
 }
 

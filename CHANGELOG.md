@@ -31,7 +31,29 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Changed (breaking)
 
-Manim parity v2, Wave A1 (#115, epic #114): behaviour now matches Manim CE.
+Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117).
+
+- `Create` (and `Uncreate`) default to `lagRatio: 1`, as in CE `creation.py`. A multi-part
+  mobject now draws its children one after another instead of all at once; pass
+  `{ lagRatio: 0 }` for the old simultaneous draw. Only family members that have
+  points take a slot in the sequence (empty `VGroup` shells no longer do).
+- `Write` takes its defaults from the mobject, as CE does: `runTime` is 1 below 15 drawing
+  members and 2 from 15 up (was always 1.5), and `lagRatio` is `min(4 / max(1, n), 0.2)`
+  (was always 0.1). The rate function stays `linear`. Existing `Write`s therefore run
+  for a different time, and long texts stagger tighter. Explicit `runTime`/`lagRatio` are
+  unchanged.
+- `Write` now looks like CE's `DrawBorderThenFill`: each member's outline is traced first
+  (width 2, in its stroke colour, or its fill colour when it has no stroke) with no fill,
+  then the fill fades in. It used to fade the fill in while the stroke was still drawing.
+  Raster `Text` still reveals as a typewriter.
+- `UpdateFromFunc` and `UpdateFromAlphaFunc` default to `suspendMobjectUpdating: false`
+  (was `true`). The target's own updaters now keep running during the animation; pass
+  `{ suspendMobjectUpdating: true }` for the old behaviour.
+- `thereAndBackWithPause(t, pauseRatio)` uses `a = 2 / (1 - pauseRatio)` (was
+  `1 / pauseRatio`). The curve is unchanged at the default `pauseRatio = 1/3` and differs
+  for any other value.
+- `runningStart(t, pullFactor)` evaluates CE's 7-point Bezier `[0, 0, p, p, 1, 1, 1]`
+  (was a 5-point `[0, 0, p, p, 1]`), so the dip and the approach to 1 are shaped differently.
 
 - `setFill` / `setStroke` / `setStyle` / `setSheen` / `setSheenDirection` /
   `setBackgroundStroke` now recurse into the whole family by default (CE
@@ -53,6 +75,11 @@ Manim parity v2, Wave A1 (#115, epic #114): behaviour now matches Manim CE.
 - `add()` throws when a mobject is added to itself (CE `ValueError`) or when the
   added mobject already contains the parent, instead of silently creating a cycle
   that made `getFamily()` recurse forever.
+
+### Added
+
+- `Write` accepts `reverse: true` (CE `Write(reverse=True)`): members draw last-to-first, and
+  the animation becomes a remover (not an introducer) unless `remover` is set explicitly.
 
 ### Fixed
 

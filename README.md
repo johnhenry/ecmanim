@@ -406,7 +406,7 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | 3D solids | Sphere, Torus, Cylinder, Cone, Cube, Box, Prism | ✅ same | + caps, Dot3D, Line3D, Arrow3D, ThreeDVMobject |
 | Polyhedra | Tetrahedron, Octahedron, Icosahedron, Dodecahedron | ✅ same | + Polyhedron, ConvexHull3D |
 | Surfaces | Surface, checkerboard, shading | ✅ `Surface`/`ParametricSurface` | quad-mesh faces, **smooth (Gouraud) or flat shading**, checkerboard/`colorFunc`, **per-pixel z-buffer** |
-| Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ same | + Unwrite, SpiralIn, letter/word/typewriter reveals |
+| Creation | Create, Write, Uncreate, DrawBorderThenFill | ✅ same | CE defaults: `Create` `lagRatio 1`; `Write` length-based `runTime`/`lagRatio`, border-then-fill look, `reverse`. + Unwrite, SpiralIn, letter/word/typewriter reveals |
 | Transform | Transform, ReplacementTransform | ✅ same | automatic Bézier point-count alignment |
 | Transform (matching) | TransformMatchingShapes, TransformMatchingTex | ✅ same | transform_matching.ts |
 | Transform (extra) | MoveToTarget, Restore, ApplyMatrix, ApplyComplexFunction, … | ✅ same | transform_extra.ts |
@@ -418,7 +418,7 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | Changing | AnimatedBoundary, TracedPath | ✅ same | |
 | Trackers | ValueTracker, DecimalNumber, Integer, ComplexValueTracker, always_redraw | ✅ same | `alwaysRedraw`; DecimalNumber is raster-backed (see below) |
 | Updaters | `mob.add_updater(fn)` | `mob.addUpdater((mob, dt) => …)` | run each frame during play/wait |
-| Rate funcs | smooth, rush_into, there_and_back, … (58) | ✅ camelCase (58 exported, 45 registered) | `smooth`, `rushInto`, `thereAndBack`, … |
+| Rate funcs | smooth, rush_into, there_and_back, … (58) | ✅ camelCase (58 exported, 45 registered) | `smooth`, `rushInto`, `thereAndBack`, …; `thereAndBackWithPause` and `runningStart` use CE's formulas |
 | Colors | WHITE, BLUE, RED, … | ✅ same names + ~2200 palette | X11/XKCD/SVG/BS381/AS2700/DVIPS namespaces + `Color.lerp`, hex parsing |
 | Images | `ImageMobject` | ✅ `ImageMobject` | positioned, scaled, faded |
 | SVG files | `SVGMobject` | ✅ `SVGMobject` | parses paths/shapes/groups/transforms → animatable VMobjects |
@@ -433,6 +433,9 @@ Deeper module map, rendering pipeline, and registry mechanics:
 
 ### Honest divergences
 
+- **`Write` is `Create`-based, not `DrawBorderThenFill`-based.** It reproduces CE's border-then-fill
+  look and length-based defaults, but `Write` still extends `Create` (so `instanceof Create` holds),
+  and raster `Text` reveals as a typewriter rather than tracing glyph outlines.
 - **`DecimalNumber` is raster-backed.** It extends `RasterText` (Canvas glyphs),
   not vector glyphs, so number labels are drawn as bitmap text rather than Béziers.
 - **`MathTex` / `VText` in the browser need a font/bundler.** They expect MathJax

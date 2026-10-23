@@ -198,7 +198,8 @@ export class UpdateFromFunc extends Animation {
   updateFunction: (mob: any) => void;
 
   constructor(mobject: any, updateFunction: (mob: any) => void, config: any = {}) {
-    super(mobject, config);
+    // CE/GL updaters/update.py: suspend_mobject_updating defaults to False.
+    super(mobject, { suspendMobjectUpdating: false, ...config });
     this.updateFunction = updateFunction;
   }
 
@@ -212,7 +213,8 @@ export class UpdateFromAlphaFunc extends Animation {
   updateFunction: (mob: any, alpha: number) => void;
 
   constructor(mobject: any, updateFunction: (mob: any, alpha: number) => void, config: any = {}) {
-    super(mobject, config);
+    // CE/GL updaters/update.py: suspend_mobject_updating defaults to False.
+    super(mobject, { suspendMobjectUpdating: false, ...config });
     this.updateFunction = updateFunction;
   }
 
