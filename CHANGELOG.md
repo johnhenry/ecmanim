@@ -29,6 +29,31 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Changed (breaking)
+
+Manim parity v2, Wave A1 (#115, epic #114): behaviour now matches Manim CE.
+
+- `setFill` / `setStroke` / `setStyle` / `setSheen` / `setSheenDirection` /
+  `setBackgroundStroke` now recurse into the whole family by default (CE
+  `family=True`, `vectorized_mobject.py`). Before, `new VGroup(a, b).setFill(RED, 0.5)`
+  changed only the (invisible) group, so children kept their own fill and stroke.
+  Scenes that styled a group and relied on children being left alone must pass
+  `family: false` (positional, or in the options object).
+- `VGroup.arrange(...)` now recenters the group at the origin (CE
+  `arrange(center=True)`, `mobject.py`). The `VMobject`-level override that skipped
+  centering is gone, so a `VGroup` row/column that used to start at its first
+  child's position is now centered; pass `{ center: false }` for the old placement.
+  `arrange` also forwards `alignedEdge`, `submobjectToAlign`,
+  `indexOfSubmobjectToAlign`, `coorMask` to `nextTo`.
+- `nextTo` now honours `alignedEdge` (CE `next_to`, `mobject.py`): the aligned edge
+  of the mobject is flushed with the same edge of the target instead of always
+  centering across the perpendicular axis. Also takes `submobjectToAlign`,
+  `indexOfSubmobjectToAlign`, `coorMask`, and an options-object form
+  (`nextTo(b, RIGHT, { buff, alignedEdge })`).
+- `add()` throws when a mobject is added to itself (CE `ValueError`) or when the
+  added mobject already contains the parent, instead of silently creating a cycle
+  that made `getFamily()` recurse forever.
+
 ### Fixed
 
 - `MathTex`/`Tex` no longer render Unicode superscripts/subscripts (`a²`, `x₁`) as
