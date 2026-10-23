@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseDiagram, layoutDiagram, buildBoard } from "../src/diagram/diagram.ts";
-import { estimateTextSize } from "../src/mobject/text/Text.ts";
+import { estimateTextSize, RasterText } from "../src/mobject/text/Text.ts";
 import { Scene } from "../src/scene/Scene.ts";
 import { captureFrames, matchSnapshot, loadNapiCanvas } from "./_snapshot_util.ts";
 
@@ -84,7 +84,12 @@ const canvasAvailable = await loadNapiCanvas().then((m) => !!m);
 test("diagram golden: long labels", { skip: !canvasAvailable && "@napi-rs/canvas not available" }, async () => {
   class S extends Scene {
     async construct() {
-      this.add(buildBoard(parseDiagram("A[Hypotenuse c] --> B[Perpendicular Leg]\nB --> C[Base]")));
+      const board: any = buildBoard(parseDiagram("A[Hypotenuse c] --> B[Perpendicular Leg]\nB --> C[Base]"));
+      // Strip the RasterText labels: they render with system fonts, so their pixels
+      // differ between machines (CI has fonts, some hosts don't). Box sizes are still
+      // computed from the labels, which is what this golden pins.
+      for (const m of board.getFamily()) m.submobjects = m.submobjects.filter((c: any) => !(c instanceof RasterText));
+      this.add(board);
       await this.wait(0.2);
     }
   }
