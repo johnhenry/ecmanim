@@ -122,7 +122,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       mob = new idx.MathTex(v.content, { fontSize: 1.5, color: "#FFFFFF" });
       maxScale = 1.1;
     } else if (v.kind === "diagram") {
-      mob = diagram(v.content);
+      try { mob = diagram(v.content); } catch { mob = new idx.Text(wrap(v.content, 24), { fontSize: 0.5, color: "#FFFFFF" }); }
       maxScale = 1.3;
     } else {
       mob = buildBarChart(idx, v.content);

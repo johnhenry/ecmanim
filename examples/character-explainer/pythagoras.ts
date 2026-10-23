@@ -2,6 +2,7 @@
 // speech (espeak-ng via tts: "system"; falls back to estimated timing if absent).
 //   node examples/character-explainer/pythagoras.ts          # hand-written plan
 //   node examples/character-explainer/pythagoras.ts --llm    # plan from just the topic via local Ollama (qwen2.5:3b)
+//   node examples/character-explainer/pythagoras.ts --llm --model qwen2.5:3b --timeout 900   (seconds)
 //   QUALITY=low node examples/character-explainer/pythagoras.ts
 // Output: examples/character-explainer/out/pythagoras.mp4 (out/ is gitignored)
 
@@ -63,15 +64,22 @@ const quality = process.env.QUALITY ?? "medium";
 const output = "examples/character-explainer/out/" + (useLLM ? "pythagoras-llm.mp4" : "pythagoras.mp4");
 const renderOptions = { output, quality };
 
+const arg = (name: string) => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; };
+
 let res;
 if (useLLM) {
-  const llm = ollamaLLMProvider({ model: "qwen2.5:3b", timeoutMs: 300_000 });
-  if (!(await llm.available!())) throw new Error("Ollama is not reachable at http://localhost:11434 (start it, then `ollama pull qwen2.5:3b`)");
+  const model = arg("--model") ?? "qwen2.5:3b";
+  const timeoutSec = Number(arg("--timeout") ?? 900);
+  const llm = ollamaLLMProvider({ model, timeoutMs: timeoutSec * 1000 });
+  if (!(await llm.available!())) throw new Error(`Ollama is not reachable at http://localhost:11434 (start it, then \`ollama pull ${model}\`)`);
+  console.log(`planning with ollama ${model}... this can take minutes on CPU (timeout ${timeoutSec}s; falls back to a built-in plan if it fails)`);
+  const t0 = Date.now();
   res = await runFormat("character-explainer", {
     topic: "The Pythagorean theorem",
     params: { tts: "system", renderOptions },
     providers: { render: manimRenderProvider, llm },
   });
+  console.log(`plan + render finished in ${((Date.now() - t0) / 1000).toFixed(0)}s; plan has ${res.plan.beats.length} beats`);
 } else {
   res = await runFormat("character-explainer", { topic: plan.title, params: { ...plan, renderOptions }, providers: { render: manimRenderProvider } });
 }

@@ -102,6 +102,33 @@ function splitBookmarks(text: string): { clean: string; marks: Array<{ name: str
 }
 
 /**
+ * Lenient cue normalisation for common model shapes. Returns the canonical
+ * `do` and (when recoverable) the value for its slot, plus a note per change.
+ */
+function normalizeCue(c: any): { doo: string; value?: string; notes: string[] } {
+  const notes: string[] = [];
+  let doo = norm(c?.do);
+  let value: string | undefined;
+  if (!isIn(CUE_DOS, doo)) {
+    if (isIn(POSE_NAMES, doo)) { value = doo; doo = "pose"; }
+    else if (isIn(CAMERA_KINDS, doo)) { value = doo; doo = "camera"; }
+    else if (isIn(FX_KINDS, doo)) { value = doo; doo = "fx"; }
+    else if (doo === "zoom") { value = "pulse"; doo = "camera"; }
+    if (isIn(CUE_DOS, doo)) notes.push(`do "${c?.do}" normalized to ${doo}${value ? ` "${value}"` : ""}`);
+    return { doo, value, notes };
+  }
+  const list = doo === "pose" ? POSE_NAMES : doo === "camera" ? CAMERA_KINDS : doo === "fx" ? FX_KINDS : undefined;
+  if (list && !isIn(list, norm(c?.[doo]))) {
+    for (const k of ["type", "kind", "effect", "name", "value", "style"]) {
+      if (isIn(list, norm(c?.[k]))) { value = norm(c[k]); break; }
+    }
+    if (!value) value = (list as readonly string[]).find((n) => c?.[n] === true || norm(c?.[n]) === "true");
+    if (value) notes.push(`${doo} cue shape normalized to ${doo} "${value}"`);
+  }
+  return { doo, value, notes };
+}
+
+/**
  * Defensively extract a JSON value from model output: objects pass through;
  * strings may be wrapped in code fences or followed by chatter. Returns
  * undefined (never throws) when nothing parses.
@@ -203,7 +230,9 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
     for (const [ci, c] of (Array.isArray(b.cues) ? b.cues : []).entries()) {
       const tag = `beat #${bi} cue #${ci}`;
       const at = typeof c?.at === "string" ? c.at.trim() : "";
-      const doo = norm(c?.do);
+      const nc = normalizeCue(c);
+      const doo = nc.doo;
+      for (const n of nc.notes) warnings.push(`${tag}: ${n}`);
       if (!isIn(CUE_DOS, doo)) { warnings.push(`${tag}: unknown do "${c?.do}", dropped`); continue; }
       const atKey = at.toLowerCase();
       const atOk = atKey === "start" || atKey === "end" || marks.has(at);
@@ -214,15 +243,15 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
         if (!target || !seen.has(target)) { warnings.push(`${tag}: point target "${c?.target}" is not a visual, dropped`); continue; }
         cue.target = target;
       } else if (doo === "pose") {
-        const p = norm(c.pose);
+        const p = nc.value ?? norm(c.pose);
         if (!isIn(POSE_NAMES, p)) { warnings.push(`${tag}: unknown pose "${c?.pose}", dropped`); continue; }
         cue.pose = p;
       } else if (doo === "camera") {
-        const k = norm(c.camera);
+        const k = nc.value ?? norm(c.camera);
         if (!isIn(CAMERA_KINDS, k)) { warnings.push(`${tag}: unknown camera "${c?.camera}", dropped`); continue; }
         cue.camera = k;
       } else {
-        const k = norm(c.fx);
+        const k = nc.value ?? norm(c.fx);
         if (!isIn(FX_KINDS, k)) { warnings.push(`${tag}: unknown fx "${c?.fx}", dropped`); continue; }
         cue.fx = k;
         if (target !== undefined) {
@@ -290,43 +319,28 @@ export function buildFallbackPlan(topic: string, opts: { tts?: string; style?: s
 
 const EXAMPLE_PLAN = {
   title: "Why the sky is blue",
-  visuals: [
-    { id: "q", kind: "text", content: "Why is the sky blue?" },
-    { id: "bars", kind: "chart", content: [{ label: "Red", value: 1 }, { label: "Blue", value: 5 }] },
-  ],
+  visuals: [{ id: "q", kind: "text", content: "Why is the sky blue?" }],
   beats: [
     { narration: "Hello! <bookmark mark=\"q\"/> Why is the sky blue?", show: ["q"], cues: [{ at: "start", do: "pose", pose: "wave" }, { at: "q", do: "point", target: "q" }] },
-    { narration: "Air scatters <bookmark mark=\"b\"/> blue light far more than red.", show: ["bars"], cues: [{ at: "b", do: "point", target: "bars" }, { at: "end", do: "pose", pose: "celebrate" }] },
+    { narration: "Air scatters blue light most.", cues: [{ at: "end", do: "pose", pose: "celebrate" }] },
   ],
 };
 
 /** The system + user prompt for a model: schema, allowed vocabularies, one short example. */
 export function buildPlanPrompt(topic: string): { system: string; prompt: string } {
-  const system = "You write short scripts for an animated stick-figure presenter. Reply with ONE JSON object only: no markdown, no commentary.";
+  const system = "You write scripts for an animated stick-figure presenter. Reply with ONE JSON object only.";
   const prompt = [
-    `Write a plan for a 30-45 second explainer about: ${topic}`,
-    "",
-    "JSON shape:",
-    `{ "title": string,`,
-    `  "visuals": [{ "id": string, "kind": "text"|"math"|"diagram"|"chart", "content": ..., "at"?: "right"|"top"|"bottom" }],`,
-    `  "beats": [{ "narration": string, "show"?: [visual ids], "cues"?: [{ "at": bookmark name|"start"|"end", "do": "point"|"pose"|"camera"|"fx", "target"?: visual id, "pose"?: ..., "camera"?: ..., "fx"?: ... }] }] }`,
-    "",
-    "Allowed values (use exactly these, nothing else):",
-    `- visual kind: ${VISUAL_KINDS.join(" | ")}  (math content = LaTeX string; diagram content = lines like "A[Start] --> B[End]"; chart content = [{"label","value"}]; text content = short string)`,
-    `- do: ${CUE_DOS.join(" | ")}`,
-    `- pose: ${POSE_NAMES.join(" | ")}`,
-    `- camera: ${CAMERA_KINDS.join(" | ")}`,
-    `- fx: ${FX_KINDS.join(" | ")}`,
-    "",
-    "Rules: 3 to 5 beats; each narration is 1-2 short sentences; mark moments with <bookmark mark=\"name\"/> inside the narration and put cues at those names; every \"point\" cue needs a target visual id and the visual must be in \"show\" by then; at most 3 visuals; give every beat at least one cue.",
-    "",
-    "Example:",
-    JSON.stringify(EXAMPLE_PLAN),
-    "",
-    `Now output the JSON for: ${topic}`,
+    `Plan a 30-45 second explainer about: ${topic}`,
+    `Schema: {"title":str,"visuals":[{"id":str,"kind":${q(VISUAL_KINDS)},"content":...,"at"?:${q(VISUAL_REGIONS)}}],"beats":[{"narration":str,"show"?:[visual ids],"cues"?:[{"at":bookmark|"start"|"end","do":${q(CUE_DOS)},"target"?:visual id,"pose"?:${q(POSE_NAMES)},"camera"?:${q(CAMERA_KINDS)},"fx"?:${q(FX_KINDS)}}]}]}`,
+    `content: text=short string; math=LaTeX; diagram=lines like "A[Start] --> B[End]"; chart=[{"label","value"}].`,
+    `Rules: 3-5 beats of 1-2 short sentences; put <bookmark mark="name"/> in narration and cue at those names; "point" needs a target shown by then; max 3 visuals; every beat gets a cue.`,
+    `Example: ${JSON.stringify(EXAMPLE_PLAN)}`,
+    `Output JSON for: ${topic}`,
   ].join("\n");
   return { system, prompt };
 }
+
+const q = (list: readonly string[]) => list.map((v) => `"${v}"`).join("|");
 
 // --- 3. scheduleCues + layout ------------------------------------------------------
 
@@ -478,11 +492,18 @@ export function characterExplainerGates(plan: CharacterExplainerPlan): QualityGa
 
 // --- 6. ollama provider ------------------------------------------------------------
 
+/** Default per-request timeout of ollamaLLMProvider (15 minutes). */
+export const DEFAULT_OLLAMA_TIMEOUT_MS = 15 * 60_000;
+
 export interface OllamaOptions {
   model?: string;
   baseUrl?: string;
-  /** Abort a request after this many ms. Default 120000 (small CPU-only models are slow). */
+  /** Abort a request after this many ms. Default 15 minutes: a 3B model on a loaded CPU-only host runs at ~1-2 tok/s. */
   timeoutMs?: number;
+  /** How long Ollama keeps the model loaded after a call (default "15m"). */
+  keepAlive?: string;
+  /** Ollama `options` (num_predict, num_ctx, temperature, ...). Defaults: `{ num_predict: 1024 }`. Yours are merged over the defaults. */
+  options?: Record<string, unknown>;
   /** Inject a fetch (tests). Default: the global fetch. */
   fetch?: typeof fetch;
 }
@@ -495,7 +516,8 @@ export interface OllamaOptions {
 export function ollamaLLMProvider(opts: OllamaOptions = {}): Provider {
   const model = opts.model ?? "qwen2.5:3b";
   const baseUrl = (opts.baseUrl ?? "http://localhost:11434").replace(/\/+$/, "");
-  const timeoutMs = opts.timeoutMs ?? 120_000;
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_OLLAMA_TIMEOUT_MS;
+  const keepAlive = opts.keepAlive ?? "15m";
   const doFetch = (): typeof fetch => opts.fetch ?? globalThis.fetch;
 
   const request = async (path: string, init: RequestInit, ms: number): Promise<any> => {
@@ -525,10 +547,17 @@ export function ollamaLLMProvider(opts: OllamaOptions = {}): Provider {
       try { await request("/api/tags", { method: "GET" }, Math.min(timeoutMs, 3000)); return true; } catch { return false; }
     },
     async invoke(input: { prompt: string; system?: string; json?: boolean }) {
-      const body: Record<string, unknown> = { model, prompt: input.prompt, system: input.system, stream: false, format: input.json ? "json" : undefined };
+      const body: Record<string, unknown> = { model, prompt: input.prompt, system: input.system, stream: true, format: input.json ? "json" : undefined, keep_alive: keepAlive, options: { num_predict: 1024, ...opts.options } };
       const res = await request("/api/generate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, timeoutMs);
-      const data = await res.json();
-      const text = typeof data?.response === "string" ? data.response : "";
+      // Streamed (NDJSON): Node's fetch aborts a request whose response headers take
+      // >300 s, which a slow CPU model exceeds with stream:false. Streaming sends
+      // headers with the first token. A single JSON object (stream:false style) also parses.
+      const raw = await res.text();
+      let text = "";
+      for (const line of raw.split("\n")) {
+        if (!line.trim()) continue;
+        try { const o = JSON.parse(line); if (typeof o?.response === "string") text += o.response; if (o?.error) throw new Error(`ollama: ${o.error}`); } catch (e: any) { if (/^ollama:/.test(e?.message)) throw e; }
+      }
       if (!input.json) return text;
       const parsed = parseModelJSON(text);
       if (parsed === undefined) throw new Error("ollama: response was not valid JSON");

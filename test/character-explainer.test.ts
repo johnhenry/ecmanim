@@ -7,7 +7,7 @@ import {
   POSE_NAMES, CUE_DOS, CAMERA_KINDS, FX_KINDS, VISUAL_KINDS,
   validateCharacterPlan, buildFallbackPlan, parseModelJSON, scheduleCues, buildPlanPrompt,
   createPresenterPoseLibrary, PRESENTER_BONES, characterExplainerGates,
-  ollamaLLMProvider, characterExplainerFormat, END_LEAD, layoutVisuals, STAGE,
+  ollamaLLMProvider, characterExplainerFormat, END_LEAD, layoutVisuals, STAGE, DEFAULT_OLLAMA_TIMEOUT_MS,
 } from "../src/authoring/character_explainer.ts";
 import { runQualityGates } from "../src/authoring/quality.ts";
 import { getFormat, runFormat } from "../src/authoring/formats.ts";
@@ -91,6 +91,29 @@ test("vocabularies match the issue", () => {
   assert.deepEqual([...CAMERA_KINDS], ["impact", "pulse", "shake"]);
   assert.deepEqual([...FX_KINDS], ["aura", "explosion", "smoke", "beam"]);
   assert.deepEqual([...VISUAL_KINDS], ["text", "math", "diagram", "chart"]);
+});
+
+// --- lenient normalisation (real qwen2.5:3b output) ----------------------------------
+const QWEN = {"title":"The Pythagorean Theorem","visuals":[{"id":"triangle","kind":"diagram","content":"A[Start] --> B[Base=3] --> C[Top=4] --> D[Side=5] --> C[Top=4] <-- B[Base=3] <-- A[Start]","at":"right"},{"id":"eq","kind":"math","content":"a^2 + b^2 = c^2","at":"bottom"}],"beats":[{"narration":"Let's explore the Pythagorean Theorem! <bookmark mark='triangle' />","show":["triangle"],"cues":[{"at":"triangle","do":"camera","impact":true}]},{"narration":"Imagine a right-angled triangle. <bookmark mark='eq' />","show":["eq"],"cues":[{"at":"eq","do":"point","target":"eq"}]}]};
+
+test("normalise: real qwen output keeps its camera cue (impact:true) with a warning", () => {
+  const r = validateCharacterPlan(structuredClone(QWEN));
+  assert.equal(r.usable, true);
+  assert.deepEqual(r.plan.beats[0].cues, [{ at: "triangle", do: "camera", camera: "impact" }]);
+  assert.equal(r.plan.beats[1].cues![0].target, "eq");
+  assert.ok(r.plan.warnings.some((w) => /normali[sz]ed/i.test(w) && /impact/.test(w)));
+});
+
+test("normalise: common cue shapes map onto the schema", () => {
+  const mk = (cue: any) => validateCharacterPlan({ beats: [{ narration: "hi", cues: [{ at: "start", ...cue }] }] }).plan.beats[0].cues?.[0];
+  assert.equal(mk({ do: "camera", type: "impact" })!.camera, "impact");
+  assert.equal(mk({ do: "fx", explosion: true })!.fx, "explosion");
+  assert.equal(mk({ do: "pose", celebrate: true })!.pose, "celebrate");
+  assert.deepEqual(mk({ do: "celebrate" }), { at: "start", do: "pose", pose: "celebrate" });
+  assert.deepEqual(mk({ do: "zoom" }), { at: "start", do: "camera", camera: "pulse" });
+  assert.deepEqual(mk({ do: "shake" }), { at: "start", do: "camera", camera: "shake" });
+  assert.equal(mk({ do: "camera", impact: false }), undefined);
+  assert.equal(mk({ do: "camera" }), undefined);
 });
 
 // --- fallback -------------------------------------------------------------------
@@ -225,7 +248,16 @@ test("ollama: json mode posts the right request and returns parsed JSON", async 
   assert.equal(calls[0].url, "http://localhost:11434/api/generate");
   assert.equal(calls[0].init.method, "POST");
   const body = JSON.parse(calls[0].init.body);
-  assert.deepEqual(body, { model: "qwen2.5:3b", prompt: "p", system: "s", stream: false, format: "json" });
+  assert.equal(body.model, "qwen2.5:3b"); assert.equal(body.prompt, "p"); assert.equal(body.system, "s");
+  assert.equal(body.stream, true); assert.equal(body.format, "json");
+  assert.equal(body.keep_alive, "15m");
+  assert.ok(body.options.num_predict > 0 && body.options.num_predict <= 2048);
+});
+
+test("ollama: NDJSON streamed responses are concatenated", async () => {
+  const nd = ['{"response":"{\\"x\\":"}', '{"response":"1}"}', '{"done":true}'].join("\n");
+  const p = ollamaLLMProvider({ fetch: (async () => ({ ok: true, status: 200, text: async () => nd })) as any });
+  assert.deepEqual(await p.invoke({ prompt: "p", json: true }), { x: 1 });
 });
 
 test("ollama: text mode returns the string and omits format", async () => {
@@ -258,6 +290,21 @@ test("ollama: available() pings /api/tags and never throws", async () => {
   assert.equal(urls[0], "http://localhost:11434/api/tags");
   const down = ollamaLLMProvider({ fetch: (async () => { throw new Error("ECONNREFUSED"); }) as any });
   assert.equal(await down.available!(), false);
+});
+
+test("ollama: options passthrough overrides defaults; default timeout is generous", async () => {
+  const calls: any[] = [];
+  const p = ollamaLLMProvider({ keepAlive: "1h", options: { num_ctx: 2048, temperature: 0.2, num_predict: 99 }, fetch: (async (_u: string, init: any) => { calls.push(JSON.parse(init.body)); return resp(JSON.stringify({ response: "x" })); }) as any });
+  await p.invoke({ prompt: "p" });
+  assert.equal(calls[0].keep_alive, "1h");
+  assert.deepEqual(calls[0].options, { num_predict: 99, num_ctx: 2048, temperature: 0.2 });
+  assert.equal(DEFAULT_OLLAMA_TIMEOUT_MS, 15 * 60_000);
+});
+
+test("odd diagram DSL from a model never throws at build time", async () => {
+  const { diagram } = await import("../src/diagram/diagram.ts");
+  const g = diagram(QWEN.visuals[0].content as string);
+  assert.ok(g.getWidth() > 0);
 });
 
 // --- format plan() ----------------------------------------------------------------
