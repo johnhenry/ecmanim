@@ -29,6 +29,11 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Added
+
+- Authoring: **`character-explainer` format** (`ecmanim/authoring`): an animated stick-figure presenter narrates a topic with gestures, IK pointing at visuals, camera beats and particle effects synced to voiceover bookmarks. The plan is a JSON of choices from fixed vocabularies (`POSE_NAMES`, `CAMERA_KINDS`, `FX_KINDS`, ...). Includes pure helpers `validateCharacterPlan` (repair with `plan.warnings`, never throws), `buildFallbackPlan`, `buildPlanPrompt`, `parseModelJSON`, `scheduleCues`, `layoutVisuals`, `characterExplainerGates`, `PRESENTER_BONES` / `createPresenterPoseLibrary`, and an `examples/character-explainer/` demo. See `docs/authoring-studio.md`.
+- Authoring: **`ollamaLLMProvider({ model, baseUrl, timeoutMs })`**, an `llm` provider for a local Ollama server (global `fetch`, injectable for tests).
+
 ## 0.12.0 — 2026-10-22
 
 **The first release published under both names in lockstep:**

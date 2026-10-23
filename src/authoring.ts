@@ -22,6 +22,16 @@ export type { Provider, ProviderKind, ProviderSet, Format, FormatContext, Format
 export { manimRenderProvider, titleCardFormat } from "./authoring/showrunner.ts";
 export type { TitleCardPlan } from "./authoring/showrunner.ts";
 
+export {
+  characterExplainerFormat, ollamaLLMProvider, validateCharacterPlan, buildFallbackPlan, buildPlanPrompt, parseModelJSON,
+  scheduleCues, layoutVisuals, characterExplainerGates, createPresenterPoseLibrary,
+  PRESENTER_BONES, PRESENTER_POSES, POSE_NAMES, CUE_DOS, CAMERA_KINDS, FX_KINDS, VISUAL_KINDS, VISUAL_REGIONS, END_LEAD, STAGE,
+} from "./authoring/character_explainer.ts";
+export type {
+  CharacterExplainerPlan, CharacterVisual, CharacterBeat, CharacterCue, PoseName, CueDo, CameraKind, FxKind, VisualKind,
+  VisualRegion, CueEvent, Box, ValidationResult, OllamaOptions,
+} from "./authoring/character_explainer.ts";
+
 export { explainerFormat, chartRevealFormat, quoteCardFormat } from "./authoring/formats_builtin.ts";
 export type {
   ExplainerPlan, ExplainerSection, ChartRevealPlan, ChartDatum, QuoteCardPlan,

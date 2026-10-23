@@ -27,3 +27,4 @@ examples/gallery/manifest.json
 examples/gallery/index.html
 examples/gallery/*-parity.html
 examples/gallery/feature-demos.html
+examples/character-explainer/out/
