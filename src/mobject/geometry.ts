@@ -100,11 +100,18 @@ export class Annulus extends VMobject {
 export interface LineConfig extends VMobjectConfig {
   start?: number[];
   end?: number[];
+  /** Distance to trim from both ends (CE `Line(buff=0)`); ignored when the
+   *  line is shorter than `2 * buff`. */
+  buff?: number;
+  /** If nonzero, bend the line into an arc spanning this angle in radians
+   *  (CE `Line(path_arc=0)`, built as an `ArcBetweenPoints`). */
+  pathArc?: number;
 }
 
 export class Line extends VMobject {
   start: number[];
   end: number[];
+  pathArc: number;
 
   constructor(start: number[] | LineConfig = V.LEFT, end: number[] = V.RIGHT, config: LineConfig = {}) {
     // Allow Line({start, end, ...}) style too.
@@ -117,7 +124,29 @@ export class Line extends VMobject {
     this.start = (start as number[]) ?? V.LEFT;
     this.end = end ?? V.RIGHT;
     this.fillOpacity = 0;
-    this.setPointsAsCorners([this.start, this.end]);
+    this.pathArc = config.pathArc ?? 0;
+    if (this.pathArc) {
+      // manim: ArcBetweenPoints(start, end, angle=path_arc).
+      this.points = [];
+      this.subpathStarts = [];
+      this.appendBezierPoints(arcBezierPoints(1, 0, this.pathArc));
+      const c0 = this.points[0];
+      const cv = V.sub(this.points[this.points.length - 1], c0);
+      const tv = V.sub(this.end, this.start);
+      if (V.length(cv) > 1e-9 && V.length(tv) > 1e-9) {
+        this.scale(V.length(tv) / V.length(cv), { aboutPoint: c0 });
+        this.rotate(V.angleOf(tv) - V.angleOf(cv), { aboutPoint: c0 });
+      }
+      this.shift(V.sub(this.start, this.points[0]));
+    } else {
+      this.setPointsAsCorners([this.start, this.end]);
+    }
+    // manim Line._account_for_buff.
+    const buff = config.buff ?? 0;
+    if (buff > 0) {
+      const length = this.pathArc ? this.getArcLength() : V.distance(this.start, this.end);
+      if (length >= 2 * buff) this.pointwiseBecomePartial(this, buff / length, 1 - buff / length);
+    }
   }
 
   getStart() { return this.points[0]; }
@@ -198,8 +227,15 @@ export class Arrow extends Line {
   _origEnd: number[];
 
   constructor(start: number[] | LineConfig = V.LEFT, end: number[] = V.RIGHT, config: ArrowConfig = {}) {
-    super(start, end, config);
-    this.tipLength = config.tipLength ?? 0.25;
+    // Arrow applies its own buff (default MED_SMALL_BUFF) below; keep Line from trimming too.
+    super(
+      start && typeof start === "object" && !Array.isArray(start) ? { ...start, buff: 0 } : start,
+      end,
+      { ...config, buff: 0 },
+    );
+    // manim DEFAULT_ARROW_TIP_LENGTH (constants.py); the drawn tip is clamped by
+    // max_tip_length_to_length_ratio in buildTip (get_default_tip_length).
+    this.tipLength = config.tipLength ?? 0.35;
     // manim MED_SMALL_BUFF default; shortens the visible shaft at both ends.
     this.buff = config.buff ?? 0.25;
     this.tipShape = config.tipShape ?? ArrowTriangleFilledTip;
@@ -228,17 +264,18 @@ export class Arrow extends Line {
 
   // Shrink tip length / stroke width for very short arrows (manim behavior).
   private _scaleForShortArrows(): void {
-    const length = V.distance(this.getStart(), this.getEnd()) + 2 * this.buff;
+    // manim: get_length() of the (buff-trimmed) shaft, before the tip is added.
+    const length = V.distance(this.getStart(), this.getEnd());
     if (length <= 0) return;
-    const maxTip = length * this.maxTipLengthToLengthRatio;
-    if (this.tipLength > maxTip) this.tipLength = maxTip;
     const maxStroke = length * this.maxStrokeWidthToLengthRatio;
     if (this.strokeWidth > maxStroke) this.strokeWidth = maxStroke;
   }
 
   buildTip(): this {
     const TipClass = this.tipShape ?? ArrowTriangleFilledTip;
-    const tip: ArrowTip = new TipClass({ tipLength: this.tipLength }) as ArrowTip;
+    // manim get_default_tip_length: min(tip_length, max_ratio * length).
+    const tipLength = Math.min(this.tipLength, this.maxTipLengthToLengthRatio * V.distance(this.getStart(), this.getEnd()));
+    const tip: ArrowTip = new TipClass({ tipLength }) as ArrowTip;
     tip.setColor(this.strokeColor);
     tip.fillOpacity = 1;
     const s = this.getStart();

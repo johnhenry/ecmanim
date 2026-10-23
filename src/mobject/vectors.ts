@@ -52,7 +52,12 @@ export class DoubleArrow extends Line {
     config: DoubleArrowConfig = {},
   ) {
     super(start, end, config);
-    this.tipLength = config.tipLength ?? 0.25;
+    // manim DEFAULT_ARROW_TIP_LENGTH, clamped by max_tip_length_to_length_ratio (0.25).
+    const ratio = config.maxTipLengthToLengthRatio ?? 0.25;
+    this.tipLength = Math.min(
+      config.tipLength ?? 0.35,
+      ratio * V.distance(this.getStart(), this.getEnd()),
+    );
     this.tipStart = this._buildTipAt(this.getStart(), this.getEnd());
     this.tipEnd = this._buildTipAt(this.getEnd(), this.getStart());
     this.add(this.tipStart, this.tipEnd);

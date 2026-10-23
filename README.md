@@ -381,10 +381,11 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | Scene | `class S(Scene): def construct` | `class S extends Scene { async construct() }` | `await this.play(...)`, `await this.wait(t)` |
 | Play | `self.play(a, b, run_time=2)` | `await this.play(a, b, { _playConfig: true, runTime: 2 })` | parallel by default |
 | `.animate` | `mob.animate.shift(RIGHT)` | `mob.animate.shift([1,0,0])` | chainable proxy |
-| Geometry | Circle, Square, Line, Polygon, … | ✅ same | Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon RegularPolygon Triangle Rectangle Square |
+| Geometry | Circle, Square, Line, Polygon, … | ✅ same | Arc Circle Dot Ellipse Annulus Line Arrow DashedLine Polygon RegularPolygon Triangle Rectangle Square; `Line` takes `buff`/`pathArc`, arrow tips default to CE's 0.35 (clamped to 0.25 × shaft length) |
 | Tips / arcs | ArrowTip, ArcBetweenPoints, CurvedArrow, Sector, Angle | ✅ same | tips.ts, arcs.ts — Sector/AnnularSector/Angle/RightAngle |
 | Polygrams | Polygram, RegularPolygram, Star, RoundedRectangle | ✅ same | polygram.ts |
 | Boolean ops | Union, Difference, Intersection, Exclusion | ✅ same | via `polygon-clipping` |
+| Layout / style | `arrange`, `next_to(aligned_edge=…)`, `set_fill(family=True)` | ✅ same (0.14.0) | `arrange` recenters; `nextTo` takes `alignedEdge`/`coorMask`; style setters recurse into the family; `add(self)` throws (#115) |
 | Matrix | Matrix, IntegerMatrix, DecimalMatrix | ✅ same | brackets, entries, `get_rows/get_columns` |
 | Table | Table, MathTable, MobjectTable | ✅ same | row/col labels, lines, highlights |
 | Brace | Brace, BraceLabel, BraceBetweenPoints, BraceText | ✅ same | |
@@ -435,6 +436,9 @@ Deeper module map, rendering pipeline, and registry mechanics:
 - **`Write` is `Create`-based, not `DrawBorderThenFill`-based.** It reproduces CE's border-then-fill
   look and length-based defaults, but `Write` still extends `Create` (so `instanceof Create` holds),
   and raster `Text` reveals as a typewriter rather than tracing glyph outlines.
+- **`DoubleArrow` is a plain `Line` with two tips.** It has no default `buff` (CE:
+  0.25) and does not retract the shaft to the tip bases; `Arrow` also leaves the
+  shaft running to the tip point. Tip length/width defaults and the length ratio clamp do match CE.
 - **`StreamLines` is not a line-for-line port.** The `create` / `startAnimation` / `endAnimation`
   animations follow CE, but random choices (shuffle order, flow start offsets) use a seeded
   generator so renders are repeatable, `endAnimation` is closed-form in its progress instead of
