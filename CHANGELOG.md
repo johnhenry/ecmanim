@@ -29,6 +29,17 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+## 0.13.0 — 2026-10-23
+
+Textbook geometry and an animated presenter. **`GeometryFigure`** draws
+triangles, quadrilaterals and their subtypes, polygons and polyhedra with
+standard textbook marks and addressable parts. The new **`character-explainer`**
+authoring format turns a plan into a narrated video presented by a stick
+figure, which points at and highlights parts of the visuals in time with its
+speech. The plan can also be written by a local LLM via the new
+`ollamaLLMProvider`. Additive only. Published as both `@johnhenry/ecmanim`
+and `ecmanim`.
+
 ### Added
 
 - **`GeometryFigure`** (root export): textbook geometry from a declarative spec: right/isosceles/equilateral/scalene/obtuse/acute triangles, square, rectangle, rhombus, parallelogram, kite, trapezoids, regular and general polygons, and polyhedra (Platonic solids, prism, pyramid, cuboid). Standard marks (equal-side ticks, equal-angle arcs, parallel chevrons, right angles), optional labels, diagonals, altitude, squares on triangle sides and circles; named parts (`fig.part("AB")`), `reveal()` / `highlight()` animations, and spinning solids with a seek-safe `setTime(t)`. See `docs/geometry-figures.md`.
