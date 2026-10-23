@@ -611,7 +611,23 @@ export class VMobject extends Mobject {
   // Python's `set_fill(color, opacity=0.3)` into one trailing object; a
   // plain-number-only signature silently assigns that object where a number
   // was expected (`this.fillOpacity` becomes `{opacity: 0.3}`, not `0.3`).
-  setFill(color: ColorLike | null, opacity: number | { opacity?: number } = 1): this {
+  //
+  // Like Manim CE, set_fill / set_stroke / set_style / set_sheen /
+  // set_sheen_direction / set_background_stroke recurse into the family by
+  // default (`family = true`; vectorized_mobject.py set_fill/set_stroke/...).
+  // Pass `family: false` (positional or in the options object) to restyle only
+  // this mobject.
+  setFill(
+    color: ColorLike | null,
+    opacity: number | { opacity?: number; family?: boolean } = 1,
+    family = true,
+  ): this {
+    if (typeof opacity === "object" && opacity.family != null) family = opacity.family;
+    if (family) {
+      for (const m of this.submobjects) {
+        if (typeof (m as any).setFill === "function") (m as any).setFill(color, opacity, family);
+      }
+    }
     if (color != null) this.fillColor = Color.parse(color);
     this.fillOpacity = typeof opacity === "object" ? (opacity.opacity ?? this.fillOpacity) : opacity;
     return this;
@@ -619,9 +635,16 @@ export class VMobject extends Mobject {
 
   setStroke(
     color: ColorLike | null,
-    width?: number | { width?: number; opacity?: number } | null,
+    width?: number | { width?: number; opacity?: number; family?: boolean } | null,
     opacity = 1,
+    family = true,
   ): this {
+    if (width != null && typeof width === "object" && width.family != null) family = width.family;
+    if (family) {
+      for (const m of this.submobjects) {
+        if (typeof (m as any).setStroke === "function") (m as any).setStroke(color, width, opacity, family);
+      }
+    }
     if (color != null) this.strokeColor = Color.parse(color);
     if (width != null && typeof width === "object") {
       if (width.width != null) this.strokeWidth = width.width;
@@ -641,13 +664,20 @@ export class VMobject extends Mobject {
     return this;
   }
 
-  setStyle({ fillColor, fillOpacity, strokeColor, strokeWidth, strokeOpacity }: {
+  setStyle(style: {
     fillColor?: ColorLike;
     fillOpacity?: number;
     strokeColor?: ColorLike;
     strokeWidth?: number;
     strokeOpacity?: number;
+    family?: boolean;
   } = {}): this {
+    const { fillColor, fillOpacity, strokeColor, strokeWidth, strokeOpacity, family = true } = style;
+    if (family) {
+      for (const m of this.submobjects) {
+        if (typeof (m as any).setStyle === "function") (m as any).setStyle(style);
+      }
+    }
     if (fillColor != null) this.fillColor = Color.parse(fillColor);
     if (fillOpacity != null) this.fillOpacity = fillOpacity;
     if (strokeColor != null) this.strokeColor = Color.parse(strokeColor);
@@ -665,11 +695,18 @@ export class VMobject extends Mobject {
   }
 
   // Background stroke drawn under the main stroke (manim's set_background_stroke).
-  setBackgroundStroke({ color, width, opacity }: {
+  setBackgroundStroke(opts: {
     color?: ColorLike;
     width?: number;
     opacity?: number;
+    family?: boolean;
   } = {}): this {
+    const { color, width, opacity, family = true } = opts;
+    if (family) {
+      for (const m of this.submobjects) {
+        if (typeof (m as any).setBackgroundStroke === "function") (m as any).setBackgroundStroke(opts);
+      }
+    }
     if (color != null) this.backgroundStrokeColor = Color.parse(color);
     if (width != null) this.backgroundStrokeWidth = width;
     if (opacity != null) this.backgroundStrokeOpacity = opacity;
@@ -677,7 +714,12 @@ export class VMobject extends Mobject {
   }
 
   // Add a linear sheen (gradient) from the base color toward a lightened tint.
-  setSheen(factor: number, direction?: number[]): this {
+  setSheen(factor: number, direction?: number[], family = true): this {
+    if (family) {
+      for (const m of this.submobjects) {
+        if (typeof (m as any).setSheen === "function") (m as any).setSheen(factor, direction, family);
+      }
+    }
     this.sheenFactor = factor;
     if (direction != null) this.sheenDirection = direction;
     if (factor === 0) {
@@ -697,7 +739,12 @@ export class VMobject extends Mobject {
     return this;
   }
 
-  setSheenDirection(dir: number[]): this {
+  setSheenDirection(dir: number[], family = true): this {
+    if (family) {
+      for (const m of this.submobjects) {
+        if (typeof (m as any).setSheenDirection === "function") (m as any).setSheenDirection(dir, family);
+      }
+    }
     this.sheenDirection = dir;
     return this;
   }
@@ -881,13 +928,6 @@ export class VGroup extends VMobject {
   constructor(...mobs: (Mobject | Mobject[])[]) {
     super();
     this.add(...mobs);
-  }
-
-  arrange(direction: number[] = V.RIGHT, buff = 0.25): this {
-    for (let i = 1; i < this.submobjects.length; i++) {
-      this.submobjects[i].nextTo(this.submobjects[i - 1], direction, buff);
-    }
-    return this;
   }
 
   get(i: number): Mobject { return this.submobjects[i]; }

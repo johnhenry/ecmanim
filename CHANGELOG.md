@@ -31,7 +31,7 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Changed (breaking)
 
-Wave A of the manim-parity v2 epic (#114, #117): defaults now match Manim CE.
+Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #117).
 
 - `Create` (and `Uncreate`) default to `lagRatio: 1`, as in CE `creation.py`. A multi-part
   mobject now draws its children one after another instead of all at once; pass
@@ -54,6 +54,27 @@ Wave A of the manim-parity v2 epic (#114, #117): defaults now match Manim CE.
   for any other value.
 - `runningStart(t, pullFactor)` evaluates CE's 7-point Bezier `[0, 0, p, p, 1, 1, 1]`
   (was a 5-point `[0, 0, p, p, 1]`), so the dip and the approach to 1 are shaped differently.
+
+- `setFill` / `setStroke` / `setStyle` / `setSheen` / `setSheenDirection` /
+  `setBackgroundStroke` now recurse into the whole family by default (CE
+  `family=True`, `vectorized_mobject.py`). Before, `new VGroup(a, b).setFill(RED, 0.5)`
+  changed only the (invisible) group, so children kept their own fill and stroke.
+  Scenes that styled a group and relied on children being left alone must pass
+  `family: false` (positional, or in the options object).
+- `VGroup.arrange(...)` now recenters the group at the origin (CE
+  `arrange(center=True)`, `mobject.py`). The `VMobject`-level override that skipped
+  centering is gone, so a `VGroup` row/column that used to start at its first
+  child's position is now centered; pass `{ center: false }` for the old placement.
+  `arrange` also forwards `alignedEdge`, `submobjectToAlign`,
+  `indexOfSubmobjectToAlign`, `coorMask` to `nextTo`.
+- `nextTo` now honours `alignedEdge` (CE `next_to`, `mobject.py`): the aligned edge
+  of the mobject is flushed with the same edge of the target instead of always
+  centering across the perpendicular axis. Also takes `submobjectToAlign`,
+  `indexOfSubmobjectToAlign`, `coorMask`, and an options-object form
+  (`nextTo(b, RIGHT, { buff, alignedEdge })`).
+- `add()` throws when a mobject is added to itself (CE `ValueError`) or when the
+  added mobject already contains the parent, instead of silently creating a cycle
+  that made `getFamily()` recurse forever.
 
 ### Added
 

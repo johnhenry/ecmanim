@@ -385,6 +385,7 @@ Deeper module map, rendering pipeline, and registry mechanics:
 | Tips / arcs | ArrowTip, ArcBetweenPoints, CurvedArrow, Sector, Angle | ✅ same | tips.ts, arcs.ts — Sector/AnnularSector/Angle/RightAngle |
 | Polygrams | Polygram, RegularPolygram, Star, RoundedRectangle | ✅ same | polygram.ts |
 | Boolean ops | Union, Difference, Intersection, Exclusion | ✅ same | via `polygon-clipping` |
+| Layout / style | `arrange`, `next_to(aligned_edge=…)`, `set_fill(family=True)` | ✅ same (0.14.0) | `arrange` recenters; `nextTo` takes `alignedEdge`/`coorMask`; style setters recurse into the family; `add(self)` throws (#115) |
 | Matrix | Matrix, IntegerMatrix, DecimalMatrix | ✅ same | brackets, entries, `get_rows/get_columns` |
 | Table | Table, MathTable, MobjectTable | ✅ same | row/col labels, lines, highlights |
 | Brace | Brace, BraceLabel, BraceBetweenPoints, BraceText | ✅ same | |
