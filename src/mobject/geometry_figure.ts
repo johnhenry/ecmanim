@@ -187,7 +187,7 @@ export class GeometryFigure extends VGroup {
     if (!canon || !def) return undefined;
     const g = new VGroup(...def.mobs);
     const c = g.getCenter();
-    let anchor = c;
+    let anchor: number[] = c;
     if (def.anchor) anchor = def.anchor();
     else if (def.kind === "side" || def.kind === "line") {
       const m = def.mobs[0];

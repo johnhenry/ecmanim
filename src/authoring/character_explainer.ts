@@ -18,14 +18,16 @@ import type { Format, FormatContext, Provider } from "./formats.ts";
 import type { QualityGate, QualityContext } from "./quality.ts";
 import { PoseLibrary } from "../animation/pose.ts";
 import type { BoneSpec, PartialPose } from "../mobject/skeleton_model.ts";
+import { normalizeShapeSpec, canonicalShapeType, resolvePartName, SHAPE_TYPES } from "../mobject/geometry_spec.ts";
+import type { ShapeSpec, ShapeType } from "../mobject/geometry_spec.ts";
 
 // --- 1. vocabularies + types -------------------------------------------------------
 
 export const POSE_NAMES = ["neutral", "wave", "point", "think", "excited", "shrug", "celebrate"] as const;
-export const CUE_DOS = ["point", "pose", "camera", "fx", "show"] as const;
+export const CUE_DOS = ["point", "pose", "camera", "fx", "show", "highlight"] as const;
 export const CAMERA_KINDS = ["impact", "pulse", "shake"] as const;
 export const FX_KINDS = ["aura", "explosion", "smoke", "beam"] as const;
-export const VISUAL_KINDS = ["text", "math", "diagram", "chart"] as const;
+export const VISUAL_KINDS = ["text", "math", "diagram", "chart", "shape"] as const;
 export const VISUAL_REGIONS = ["right", "top", "bottom"] as const;
 
 export type PoseName = (typeof POSE_NAMES)[number];
@@ -43,7 +45,7 @@ const MAX_VISUALS = 8;
 export interface CharacterVisual {
   id: string;
   kind: VisualKind;
-  /** text/math/diagram: a string. chart: `[{ label, value }, ...]`. */
+  /** text/math/diagram: a string. chart: `[{ label, value }, ...]`. shape: a ShapeSpec (see geometry-figures.md), e.g. `{ type: "rhombus" }`. */
   content: any;
   at?: VisualRegion;
 }
@@ -52,7 +54,7 @@ export interface CharacterCue {
   /** A bookmark name from the beat's narration, or "start" | "end". */
   at: string;
   do: CueDo;
-  /** point / fx / show: a visual id. */
+  /** point / fx / highlight / show: a visual id; for shapes `id.part` (e.g. `tri.a`, `rh.AB`, `rh.ticks`; see GeometryFigure parts) also works (not for show). */
   target?: string;
   pose?: PoseName;
   camera?: CameraKind;
@@ -114,6 +116,7 @@ function normalizeCue(c: any): { doo: string; value?: string; notes: string[] } 
     else if (isIn(CAMERA_KINDS, doo)) { value = doo; doo = "camera"; }
     else if (isIn(FX_KINDS, doo)) { value = doo; doo = "fx"; }
     else if (doo === "zoom") { value = "pulse"; doo = "camera"; }
+    else if (doo === "flash" || doo === "indicate" || doo === "emphasize" || doo === "emphasise") doo = "highlight";
     else if (doo === "reveal" || doo === "display") doo = "show";
     if (isIn(CUE_DOS, doo)) notes.push(`do "${c?.do}" normalized to ${doo}${value ? ` "${value}"` : ""}`);
     return { doo, value, notes };
@@ -292,6 +295,32 @@ function addDefaultCues(beats: CharacterBeat[], warnings: string[]): void {
   });
 }
 
+/** Visual `kind` spellings that mean "shape" (value = the default shape type when the content gives none). */
+const SHAPE_KIND_ALIASES: Record<string, ShapeType> = {
+  triangle: "right-triangle", "right-triangle": "right-triangle", right_triangle: "right-triangle", righttriangle: "right-triangle",
+  geometry: "right-triangle", figure: "right-triangle", polygon: "regular-polygon", quadrilateral: "quadrilateral", quad: "quadrilateral",
+  solid: "cube", polyhedron: "cube", "3d": "cube",
+};
+
+/** Split a cue target `id.part` (an exact visual id wins over splitting on a dot). */
+export function splitTarget(target: string, ids?: Iterable<string>): { id: string; part?: string } {
+  if (ids) for (const i of ids) if (i === target) return { id: target };
+  const dot = target.indexOf(".");
+  return dot < 0 ? { id: target } : { id: target.slice(0, dot), part: target.slice(dot + 1) };
+}
+
+/** The canonical part name of a shape visual for `part` (aliases resolve), or undefined if it has no such part. */
+export function resolveVisualPart(v: CharacterVisual, part: string): string | undefined {
+  return v.kind === "shape" ? resolvePartName(v.content as ShapeSpec, part) : undefined;
+}
+
+/** Does `target` ("id" or "id.part") name a visual (and an existing part) of the plan? */
+export function isValidTarget(visuals: CharacterVisual[], target: string): boolean {
+  const { id, part } = splitTarget(target, visuals.map((v) => v.id));
+  const v = visuals.find((x) => x.id === id);
+  return !!v && (part === undefined || resolveVisualPart(v, part) !== undefined);
+}
+
 /**
  * Validate + repair a raw plan (from params or a model). Invalid cues, visuals
  * and references are dropped with a message in `plan.warnings`; this never
@@ -312,7 +341,18 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
   const seen = new Set<string>();
   for (const [i, v] of (Array.isArray(r.visuals) ? r.visuals : []).entries()) {
     const id = typeof v?.id === "string" ? v.id.trim() : "";
-    const kind = norm(v?.kind);
+    let kind = norm(v?.kind);
+    let shapeDefault: ShapeType | undefined;
+    let legacyTriangle = false;
+    if (kind !== "shape" && !isIn(VISUAL_KINDS, kind)) {
+      const asType = SHAPE_KIND_ALIASES[kind] ?? canonicalShapeType(kind)?.type;
+      if (asType) {
+        warnings.push(`visual "${id}": kind "${v.kind}" normalized to shape`);
+        shapeDefault = asType;
+        legacyTriangle = kind === "triangle" || kind === "right-triangle";
+        kind = "shape";
+      }
+    }
     if (!id) { warnings.push(`visual #${i}: missing id, dropped`); continue; }
     if (seen.has(id)) { warnings.push(`visual "${id}": duplicate id, dropped`); continue; }
     if (!isIn(VISUAL_KINDS, kind)) { warnings.push(`visual "${id}": unknown kind "${v?.kind}", dropped`); continue; }
@@ -321,6 +361,13 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
     if (kind === "chart") {
       content = normChart(content);
       if (!content) { warnings.push(`visual "${id}": chart needs [{label, value>=0}], dropped`); continue; }
+    } else if (kind === "shape") {
+      // A kind that is itself a type name ("rhombus") supplies the type.
+      const typed = typeof content === "string" || (content && typeof content === "object" && !Array.isArray(content) && (content.type ?? content.shape ?? content.kind ?? content.name) !== undefined);
+      const n = normalizeShapeSpec(typed || !shapeDefault ? content : { ...(content && typeof content === "object" ? content : {}), type: shapeDefault }, shapeDefault ?? "right-triangle");
+      content = n.spec;
+      if (legacyTriangle && !content.labels) content.labels = { sides: true };
+      for (const note of n.notes) warnings.push(`visual "${id}": ${note}`);
     } else if (typeof content !== "string" || !content.trim()) {
       warnings.push(`visual "${id}": ${kind} content must be a non-empty string, dropped`); continue;
     }
@@ -378,12 +425,25 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
       const atOk = atKey === "start" || atKey === "end" || marks.has(at);
       if (!atOk) { warnings.push(`${tag}: at "${c?.at}" is not start/end or a bookmark in the narration, dropped`); continue; }
       const cue: CharacterCue = { at: atKey === "start" || atKey === "end" ? atKey : at, do: doo };
-      const target = typeof c.target === "string" ? c.target.trim() : undefined;
-      if (doo === "point") {
-        if (!target || !seen.has(target)) { warnings.push(`${tag}: point target "${c?.target}" is not a visual, dropped`); continue; }
+      // Resolve "id" / "id.part"; returns undefined if the visual is unknown.
+      const resolve = (raw: unknown, allowPart: boolean): string | undefined => {
+        if (typeof raw !== "string") return undefined;
+        const { id: tid, part } = splitTarget(raw.trim(), seen);
+        const vis = visuals.find((x) => x.id === tid);
+        if (!vis) return undefined;
+        if (part === undefined) return tid;
+        const canon = allowPart ? resolveVisualPart(vis, part) : undefined;
+        if (canon) return `${tid}.${canon}`;
+        warnings.push(`${tag}: ${allowPart ? "unknown" : "unsupported"} part "${part}" of "${tid}", using the whole visual`);
+        return tid;
+      };
+      const target = typeof c.target === "string" ? resolve(c.target, doo !== "show") : undefined;
+      const rawTarget = typeof c.target === "string" ? c.target.trim() : undefined;
+      if (doo === "point" || doo === "highlight") {
+        if (!target) { warnings.push(`${tag}: ${doo} target "${c?.target}" is not a visual, dropped`); continue; }
         cue.target = target;
       } else if (doo === "show") {
-        if (!target || !seen.has(target)) { warnings.push(`${tag}: show target "${c?.target}" is not a visual, dropped`); continue; }
+        if (!target) { warnings.push(`${tag}: show target "${c?.target}" is not a visual, dropped`); continue; }
         cue.target = target;
       } else if (doo === "pose") {
         const p = nc.value ?? norm(c.pose);
@@ -397,8 +457,8 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
         const k = nc.value ?? norm(c.fx);
         if (!isIn(FX_KINDS, k)) { warnings.push(`${tag}: unknown fx "${c?.fx}", dropped`); continue; }
         cue.fx = k;
-        if (target !== undefined) {
-          if (seen.has(target)) cue.target = target; else warnings.push(`${tag}: fx target "${target}" is not a visual, using the presenter`);
+        if (rawTarget !== undefined) {
+          if (target) cue.target = target; else warnings.push(`${tag}: fx target "${rawTarget}" is not a visual, using the presenter`);
         }
       }
       cues.push(cue);
@@ -406,9 +466,10 @@ export function validateCharacterPlan(raw: unknown, defaults: { title?: string; 
     // Pointing / fx at a visual that has not been revealed yet: reveal it here.
     const revealedByCue = new Set(cues.filter((c) => c.do === "show").map((c) => c.target!));
     for (const c of cues) {
-      if (c.do !== "show" && c.target && !shownSoFar.has(c.target) && !show.includes(c.target) && !revealedByCue.has(c.target)) {
-        show.push(c.target);
-        warnings.push(`beat #${bi}: "${c.target}" was targeted before being shown, added to show`);
+      const tid = c.target ? splitTarget(c.target, seen).id : undefined;
+      if (c.do !== "show" && tid && !shownSoFar.has(tid) && !show.includes(tid) && !revealedByCue.has(tid)) {
+        show.push(tid);
+        warnings.push(`beat #${bi}: "${tid}" was targeted before being shown, added to show`);
       }
     }
     for (const id of show) shownSoFar.add(id);
@@ -464,11 +525,11 @@ export function buildFallbackPlan(topic: string, opts: { tts?: string; style?: s
 }
 
 const EXAMPLE_PLAN = {
-  title: "Energy and mass",
-  visuals: [{ id: "eq", kind: "math", content: "E = m c^2" }, { id: "note", kind: "text", content: "Mass is energy" }],
+  title: "Right triangles",
+  visuals: [{ id: "tri", kind: "shape", content: { type: "right-triangle", a: 3, b: 4, squares: true } }, { id: "eq", kind: "math", content: "a^2 + b^2 = c^2" }],
   beats: [
-    { narration: "Hello! <bookmark mark=\"e\"/> This is the famous equation.", show: ["eq"], cues: [{ at: "start", do: "pose", pose: "wave" }, { at: "e", do: "point", target: "eq" }] },
-    { narration: "Mass is <bookmark mark=\"n\"/> a kind of energy.", cues: [{ at: "n", do: "show", target: "note" }, { at: "end", do: "pose", pose: "celebrate" }] },
+    { narration: "Hello! <bookmark mark=\"s\"/> This side is the longest one.", show: ["tri"], cues: [{ at: "start", do: "pose", pose: "wave" }, { at: "s", do: "point", target: "tri.c" }] },
+    { narration: "Their squares <bookmark mark=\"e\"/> obey this rule.", cues: [{ at: "e", do: "show", target: "eq" }, { at: "e", do: "highlight", target: "tri.squareC" }, { at: "end", do: "pose", pose: "celebrate" }] },
   ],
 };
 
@@ -477,8 +538,8 @@ export function buildPlanPrompt(topic: string): { system: string; prompt: string
   const system = "You write scripts for an animated stick-figure presenter. Reply with ONE JSON object only.";
   const prompt = [
     `Plan a 30-45 second explainer about: ${topic}`,
-    `Schema: {"title":str,"visuals":[{"id":str,"kind":${q(VISUAL_KINDS)},"content":...,"at"?:${q(VISUAL_REGIONS)}}],"beats":[{"narration":str,"show"?:[visual ids],"cues"?:[{"at":bookmark|"start"|"end","do":${q(CUE_DOS)},"target"?:visual id (point/show/fx),"pose"?:${q(POSE_NAMES)},"camera"?:${q(CAMERA_KINDS)},"fx"?:${q(FX_KINDS)}}]}]}`,
-    `content: text=at most 12 words; math=LaTeX with ^ for exponents (a^2), never Unicode superscripts; diagram=one edge per line in the A[Label] --> B[Label] DSL; chart=[{"label","value"}].`,
+    `Schema: {"title":str,"visuals":[{"id":str,"kind":${q(VISUAL_KINDS)},"content":...,"at"?:${q(VISUAL_REGIONS)}}],"beats":[{"narration":str,"show"?:[visual ids],"cues"?:[{"at":bookmark|"start"|"end","do":${q(CUE_DOS)},"target"?:visual id or triangle part "tri.a" (point/show/fx/highlight),"pose"?:${q(POSE_NAMES)},"camera"?:${q(CAMERA_KINDS)},"fx"?:${q(FX_KINDS)}}]}]}`,
+    `content: text=at most 12 words; math=LaTeX with ^ for exponents (a^2), never Unicode superscripts; diagram=one edge per line in the A[Label] --> B[Label] DSL; chart=[{"label","value"}]; shape={"type":T,...} with T one of ${SHAPE_TYPES.join("|")} (also pentagon..dodecagon; params e.g. {"type":"right-triangle","a":3,"b":4,"squares":true,"labels":{"sides":true}}; textbook marks are automatic). Target a part as "id.part": sides a/b/c (triangles) or AB/BC.., vertices A/B.., angleA, diagonalAC, ticks, arrows, arcs, right, squareA/B/C, height; solids face0/edge0/vertex0.`,
     `Rules: 3-5 beats of 1-2 short sentences; put <bookmark mark="name"/> in narration and cue at those names; "point" needs a target shown by then; "show" reveals a visual at a bookmark; max 3 visuals; every beat gets a cue.`,
     `Example: ${JSON.stringify(EXAMPLE_PLAN)}`,
     `Output JSON for: ${topic}`,
@@ -617,10 +678,10 @@ export function characterExplainerGates(plan: CharacterExplainerPlan): QualityGa
       name: "targets_exist",
       check: (_c: QualityContext) => {
         const missing: string[] = [];
-        for (const b of plan.beats) for (const c of b.cues ?? []) if (c.target !== undefined && !ids.has(c.target)) missing.push(c.target);
+        for (const b of plan.beats) for (const c of b.cues ?? []) if (c.target !== undefined && !isValidTarget(plan.visuals, c.target)) missing.push(c.target);
         for (const b of plan.beats) for (const s of b.show ?? []) if (!ids.has(s)) missing.push(s);
         return missing.length
-          ? { ok: false, message: `unknown visual id(s): ${[...new Set(missing)].join(", ")}`, severity: "error" as const }
+          ? { ok: false, message: `unknown visual id(s) or part(s): ${[...new Set(missing)].join(", ")}`, severity: "error" as const }
           : { ok: true, message: "every cue target and show ref exists in visuals", severity: "error" as const };
       },
     },

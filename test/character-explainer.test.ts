@@ -88,10 +88,10 @@ test("validate: normalises case/whitespace of vocab values and defaults tts", ()
 
 test("vocabularies match the issue", () => {
   assert.deepEqual([...POSE_NAMES], ["neutral", "wave", "point", "think", "excited", "shrug", "celebrate"]);
-  assert.deepEqual([...CUE_DOS], ["point", "pose", "camera", "fx", "show"]);
+  assert.deepEqual([...CUE_DOS], ["point", "pose", "camera", "fx", "show", "highlight"]);
   assert.deepEqual([...CAMERA_KINDS], ["impact", "pulse", "shake"]);
   assert.deepEqual([...FX_KINDS], ["aura", "explosion", "smoke", "beam"]);
-  assert.deepEqual([...VISUAL_KINDS], ["text", "math", "diagram", "chart"]);
+  assert.deepEqual([...VISUAL_KINDS], ["text", "math", "diagram", "chart", "shape"]);
 });
 
 // --- lenient normalisation (real qwen2.5:3b output) ----------------------------------
@@ -345,6 +345,108 @@ test("gates: targets_exist is an error, beat_has_cue a warning, motion-led promi
   assert.equal(still.results.find((r) => r.gate === "delivery_promise")!.ok, false);
 });
 
+// --- shape visuals, part targets, highlight -----------------------------------------------
+const shp = (content: any, extra: any = {}) => validateCharacterPlan({
+  visuals: [{ id: "s", kind: "shape", content, ...extra }],
+  beats: [{ narration: "Look <bookmark mark='m'/> here.", show: ["s"] }],
+});
+const spec = (content: any, extra?: any) => shp(content, extra).plan.visuals[0].content as any;
+
+test("shape: content normalises (types, synonyms, defaults) with warnings only when repaired", () => {
+  assert.equal(spec({ type: "rhombus" }).type, "rhombus");
+  assert.equal(spec("kite").type, "kite");
+  assert.equal(spec({ type: "Diamond" }).type, "rhombus");
+  assert.equal(spec({ type: "trapezium" }).type, "trapezoid");
+  assert.deepEqual([spec({ type: "hexagon" }).type, spec({ type: "hexagon" }).n], ["regular-polygon", 6]);
+  assert.equal(spec({ type: "banana" }).type, "right-triangle");
+  assert.ok(shp({ type: "banana" }).plan.warnings.some((w) => /banana/.test(w)));
+  assert.ok(!shp({ type: "rhombus" }).plan.warnings.some((w) => /shape|type/.test(w)));
+  assert.equal(spec({ type: "cube" }).type, "cube");
+});
+
+test("shape: legacy triangle kind/content variants map onto right-triangle", () => {
+  for (const kind of ["triangle", "right-triangle", "Triangle"]) {
+    const r = shp({ a: 3, b: 4 }, { kind });
+    assert.equal(r.plan.visuals[0].kind, "shape", kind);
+    assert.equal((r.plan.visuals[0].content as any).type, "right-triangle");
+    assert.deepEqual((r.plan.visuals[0].content as any).labels, { sides: true }); // old default a, b, c
+  }
+  assert.equal(spec({ legs: [5, 12] }, { kind: "triangle" }).b, 12);
+  assert.equal(spec({ sides: [3, 4, 5] }, { kind: "geometry" }).a, 3);
+  assert.equal(spec({ sides: [3, 4, 5] }, { kind: "geometry" }).type, "right-triangle");
+  assert.equal(spec({}, { kind: "solid" }).type, "cube");
+  assert.equal(spec({}, { kind: "polygon" }).type, "regular-polygon");
+  assert.equal(spec({ n: 5 }, { kind: "polygon" }).n, 5);
+  assert.equal(spec({}, { kind: "rhombus" }).type, "rhombus"); // kind is a type name
+  assert.equal(spec({}, { kind: "quadrilateral" }).type, "quadrilateral");
+  assert.ok(shp({ a: 3, b: 4 }, { kind: "geometry" }).plan.warnings.some((w) => /normalized to shape/.test(w)));
+});
+
+test("shape: inconsistent sides / absurd sizes warn and fall back", () => {
+  const bad = shp({ type: "right-triangle", sides: [3, 4, 6] });
+  assert.equal((bad.plan.visuals[0].content as any).a, 3);
+  assert.ok(bad.plan.warnings.some((w) => /a\^2/.test(w)));
+  const absurd = shp({ type: "right-triangle", a: -1, b: 4 });
+  assert.deepEqual([(absurd.plan.visuals[0].content as any).a, (absurd.plan.visuals[0].content as any).b], [3, 4]);
+});
+
+test("part targets: canonical names kept, aliases resolved, unknown -> whole visual with a warning", () => {
+  const mk = (cue: any, content: any = { type: "right-triangle", squares: true }) => validateCharacterPlan({
+    visuals: [{ id: "tri", kind: "shape", content }, { id: "t", kind: "text", content: "hello" }],
+    beats: [{ narration: "x <bookmark mark='m'/> y", show: ["tri", "t"], cues: [{ at: "m", ...cue }] }],
+  });
+  const tgt = (r: any) => r.plan.beats[0].cues![0].target;
+  for (const part of ["a", "b", "c", "right", "squareA", "squareB", "squareC", "angleC", "A"]) assert.equal(tgt(mk({ do: "point", target: `tri.${part}` })), `tri.${part}`, part);
+  assert.equal(tgt(mk({ do: "point", target: "tri.SQUAREc" })), "tri.squareC");
+  assert.equal(tgt(mk({ do: "point", target: "tri.BC" })), "tri.a"); // vertex pair -> side alias
+  const unk = mk({ do: "point", target: "tri.zzz" });
+  assert.equal(tgt(unk), "tri");
+  assert.ok(unk.plan.warnings.some((w) => /part "zzz"/.test(w)));
+  assert.equal(tgt(mk({ do: "point", target: "t.a" })), "t"); // text has no parts
+  assert.equal(tgt(mk({ do: "fx", fx: "aura", target: "tri.c" })), "tri.c");
+  assert.equal(tgt(mk({ do: "point", target: "tri.squareA" }, { type: "right-triangle" })), "tri"); // no squares drawn
+  assert.equal(mk({ do: "point", target: "ghost.a" }).plan.beats[0].cues!.some((c: any) => c.target === "ghost.a"), false);
+  // quadrilateral marks and solids
+  const q = (target: string, type: string, extra: any = {}) => validateCharacterPlan({
+    visuals: [{ id: "q", kind: "shape", content: { type, ...extra } }],
+    beats: [{ narration: "x", show: ["q"], cues: [{ at: "start", do: "highlight", target }] }],
+  }).plan.beats[0].cues![0].target;
+  assert.equal(q("q.ticks", "rhombus"), "q.ticks");
+  assert.equal(q("q.arrows", "rhombus"), "q.arrows");
+  assert.equal(q("q.ab", "rhombus"), "q.AB");
+  assert.equal(q("q.ticks", "scalene-triangle"), "q"); // scalene has no ticks
+  assert.equal(q("q.face3", "cube"), "q.face3");
+  assert.equal(q("q.face9", "cube"), "q");
+  assert.equal(q("q.diagonalAC", "kite", { diagonals: true }), "q.diagonalAC");
+});
+
+test("highlight cue: whole visual or part; needs a target; flash/indicate alias", () => {
+  const mk = (cue: any) => validateCharacterPlan({
+    visuals: [{ id: "tri", kind: "shape", content: { type: "right-triangle" } }],
+    beats: [{ narration: "hi", show: ["tri"], cues: [{ at: "start", ...cue }] }],
+  }).plan.beats[0].cues![0];
+  assert.deepEqual(mk({ do: "highlight", target: "tri.c" }), { at: "start", do: "highlight", target: "tri.c" });
+  assert.deepEqual(mk({ do: "highlight", target: "tri" }), { at: "start", do: "highlight", target: "tri" });
+  assert.equal(mk({ do: "flash", target: "tri.a" }).do, "highlight");
+  assert.equal(mk({ do: "indicate", target: "tri.a" }).do, "highlight");
+  assert.notEqual(mk({ do: "highlight" }).do, "highlight");
+});
+
+test("gates: targets_exist understands parts", () => {
+  const plan: any = { title: "t", tts: "silent", visuals: [{ id: "tri", kind: "shape", content: { type: "right-triangle", a: 3, b: 4, squares: true } }, { id: "txt", kind: "text", content: "x" }],
+    beats: [{ narration: "x", cues: [{ at: "start", do: "point", target: "tri.squareC" }, { at: "start", do: "highlight", target: "tri.a" }] }] };
+  const run = (p: any) => runQualityGates(qctx(), characterExplainerGates(p)).results.find((r) => r.gate === "targets_exist")!;
+  assert.equal(run(plan).ok, true);
+  plan.beats[0].cues[0].target = "tri.nope"; assert.equal(run(plan).ok, false);
+  plan.beats[0].cues[0].target = "ghost.a"; assert.equal(run(plan).ok, false);
+  plan.beats[0].cues[0].target = "txt.a"; assert.equal(run(plan).ok, false);
+});
+
+test("prompt lists the shape kind, type names, part syntax and highlight", () => {
+  const { prompt } = buildPlanPrompt("x");
+  for (const w of ["shape", "highlight", "rhombus", "isosceles-trapezoid", "icosahedron", "squareA", "diagonalAC", "ticks", "face0"]) assert.ok(prompt.includes(w), w);
+});
+
 // --- ollama provider ---------------------------------------------------------------
 const resp = (body: string, init: { ok?: boolean; status?: number } = {}) => ({
   ok: init.ok ?? true, status: init.status ?? 200,
@@ -451,10 +553,11 @@ test("render smoke: low quality, silent TTS", async () => {
   const res = await runFormat("character-explainer", {
     params: {
       title: "Smoke", tts: "silent",
-      visuals: [{ id: "f", kind: "math", content: "a^2+b^2=c^2" }, { id: "t", kind: "text", content: "Hello" }],
+      visuals: [{ id: "f", kind: "math", content: "a^2+b^2=c^2" }, { id: "t", kind: "text", content: "Hello" }, { id: "tri", kind: "shape", content: { type: "right-triangle", a: 3, b: 4, squares: true, labels: { sides: true } } }],
       beats: [
         { narration: "Hi <bookmark mark='a'/> there.", show: ["t"], cues: [{ at: "start", do: "pose", pose: "wave" }, { at: "a", do: "point", target: "t" }, { at: "a", do: "camera", camera: "pulse" }] },
         { narration: "Now <bookmark mark='b'/> this.", show: ["f"], cues: [{ at: "b", do: "fx", fx: "aura", target: "f" }, { at: "end", do: "pose", pose: "celebrate" }] },
+        { narration: "A triangle <bookmark mark='t'/> with squares.", show: ["tri"], cues: [{ at: "t", do: "point", target: "tri.a" }, { at: "t", do: "highlight", target: "tri.squareC" }, { at: "end", do: "point", target: "tri.c" }] },
       ],
       renderOptions: { output: out, quality: "low", fps: 12, verbose: false, disableCaching: true },
     },

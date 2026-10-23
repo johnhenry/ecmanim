@@ -7,7 +7,9 @@
 import {
   PRESENTER_BONES, createPresenterPoseLibrary, scheduleCues, layoutVisuals, STAGE,
 } from "./character_explainer.ts";
+import { splitTarget } from "./character_explainer.ts";
 import type { CharacterExplainerPlan, CharacterVisual, CharacterBeat, CharacterCue, Box } from "./character_explainer.ts";
+import type { GeometryFigure, FigurePart } from "../mobject/geometry_figure.ts";
 
 const PRESENTER_X = -3.7;
 const PRESENTER_Y = -1.3;
@@ -29,7 +31,11 @@ const wrap = (text: string, width: number): string => {
 
 interface VisualRec {
   def: CharacterVisual;
+  /** The mobject on the scene (a GeometryFigure for shapes). */
   mob: any;
+  fig?: GeometryFigure;
+  /** Layout cost within a region (a triangle with squares fills the panel: 2). */
+  cost: number;
   w0: number;
   h0: number;
   scale: number;
@@ -37,13 +43,48 @@ interface VisualRec {
   shown: boolean;
 }
 
+import { Animation } from "../animation/Animation.ts";
+
+/** Scale a mobject by `factor` about its centre while shifting it by `delta`, with the usual smooth easing. */
+class MoveScale extends Animation {
+  private c0: number[] = [0, 0, 0];
+  private prevF = 1;
+  private prevA = 0;
+  private factor: number;
+  private delta: number[];
+  constructor(mob: any, factor: number, delta: number[], runTime = 0.8) {
+    super(mob, { runTime });
+    this.factor = factor;
+    this.delta = delta;
+  }
+  begin(): this {
+    this.started = true;
+    this.c0 = this.mobject.getCenter();
+    this.interpolate(0);
+    return this;
+  }
+  interpolateMobject(a: number): void {
+    const f = 1 + (this.factor - 1) * a;
+    const [cx, cy] = [this.c0[0] + this.delta[0] * this.prevA, this.c0[1] + this.delta[1] * this.prevA];
+    const [nx, ny] = [this.c0[0] + this.delta[0] * a, this.c0[1] + this.delta[1] * a];
+    const k = f / this.prevF;
+    this.mobject.applyToPoints((p: number[]) => [nx + (p[0] - cx) * k, ny + (p[1] - cy) * k, p[2]]);
+    this.prevF = f; this.prevA = a;
+  }
+  _hashExtra(): string { return `ms:${this.factor.toFixed(4)}:${this.delta.map((d) => d.toFixed(4)).join(",")}`; }
+}
+
 export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan): Promise<void> {
   const idx = await import("../index.ts");
+  const geo = idx;
+  await idx.initMathTex();
   const sk = await import("../skeletal.ts");
   const { voiceover } = await import("../voiceover/voiceover.ts");
   const { diagram } = await import("../diagram/diagram.ts");
 
-  const play = (anims: any[], runTime: number) => scene.play(...anims, { _playConfig: true, runTime });
+  // `runTime` overrides every animation's duration; omit it to keep each one's own (see withRT).
+  const play = (anims: any[], runTime?: number) => (runTime === undefined ? scene.play(...anims) : scene.play(...anims, { _playConfig: true, runTime }));
+  const withRT = (a: any, t: number) => { const b = a?._isAnimateBuilder ? a.build() : a; b.runTime = t; return b; };
 
   // --- presenter -------------------------------------------------------------
   const ctrl = new sk.SkeletonModel(PRESENTER_BONES, { root: [PRESENTER_X, PRESENTER_Y] });
@@ -115,6 +156,12 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
   const makeVisual = (v: CharacterVisual): VisualRec => {
     let mob: any;
     let maxScale = 1.2;
+    if (v.kind === "shape") {
+      const fig: GeometryFigure = new geo.GeometryFigure(v.content, { size: 3 });
+      const sq = (v.content as any).squares === true;
+      const solid = fig.layout === null;
+      return { def: v, mob: fig, fig, cost: sq ? 2 : 1, w0: Math.max(fig.getWidth(), 1e-3), h0: Math.max(fig.getHeight(), 1e-3), scale: 1, maxScale: sq ? 1.4 : solid ? 1.9 : 2.2, shown: false };
+    }
     if (v.kind === "text") {
       mob = new idx.Text(wrap(v.content, 26), { fontSize: 0.7, lineSpacing: 1.7, color: "#FFFFFF" });
       maxScale = 1.25;
@@ -128,28 +175,31 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       mob = buildBarChart(idx, v.content);
       maxScale = 1.0;
     }
-    return { def: v, mob, w0: Math.max(mob.getWidth(), 1e-3), h0: Math.max(mob.getHeight(), 1e-3), scale: 1, maxScale, shown: false };
+    return { def: v, mob, cost: 1, w0: Math.max(mob.getWidth(), 1e-3), h0: Math.max(mob.getHeight(), 1e-3), scale: 1, maxScale, shown: false };
   };
 
   const fitScale = (r: VisualRec, box: Box) => Math.min(box.maxW / r.w0, box.maxH / r.h0, r.maxScale);
 
-  // Show `ids` (new) and relayout. Returns animations to play together.
-  // `pre` (fade-outs of evicted visuals) must finish before `main` starts, so
-  // an outgoing and an incoming visual never overlap in the same slot.
+  // Show `ids` (new) and relayout. `pre` (fade-outs of evicted visuals) must
+  // finish before `main` starts, so an outgoing and an incoming visual never
+  // overlap in the same slot.
   const revealAnims = (ids: string[]): { pre: any[]; main: any[] } => {
     const anims: any[] = [];
     const pre: any[] = [];
     for (const id of ids) {
-      if (!recs.has(id)) recs.set(id, makeVisual(plan.visuals.find((v) => v.id === id)!));
+      const old = recs.get(id);
+      // A figure that was shown and faded out is rebuilt (its reveal state is spent).
+      if (!old || (old.fig && !old.shown)) recs.set(id, makeVisual(plan.visuals.find((v) => v.id === id)!));
     }
     const fresh = ids.filter((id) => !recs.get(id)!.shown);
     for (const id of fresh) { order.push(id); recs.get(id)!.shown = true; }
-    // Cap each region; evict oldest.
+    // Cap each region by cost (a triangle with squares counts 2); evict oldest.
     const region = (id: string) => recs.get(id)!.def.at ?? "right";
     const evicted: string[] = [];
     for (const reg of ["right", "top", "bottom"]) {
       const inReg = order.filter((id) => region(id) === reg);
-      while (inReg.length > MAX_PER_REGION) { const gone = inReg.shift()!; evicted.push(gone); order.splice(order.indexOf(gone), 1); }
+      let cost = inReg.reduce((n, id) => n + recs.get(id)!.cost, 0);
+      while (cost > MAX_PER_REGION && inReg.length > 1) { const gone = inReg.shift()!; cost -= recs.get(gone)!.cost; evicted.push(gone); order.splice(order.indexOf(gone), 1); }
     }
     for (const id of evicted) { const r = recs.get(id)!; r.shown = false; pre.push(new idx.FadeOut(r.mob)); }
     const boxes = layoutVisuals(order.map((id) => ({ id, at: recs.get(id)!.def.at })));
@@ -161,11 +211,25 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
         r.mob.scale(s).moveTo([box.cx, box.cy, 0]);
         r.scale = s;
         const kind = r.def.kind;
-        anims.push(kind === "text" || kind === "math" ? new idx.Write(r.mob) : kind === "diagram" ? new idx.Create(r.mob) : new idx.FadeIn(r.mob, { shift: [0, 0.3, 0] }));
+        if (r.fig) {
+          anims.push(r.fig.reveal());
+          if (r.fig.layout === null) {
+            // Solids spin: a pure function of scene time, so seeking stays exact.
+            const t0 = scene.time;
+            const fig = r.fig;
+            fig.addUpdater(() => fig.setTime(scene.time - t0), { hashExtra: () => `spin:${(scene.time - t0).toFixed(3)}` });
+          }
+        } else {
+          anims.push(kind === "text" || kind === "math" ? new idx.Write(r.mob, { runTime: 0.9 }) : kind === "diagram" ? new idx.Create(r.mob, { runTime: 0.9 }) : new idx.FadeIn(r.mob, { shift: [0, 0.3, 0], runTime: 0.7 }));
+        }
       } else {
         const f = s / r.scale;
-        const moved = Math.abs(f - 1) > 1e-3 || Math.hypot(r.mob.getCenter()[0] - box.cx, r.mob.getCenter()[1] - box.cy) > 1e-3;
-        if (moved) { anims.push(r.mob.animate.scale(f).moveTo([box.cx, box.cy, 0])); r.scale = s; }
+        const c0 = r.mob.getCenter();
+        const moved = Math.abs(f - 1) > 1e-3 || Math.hypot(c0[0] - box.cx, c0[1] - box.cy) > 1e-3;
+        if (moved) {
+          anims.push(new MoveScale(r.mob, f, [box.cx - c0[0], box.cy - c0[1]]));
+          r.scale = s;
+        }
       }
     }
     return { pre, main: anims };
@@ -179,30 +243,41 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
   const releasePoint = (): any[] => {
     if (!state.pointing) return [];
     state.pointing = false;
-    return [pointW.animate.setValue(0), stepX.animate.setValue(0)];
+    return [withRT(pointW.animate.setValue(0), 0.45), withRT(stepX.animate.setValue(0), 0.45)];
+  };
+
+  // Resolve a cue target ("id" or "id.part") to its visual and part.
+  const resolveRec = (target: string | undefined): { rec?: VisualRec; part?: FigurePart } => {
+    if (!target) return {};
+    const { id, part } = splitTarget(target, recs.keys());
+    const rec = recs.get(id);
+    return { rec, part: part ? rec?.fig?.part(part) : undefined };
   };
 
   // Where to aim, and how far the presenter should step toward the target.
-  const aimAt = (rec: VisualRec): { aim: number[]; step: number } => {
+  const aimAt = (rec: VisualRec, part?: FigurePart): { aim: number[]; step: number } => {
     const S = figure.model.boneStart("armR") as number[];
     const S0 = [S[0] - stepX.getValue(), S[1]];
-    const c = rec.mob.getCenter();
-    const hw = rec.mob.getWidth() / 2, hh = rec.mob.getHeight() / 2;
-    const P = [Math.min(Math.max(S0[0], c[0] - hw), c[0] + hw), Math.min(Math.max(S0[1], c[1] - hh), c[1] + hh)];
+    const c = part ? part.center : rec.mob.getCenter();
+    const hw = (part ? part.width : rec.mob.getWidth()) / 2, hh = (part ? part.height : rec.mob.getHeight()) / 2;
+    // Sides, vertices, lines: aimed at by their anchor point; anything else by its nearest bbox point.
+    const P = part?.aim === "point" ? [part.anchor[0], part.anchor[1]] : [Math.min(Math.max(S0[0], c[0] - hw), c[0] + hw), Math.min(Math.max(S0[1], c[1] - hh), c[1] + hh)];
     const reach = ARM_REACH * 0.985;
     const step = Math.min(Math.max(Math.hypot(P[0] - S0[0], P[1] - S0[1]) - reach * 0.97, 0), MAX_STEP);
     const Sn = [S0[0] + step, S0[1]];
     let dx = P[0] - Sn[0], dy = P[1] - Sn[1];
     const dist = Math.hypot(dx, dy) || 1e-6;
     dx /= dist; dy /= dist;
-    const len = dist > reach ? reach : Math.max(dist - 0.15, 0.6);
+    const gap = part?.aim === "point" ? 0.05 : 0.15;
+    const len = dist > reach ? reach : Math.max(dist - gap, 0.6);
     bendSide = dx >= 0 ? "right" : "left";
     return { aim: [Sn[0] + dx * len, Sn[1] + dy * len], step };
   };
 
   const fxAnchor = (target: string | undefined): { c: number[]; r: number } => {
-    const rec = target ? recs.get(target) : undefined;
-    if (rec) return { c: rec.mob.getCenter(), r: Math.max(rec.mob.getWidth(), rec.mob.getHeight()) / 2 };
+    const { rec, part } = resolveRec(target);
+    if (part) return { c: part.aim === "point" ? part.anchor : part.center, r: Math.max(part.width, part.height, 0.5) / 2 };
+    if (rec) return { c: rec.mob.getCenter(), r: Math.max(rec.mob.getWidth(), rec.mob.getHeight(), 0.5) / 2 };
     return { c: [PRESENTER_X, PRESENTER_Y + 1.6, 0], r: 1.4 };
   };
 
@@ -227,7 +302,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       const earlyAnims = early.map((e) => poseTween(e.cue.pose!));
       if (early.length) state.lastWave = 0;
       if (reveal.length || earlyAnims.length) {
-        await play([...reveal, ...earlyAnims, ...(early.length ? releasePoint() : [])], reveal.length ? 0.8 : 0.55);
+        await play([...reveal, ...earlyAnims, ...(early.length ? releasePoint() : [])]);
       }
 
       const queue: Pending[] = [];
@@ -245,15 +320,20 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
             for (const f of [24, 58, 28]) await play([new sk.PoseTween(ctrl as any, { bones: { foreR: { angle: (f * Math.PI) / 180 } } }, { runTime: 0.22 })], 0.22);
           }
         } else if (cue.do === "show") {
-          const rec = recs.get(cue.target!) ?? null;
+          const rec = recs.get(splitTarget(cue.target!, recs.keys()).id) ?? null;
           if (rec?.shown) return;
           const { pre: out, main } = revealAnims([cue.target!]);
           if (out.length) await play(out, 0.4);
-          if (main.length) await play(main, 0.8);
-        } else if (cue.do === "point") {
-          const rec = recs.get(cue.target!);
+          if (main.length) await play(main);
+        } else if (cue.do === "highlight") {
+          const { rec, part } = resolveRec(cue.target);
           if (!rec) return;
-          const { aim: [ax, ay], step } = aimAt(rec);
+          if (part && rec.fig) await play([rec.fig.highlight(part.name)], 0.9);
+          else await play([new idx.Indicate(rec.mob, { color: "#FFFF00" })], 0.7);
+        } else if (cue.do === "point") {
+          const { rec, part } = resolveRec(cue.target);
+          if (!rec) return;
+          const { aim: [ax, ay], step } = aimAt(rec, part);
           const id = ++state.pointId;
           const anims: any[] = [pointW.animate.setValue(1), stepX.animate.setValue(step)];
           if (state.pointing) { anims.push(aimX.animate.setValue(ax), aimY.animate.setValue(ay)); }
