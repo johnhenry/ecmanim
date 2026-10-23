@@ -35,6 +35,10 @@ compatibility rules" section of `AGENTS.md`.
   invisible glyphs that still take up space: they are rewritten to `^{…}`/`_{…}`
   (runs merged) before MathJax. In `Tex` text mode, script runs become real math
   scripts. Inputs without such characters are unchanged (#108).
+- Inline diagram DSL (`diagram()` / `buildBoard()`): node boxes now grow to fit
+  long labels (label width + padding) instead of letting text overflow, and
+  layer/row/ring spacing widens to keep wider boxes apart (#109). Labels that
+  already fit render byte-identically; the Mermaid loader is unchanged.
 
 ## 0.13.0 — 2026-10-23
 
