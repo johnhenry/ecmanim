@@ -11,12 +11,12 @@ import { splitTarget } from "./character_explainer.ts";
 import type { CharacterExplainerPlan, CharacterVisual, CharacterBeat, CharacterCue, Box } from "./character_explainer.ts";
 import type { GeometryFigure, FigurePart } from "../mobject/geometry_figure.ts";
 
-const PRESENTER_X = -3.7;
+const PRESENTER_X = -3.0;
 const PRESENTER_Y = -1.3;
 const ARM_REACH = 1.0 + 0.95;
-const MAX_STEP = 0.9;
+const MAX_STEP = 1.3;
 const POINT_HOLD = 2.4;
-const MAX_PER_REGION = 2;
+const MAX_PER_REGION = 3;
 
 const wrap = (text: string, width: number): string => {
   const words = text.split(/\s+/).filter(Boolean);
@@ -34,7 +34,7 @@ interface VisualRec {
   /** The mobject on the scene (a GeometryFigure for shapes). */
   mob: any;
   fig?: GeometryFigure;
-  /** Layout cost within a region (a triangle with squares fills the panel: 2). */
+  /** Layout cost within a region (capacity 3): text/math/chart 1, a shape 2, a triangle with squares 3. */
   cost: number;
   w0: number;
   h0: number;
@@ -160,11 +160,11 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       const fig: GeometryFigure = new geo.GeometryFigure(v.content, { size: 3 });
       const sq = (v.content as any).squares === true;
       const solid = fig.layout === null;
-      return { def: v, mob: fig, fig, cost: sq ? 2 : 1, w0: Math.max(fig.getWidth(), 1e-3), h0: Math.max(fig.getHeight(), 1e-3), scale: 1, maxScale: sq ? 1.4 : solid ? 1.9 : 2.2, shown: false };
+      return { def: v, mob: fig, fig, cost: sq ? 3 : 2, w0: Math.max(fig.getWidth(), 1e-3), h0: Math.max(fig.getHeight(), 1e-3), scale: 1, maxScale: sq ? 1.4 : solid ? 1.9 : 2.2, shown: false };
     }
     if (v.kind === "text") {
       mob = new idx.Text(wrap(v.content, 26), { fontSize: 0.7, lineSpacing: 1.7, color: "#FFFFFF" });
-      maxScale = 1.25;
+      maxScale = 0.95;
     } else if (v.kind === "math") {
       mob = new idx.MathTex(v.content, { fontSize: 1.5, color: "#FFFFFF" });
       maxScale = 1.1;
@@ -202,7 +202,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       while (cost > MAX_PER_REGION && inReg.length > 1) { const gone = inReg.shift()!; cost -= recs.get(gone)!.cost; evicted.push(gone); order.splice(order.indexOf(gone), 1); }
     }
     for (const id of evicted) { const r = recs.get(id)!; r.shown = false; pre.push(new idx.FadeOut(r.mob)); }
-    const boxes = layoutVisuals(order.map((id) => ({ id, at: recs.get(id)!.def.at })));
+    const boxes = layoutVisuals(order.map((id) => ({ id, at: recs.get(id)!.def.at, weight: recs.get(id)!.def.kind === "shape" ? 2.5 : 1 })));
     for (const id of order) {
       const r = recs.get(id)!;
       const box = boxes[id];

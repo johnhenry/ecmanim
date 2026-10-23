@@ -304,6 +304,8 @@ test("layoutVisuals: boxes stay on stage, never overlap, and strips shrink the m
   assert.ok(boxes.a.cy < boxes.t.cy);
   assert.ok(layoutVisuals([{ id: "a" }]).a.maxH > boxes.a.maxH);
   assert.deepEqual(layoutVisuals([]), {});
+  const w = layoutVisuals([{ id: "s", weight: 3 }, { id: "t" }]);
+  assert.ok(w.s.maxH > 2.5 * w.t.maxH && w.s.cy > w.t.cy);
 });
 
 // --- presenter spec ---------------------------------------------------------------

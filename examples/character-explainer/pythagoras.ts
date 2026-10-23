@@ -16,36 +16,44 @@ const plan: CharacterExplainerPlan = {
   title: "The Pythagorean Theorem",
   tts: "system",
   visuals: [
-    { id: "formula", kind: "math", content: "a^2 + b^2 = c^2" },
-    { id: "tri", kind: "diagram", content: "A[Leg a] --> C[Hypotenuse c]\nB[Leg b] --> C" },
-    { id: "squares", kind: "chart", content: [{ label: "a squared", value: 9 }, { label: "b squared", value: 16 }, { label: "c squared", value: 25 }] },
+    { id: "tri", kind: "shape", content: { type: "right-triangle", a: 3, b: 4, squares: true, labels: { sides: true } } },
+    { id: "formula", kind: "math", content: "a^2 + b^2 = c^2", at: "top" },
+    { id: "areas", kind: "chart", content: [{ label: "a squared", value: 9 }, { label: "b squared", value: 16 }, { label: "c squared", value: 25 }] },
   ],
   beats: [
     {
-      narration: "Hi there! Today we are looking at one of the most famous ideas in geometry, the Pythagorean theorem. <bookmark mark=\"f\"/> It says that a squared plus b squared equals c squared.",
-      show: ["formula"],
+      narration: "Hi there! Today we are looking at one of the most famous ideas in geometry, the Pythagorean theorem.",
+      show: ["tri"],
+      cues: [{ at: "start", do: "pose", pose: "wave" }],
+    },
+    {
+      narration: "It is about right triangles, the ones with a square corner. <bookmark mark=\"corner\"/> This corner is the right angle. <bookmark mark=\"a\"/> The two shorter sides are called the legs, side a, <bookmark mark=\"b\"/> and side b. <bookmark mark=\"c\"/> The longest side, opposite the corner, is the hypotenuse, c.",
       cues: [
-        { at: "start", do: "pose", pose: "wave" },
-        { at: "f", do: "point", target: "formula" },
+        { at: "corner", do: "point", target: "tri.right" },
+        { at: "a", do: "point", target: "tri.a" },
+        { at: "b", do: "point", target: "tri.b" },
+        { at: "c", do: "point", target: "tri.c" },
       ],
     },
     {
-      narration: "It is about right triangles, the ones with a square corner. <bookmark mark=\"legs\"/> The two shorter sides are called the legs, <bookmark mark=\"hyp\"/> and the longest side, opposite the corner, is the hypotenuse.",
-      show: ["tri"],
+      narration: "The theorem says that <bookmark mark=\"sa\"/> a squared, <bookmark mark=\"sb\"/> plus b squared, <bookmark mark=\"sc\"/> equals c squared. The two small squares together have exactly the area of the big one.",
+      show: ["formula"],
       cues: [
         { at: "start", do: "pose", pose: "think" },
-        { at: "legs", do: "point", target: "tri" },
-        { at: "hyp", do: "camera", camera: "pulse" },
+        { at: "sa", do: "highlight", target: "tri.squareA" },
+        { at: "sb", do: "highlight", target: "tri.squareB" },
+        { at: "sc", do: "point", target: "tri.squareC" },
+        { at: "sc", do: "highlight", target: "tri.squareC" },
       ],
     },
     {
       narration: "Let us test it with legs of three and four. <bookmark mark=\"sq\"/> Three squared is nine, four squared is sixteen, and nine plus sixteen is twenty five. <bookmark mark=\"ok\"/> So the hypotenuse is exactly five. It works!",
-      show: ["squares"],
+      show: ["areas"],
       cues: [
-        { at: "sq", do: "point", target: "squares" },
+        { at: "sq", do: "point", target: "areas" },
         { at: "ok", do: "camera", camera: "impact" },
         { at: "ok", do: "pose", pose: "excited" },
-        { at: "ok", do: "fx", fx: "explosion", target: "squares" },
+        { at: "ok", do: "fx", fx: "explosion", target: "areas" },
       ],
     },
     {

@@ -154,6 +154,8 @@ export class GeometryFigure extends VGroup {
   private _edgeMobs: VMobject[] = [];
   private _vertDots: VMobject[] = [];
   private _time = 0;
+  /** Solids: reveal progress 0..1 (1 = fully shown); scales every element's opacity. */
+  private _ra = 1;
   private _frameReady = false;
 
   constructor(rawSpec: unknown, config: GeometryFigureConfig = {}) {
@@ -256,11 +258,11 @@ export class GeometryFigure extends VGroup {
     for (let i = 0; i < n; i++) {
       const { a0, sweep } = angleAt(i);
       const minSide = Math.min(len(sub(V[i], V[(i + 1) % n])), len(sub(V[i], V[(i - 1 + n) % n])));
-      const r0 = Math.min(0.42 * u, 0.3 * minSide);
+      const r0 = Math.min(0.5 * u, 0.3 * minSide);
       const cnt = arcCount.get(i) ?? 1;
       const arcs: VMobject[] = [];
       for (let c = 0; c < cnt; c++) {
-        const a = new Arc({ radius: r0 + c * 0.09 * u, startAngle: a0, angle: sweep, arcCenter: p3(V[i]), color: this._cfg.markColor, strokeWidth: 3 });
+        const a = new Arc({ radius: r0 + c * 0.12 * u, startAngle: a0, angle: sweep, arcCenter: p3(V[i]), color: this._cfg.markColor, strokeWidth: 3.5 });
         if (!arcCount.has(i)) { a.strokeOpacity = 0; }
         arcs.push(a); this.add(a);
         if (arcCount.has(i)) st.marks.push(a);
@@ -271,7 +273,7 @@ export class GeometryFigure extends VGroup {
     const rightMobs: VMobject[] = [];
     for (const vi of mp.rightAngles) {
       const dn = dirTo(vi, vi + 1), dp = dirTo(vi, vi - 1);
-      const r = 0.26 * u;
+      const r = 0.32 * u;
       const a = add(V[vi], mul(dn, r)), c = add(V[vi], mul(dp, r)), b = add(a, mul(dp, r));
       const m = new VMobject({ color: this._cfg.markColor, strokeWidth: 3 });
       m.setPointsAsCorners([p3(a), p3(b), p3(c)]);
@@ -285,11 +287,11 @@ export class GeometryFigure extends VGroup {
       const a = V[side], b = V[(side + 1) % n];
       const mid = mul(add(a, b), 0.5);
       const d = unit(sub(b, a)), nrm = perp(d);
-      const gap = 0.1 * u, half = 0.11 * u;
+      const gap = 0.13 * u, half = 0.17 * u;
       for (let t = 0; t < count; t++) {
         const off = (t - (count - 1) / 2) * gap;
         const c = add(mid, mul(d, off));
-        const m = new Line(p3(add(c, mul(nrm, half))), p3(sub(c, mul(nrm, half))), { color: this._cfg.markColor, strokeWidth: 3.5 });
+        const m = new Line(p3(add(c, mul(nrm, half))), p3(sub(c, mul(nrm, half))), { color: this._cfg.markColor, strokeWidth: 4.5 });
         tickMobs.push(m); this.add(m); st.marks.push(m);
       }
     }
@@ -300,10 +302,10 @@ export class GeometryFigure extends VGroup {
       const a = V[side], b = V[(side + 1) % n];
       const mid = mul(add(a, b), 0.5);
       const d = unit(sub(V[(ref + 1) % n], V[ref])), nrm = perp(d);
-      const l = 0.13 * u, w = 0.1 * u, gap = 0.12 * u;
+      const l = 0.17 * u, w = 0.13 * u, gap = 0.16 * u;
       for (let t = 0; t < count; t++) {
         const tip = add(mid, mul(d, (t - (count - 1) / 2) * gap + l / 2));
-        const m = new VMobject({ color: this._cfg.markColor, strokeWidth: 3.5 });
+        const m = new VMobject({ color: this._cfg.markColor, strokeWidth: 4 });
         m.setPointsAsCorners([p3(add(sub(tip, mul(d, l)), mul(nrm, w))), p3(tip), p3(sub(sub(tip, mul(d, l)), mul(nrm, w)))]);
         m.fillOpacity = 0;
         arrowMobs.push(m); this.add(m); st.marks.push(m);
@@ -380,7 +382,7 @@ export class GeometryFigure extends VGroup {
     if (showDots) {
       const names = Array.isArray(vLabels) ? vLabels : lay.names;
       for (let i = 0; i < n; i++) {
-        const t = tex(names[i] ?? lay.names[i], this._cfg.labelColor);
+        const t = tex(names[i] ?? lay.names[i], this._cfg.labelColor, labelFont * 0.85);
         t.moveTo(p3(add(V[i], mul(outDir(V[i]), 0.34 * u))));
         this.add(t); st.labels.push(t);
       }
@@ -397,7 +399,7 @@ export class GeometryFigure extends VGroup {
         const inside = !!(tri && spec.squares);
         if (outward === inside) nrm = mul(nrm, -1); // want outward unless squares occupy the outside
         const color = tri ? (SIDE_COLORS as any)[sideName(spec, i, n)] ?? this._cfg.labelColor : this._cfg.labelColor;
-        const t = tex(text, spec.squares ? color : this._cfg.labelColor);
+        const t = tex(text, spec.squares ? color : this._cfg.labelColor, labelFont * 0.85);
         t.moveTo(p3(add(mid, mul(nrm, (inside ? 0.3 : 0.33) * u))));
         this.add(t); st.labels.push(t);
       }
@@ -462,6 +464,13 @@ export class GeometryFigure extends VGroup {
     this._project();
   }
 
+  /** Solids: set the reveal progress (0 hidden .. 1 shown). Used by reveal(); pure in `a`. */
+  setRevealProgress(a: number): this {
+    this._ra = Math.max(0, Math.min(1, a));
+    if (this._solid) this._project();
+    return this;
+  }
+
   /** Solids: set the time (seconds) driving the spin. Pure: same t, same frame. Planar shapes ignore it. */
   setTime(t: number): this {
     this._time = t;
@@ -489,12 +498,14 @@ export class GeometryFigure extends VGroup {
       const depth = pts.reduce((s, p) => s + p[2], 0) / pts.length;
       return { i, front: nz > 0, depth };
     });
+    const al = (k: number, n: number) => Math.max(0, Math.min(1, this._ra * 1.5 - 0.5 * (k / Math.max(n, 1))));
     const order = [...info].sort((p, q) => p.depth - q.depth);
     order.forEach((it, rank) => {
       const f = sd.faces[it.i];
       const m = this._faceMobs[it.i];
       m.setPointsAsCorners([...f.map((vi) => W(R[vi])), W(R[f[0]])]);
       m.zIndex = rank;
+      m.fillOpacity = 0.3 * al(it.i, sd.faces.length);
     });
     const F = sd.faces.length;
     const adj = new Map<string, boolean>();
@@ -504,10 +515,10 @@ export class GeometryFigure extends VGroup {
       const m = this._edgeMobs[i];
       setSegments(m, W(R[a]), W(R[b]), !front);
       m.zIndex = F + (front ? 2 : 1);
-      m.strokeOpacity = front ? 1 : 0.55;
+      m.strokeOpacity = (front ? 1 : 0.55) * al(i, sd.edges.length);
       m.strokeWidth = front ? 4 : 2.5;
     });
-    this._vertDots.forEach((d, i) => { const w = W(R[i]); d.shift([w[0] - d.getCenter()[0], w[1] - d.getCenter()[1], 0]); d.zIndex = F + 3; });
+    this._vertDots.forEach((d, i) => { const w = W(R[i]); d.shift([w[0] - d.getCenter()[0], w[1] - d.getCenter()[1], 0]); d.zIndex = F + 3; d.fillOpacity = al(i, sd.verts.length); });
   }
 
   // --- animations ---------------------------------------------------------------------
@@ -520,8 +531,7 @@ export class GeometryFigure extends VGroup {
     const st = this._stage;
     const stages: Animation[] = [];
     if (this._solid) {
-      stages.push(new LaggedStart([...this._faceMobs.map((m) => new FadeIn(m, { runTime: 0.5 })), ...this._edgeMobs.map((m) => new FadeIn(m, { runTime: 0.4 }))], { lagRatio: 0.04 }));
-      stages.push(new AnimationGroup(this._vertDots.map((d) => new FadeIn(d, { runTime: 0.3 }))));
+      stages.push(new SolidFade(this));
     } else {
       stages.push(new AnimationGroup([
         ...st.fill.map((m) => new FadeIn(m, { runTime: 0.6 })),
@@ -544,6 +554,15 @@ export class GeometryFigure extends VGroup {
     if (!p) throw new Error(`GeometryFigure.highlight: unknown part "${name}" (have: ${this.partNames().join(", ")})`);
     return new HighlightPart(this, p.mobs, p.kind, config);
   }
+}
+
+/** Solids: staged fade-in driven by the figure's reveal progress (their points are rebuilt every frame, so point-based fades do not apply). */
+class SolidFade extends Animation {
+  constructor(fig: GeometryFigure) { super(fig as any, { runTime: 1.2, suspendMobjectUpdating: false }); }
+  begin(): this { this.started = true; this.interpolate(0); return this; }
+  interpolateMobject(a: number): void { (this.mobject as GeometryFigure).setRevealProgress(a); }
+  finish(): this { (this.mobject as GeometryFigure).setRevealProgress(1); this.finished = true; return this; }
+  _hashExtra(): string { return "solidfade"; }
 }
 
 /** Reveal animation of a GeometryFigure (a Succession that introduces the figure itself). */

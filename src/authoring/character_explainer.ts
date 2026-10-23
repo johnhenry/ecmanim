@@ -40,7 +40,7 @@ export type VisualRegion = (typeof VISUAL_REGIONS)[number];
 /** Seconds before the end of the narration at which an `at: "end"` cue fires. */
 export const END_LEAD = 0.5;
 const MAX_BEATS = 12;
-const MAX_VISUALS = 8;
+const MAX_VISUALS = 16;
 
 export interface CharacterVisual {
   id: string;
@@ -587,21 +587,21 @@ export function scheduleCues(beat: CharacterBeat, bookmarkTimes: Record<string, 
 
 export interface Box { cx: number; cy: number; maxW: number; maxH: number }
 /** The stage (right of the presenter) in world units; the frame is 14.22 x 8. */
-export const STAGE = { left: -0.5, right: 6.5, top: 2.7, bottom: -3.55 };
+export const STAGE = { left: -1.0, right: 6.6, top: 2.7, bottom: -3.55 };
 const GAP = 0.3;
 
 /**
  * Place visible visuals in boxes. "top" / "bottom" visuals take a strip; the
  * "right" (default) visuals share what is left, stacked vertically in order.
  */
-export function layoutVisuals(items: Array<{ id: string; at?: VisualRegion }>): Record<string, Box> {
+export function layoutVisuals(items: Array<{ id: string; at?: VisualRegion; weight?: number }>): Record<string, Box> {
   const out: Record<string, Box> = {};
   const w = STAGE.right - STAGE.left;
   const cx = (STAGE.left + STAGE.right) / 2;
   const tops = items.filter((i) => i.at === "top");
   const bottoms = items.filter((i) => i.at === "bottom");
   const mains = items.filter((i) => i.at !== "top" && i.at !== "bottom");
-  const stripH = 1.25;
+  const stripH = 1.05;
   let top = STAGE.top, bottom = STAGE.bottom;
   const place = (arr: typeof items, y0: number, y1: number, horizontal: boolean) => {
     const n = arr.length;
@@ -610,8 +610,11 @@ export function layoutVisuals(items: Array<{ id: string; at?: VisualRegion }>): 
       const bw = (w - GAP * (n - 1)) / n;
       arr.forEach((it, i) => { out[it.id] = { cx: STAGE.left + bw / 2 + i * (bw + GAP), cy: (y0 + y1) / 2, maxW: bw, maxH: y1 - y0 }; });
     } else {
-      const bh = (y1 - y0 - GAP * (n - 1)) / n;
-      arr.forEach((it, i) => { out[it.id] = { cx, cy: y1 - bh / 2 - i * (bh + GAP), maxW: w, maxH: bh }; });
+      // Stacked top to bottom; heights are proportional to `weight` (default 1).
+      const total = arr.reduce((t, it) => t + (it.weight ?? 1), 0);
+      const free = y1 - y0 - GAP * (n - 1);
+      let y = y1;
+      arr.forEach((it) => { const bh = (free * (it.weight ?? 1)) / total; out[it.id] = { cx, cy: y - bh / 2, maxW: w, maxH: bh }; y -= bh + GAP; });
     }
   };
   if (tops.length) { place(tops, top - stripH, top, true); top -= stripH + GAP; }
