@@ -587,14 +587,17 @@ export function scheduleCues(beat: CharacterBeat, bookmarkTimes: Record<string, 
 
 export interface Box { cx: number; cy: number; maxW: number; maxH: number }
 /** The stage (right of the presenter) in world units; the frame is 14.22 x 8. */
-export const STAGE = { left: -1.0, right: 6.6, top: 2.7, bottom: -3.55 };
+/** The region visuals are laid out in (world units). */
+export interface Stage { left: number; right: number; top: number; bottom: number }
+export const STAGE: Stage = { left: -1.0, right: 6.6, top: 2.7, bottom: -3.55 };
 const GAP = 0.3;
 
 /**
  * Place visible visuals in boxes. "top" / "bottom" visuals take a strip; the
  * "right" (default) visuals share what is left, stacked vertically in order.
  */
-export function layoutVisuals(items: Array<{ id: string; at?: VisualRegion; weight?: number }>): Record<string, Box> {
+export function layoutVisuals(items: Array<{ id: string; at?: VisualRegion; weight?: number }>, stage: Stage = STAGE): Record<string, Box> {
+  const STAGE = stage; // optional override, e.g. a top lowered below a two-line title
   const out: Record<string, Box> = {};
   const w = STAGE.right - STAGE.left;
   const cx = (STAGE.left + STAGE.right) / 2;

@@ -571,3 +571,31 @@ test("render smoke: low quality, silent TTS", async () => {
   assert.ok(res.output.quality.results.length > 0);
   assert.equal(res.output.quality.ok, true);
 });
+
+// Titles written by an LLM can be long; the title must always stay inside the frame
+// (a qwen2.5:3b plan produced an 86-char title that ran edge to edge and touched the top).
+test("fitTitle keeps long titles inside the frame with a top margin; short titles keep their size", async () => {
+  const { fitTitle, wrapTitle } = await import("../src/authoring/character_explainer_scene.ts");
+  const { Text } = await import("../src/index.ts");
+  const FRAME = { width: 14.222, height: 8 };
+  const long = "The Quadrilateral Family: Square, Rectangle, Rhombus, Parallelogram, Trapezoid, and Kite";
+  const t = fitTitle(new Text(wrapTitle(long), { fontSize: 0.36, lineSpacing: 1.6 }), FRAME);
+  const bb = t.getBoundingBox();
+  assert.ok(bb.min[0] >= -FRAME.width / 2 + 0.5 && bb.max[0] <= FRAME.width / 2 - 0.5, `x within margins: ${bb.min[0]}..${bb.max[0]}`);
+  assert.ok(bb.max[1] <= FRAME.height / 2 - 0.25, `top margin: ${bb.max[1]}`);
+  assert.ok(bb.min[1] >= FRAME.height / 2 - 1.6, `title stays in the top band: ${bb.min[1]}`);
+  const short = new Text("The Pythagorean Theorem", { fontSize: 0.36 });
+  const h0 = short.getHeight();
+  fitTitle(short, FRAME);
+  assert.ok(Math.abs(short.getHeight() - h0) < 1e-9, "short title is not rescaled");
+});
+
+test("layoutVisuals honours a lowered stage top (e.g. below a two-line title); default unchanged", async () => {
+  const { layoutVisuals, STAGE } = await import("../src/authoring/character_explainer.ts");
+  const items = [{ id: "k", weight: 2.5 }, { id: "t" }];
+  const def = layoutVisuals(items);
+  assert.deepEqual(layoutVisuals(items, STAGE), def, "passing STAGE explicitly is identical to the default");
+  const top = STAGE.top - 0.8;
+  const low = layoutVisuals(items, { ...STAGE, top });
+  for (const b of Object.values(low)) assert.ok(b.cy + b.maxH / 2 <= top + 1e-9, `box top ${b.cy + b.maxH / 2} <= ${top}`);
+});

@@ -10,6 +10,7 @@ import {
 import { splitTarget } from "./character_explainer.ts";
 import type { CharacterExplainerPlan, CharacterVisual, CharacterBeat, CharacterCue, Box } from "./character_explainer.ts";
 import type { GeometryFigure, FigurePart } from "../mobject/geometry_figure.ts";
+import type { Mobject } from "../mobject/Mobject.ts";
 
 const PRESENTER_X = -3.0;
 const PRESENTER_Y = -1.3;
@@ -17,6 +18,22 @@ const ARM_REACH = 1.0 + 0.95;
 const MAX_STEP = 1.3;
 const POINT_HOLD = 2.4;
 const MAX_PER_REGION = 3;
+
+/** Wrap a plan title for display (at most ~2 lines at the title font size). */
+export const wrapTitle = (title: string): string => wrap(title, 48);
+
+/**
+ * Keep the title inside the frame: scale it down (never up) to fit a max width and
+ * height, then pin it a margin below the top edge. LLM-written titles can be long.
+ */
+export function fitTitle<T extends Mobject>(title: T, frame: { width: number; height: number } = { width: 14.222, height: 8 }): T {
+  const maxW = frame.width - 1.6, maxH = 1.15;
+  const k = Math.min(1, maxW / Math.max(1e-9, title.getWidth()), maxH / Math.max(1e-9, title.getHeight()));
+  if (k < 1) title.scale(k);
+  const bb = title.getBoundingBox();
+  title.shift([-(bb.min[0] + bb.max[0]) / 2, frame.height / 2 - 0.35 - bb.max[1], 0]);
+  return title;
+}
 
 const wrap = (text: string, width: number): string => {
   const words = text.split(/\s+/).filter(Boolean);
@@ -75,6 +92,8 @@ class MoveScale extends Animation {
 }
 
 export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan): Promise<void> {
+  // Mutable copy of the visual stage; its top is lowered below the title once it is laid out.
+  const stage = { ...STAGE };
   const idx = await import("../index.ts");
   const geo = idx;
   await idx.initMathTex();
@@ -202,7 +221,7 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
       while (cost > MAX_PER_REGION && inReg.length > 1) { const gone = inReg.shift()!; cost -= recs.get(gone)!.cost; evicted.push(gone); order.splice(order.indexOf(gone), 1); }
     }
     for (const id of evicted) { const r = recs.get(id)!; r.shown = false; pre.push(new idx.FadeOut(r.mob)); }
-    const boxes = layoutVisuals(order.map((id) => ({ id, at: recs.get(id)!.def.at, weight: recs.get(id)!.def.kind === "shape" ? 2.5 : 1 })));
+    const boxes = layoutVisuals(order.map((id) => ({ id, at: recs.get(id)!.def.at, weight: recs.get(id)!.def.kind === "shape" ? 2.5 : 1 })), stage);
     for (const id of order) {
       const r = recs.get(id)!;
       const box = boxes[id];
@@ -385,7 +404,9 @@ export async function runPresenterScene(scene: any, plan: CharacterExplainerPlan
 
   // --- run ---------------------------------------------------------------------------
   scene.nextSection("intro");
-  const title = new idx.Text(wrap(plan.title, 60), { fontSize: 0.36, lineSpacing: 1.6, color: "#FFD700", point: [0, 3.5, 0] });
+  const title = fitTitle(new idx.Text(wrapTitle(plan.title), { fontSize: 0.36, lineSpacing: 1.6, color: "#FFD700" }));
+  // Visuals start below the title's real bottom (a long title wraps to two lines).
+  stage.top = Math.min(STAGE.top, title.getBoundingBox().min[1] - 0.3);
   await play([new idx.Write(title)], 0.8);
   for (const [bi, beat] of plan.beats.entries()) await runBeat(beat, bi);
   await scene.wait(1);
