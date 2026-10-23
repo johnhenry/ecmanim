@@ -127,6 +127,17 @@ DSL: `A`, `A[Label]`, `A --> B`, `A -- label --> B` (blank/`//` lines ignored).
 tagged with `matchId` (`node:A`, `edge:A->B`) so transitions pair them
 automatically. See `examples/diagram.ts`.
 
+**Node sizing.** Boxes default to 1.8 x 0.9 and grow to fit their label plus
+padding (0.3 per side horizontally, 0.2 vertically); a label that already fits
+leaves the box and layout exactly as before. Layer/row spacing widens only as
+needed to keep neighbouring boxes at least 1.2 / 0.7 apart, and edge endpoints
+are computed from the final boxes. Label size is an *estimate* (characters x
+`fontSize` x 0.55 per line, the same as RasterText's own bounds), identical on
+every backend, so very wide glyphs (e.g. all caps "W") may still be a little
+tight; there is no wrapping or shrinking. `layoutDiagram` only accounts for
+sizes when given `nodeSizes` (see `measureDiagramNodes`); `buildBoard` does so
+automatically. The Mermaid loader is separate and unaffected.
+
 **Layout limitations:** the layered algorithm assigns ranks and orders nodes with
 a barycenter heuristic — it reduces but does not minimize edge crossings, and
 there is no edge routing (edges are straight lines that may pass through other

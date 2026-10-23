@@ -29,6 +29,13 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Fixed
+
+- Inline diagram DSL (`diagram()` / `buildBoard()`): node boxes now grow to fit
+  long labels (label width + padding) instead of letting text overflow, and
+  layer/row/ring spacing widens to keep wider boxes apart (#109). Labels that
+  already fit render byte-identically; the Mermaid loader is unchanged.
+
 ## 0.13.0 — 2026-10-23
 
 Textbook geometry and an animated presenter. **`GeometryFigure`** draws

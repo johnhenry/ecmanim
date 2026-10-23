@@ -8,7 +8,7 @@
 import { VGroup } from "../mobject/VMobject.ts";
 import { RoundedRectangle } from "../mobject/polygram.ts";
 import { Arrow } from "../mobject/geometry.ts";
-import { RasterText } from "../mobject/text/Text.ts";
+import { RasterText, estimateTextSize } from "../mobject/text/Text.ts";
 import { Color } from "../core/color.ts";
 
 export interface DiagramNode { id: string; label: string; }
@@ -55,6 +55,38 @@ export function parseDiagram(dsl: string): DiagramGraph {
   return { nodes: Array.from(nodes.values()), edges };
 }
 
+/** Default node box size (world units); boxes never shrink below this. */
+export const DIAGRAM_NODE_WIDTH = 1.8;
+export const DIAGRAM_NODE_HEIGHT = 0.9;
+/** Padding between a label and its box edge when the box grows to fit it. */
+const FIT_PAD_X = 0.3;
+const FIT_PAD_Y = 0.2;
+/** Minimum clear space kept between neighbouring boxes (matches the default gaps). */
+const CLEAR_X = 1.2;
+const CLEAR_Y = 0.7;
+
+/** Box size of a node: the default size, grown to fit its label plus padding. */
+export interface DiagramNodeSize { width: number; height: number; }
+
+/**
+ * Size each node's box so its label fits. Uses `estimateTextSize` (character
+ * count x fontSize x 0.55 per line), the same backend-independent estimate
+ * RasterText uses for its own bounds, so Node, Canvas-2D and WebGL agree. A
+ * label that already fits within the default 1.8 x 0.9 box (with padding)
+ * leaves the box at exactly the default size.
+ */
+export function measureDiagramNodes(graph: DiagramGraph, fontSize = 0.32): Map<string, DiagramNodeSize> {
+  const sizes = new Map<string, DiagramNodeSize>();
+  for (const node of graph.nodes) {
+    const t = estimateTextSize(node.label, fontSize);
+    sizes.set(node.id, {
+      width: Math.max(DIAGRAM_NODE_WIDTH, t.width + 2 * FIT_PAD_X),
+      height: Math.max(DIAGRAM_NODE_HEIGHT, t.height + 2 * FIT_PAD_Y),
+    });
+  }
+  return sizes;
+}
+
 export interface LayoutOptions {
   /** Horizontal spacing between layers (default 3). */
   layerGap?: number;
@@ -62,6 +94,13 @@ export interface LayoutOptions {
   nodeGap?: number;
   /** "layered" (default, left→right by depth) or "circular". */
   algorithm?: "layered" | "circular";
+  /**
+   * Per-node box sizes (see `measureDiagramNodes`). When given, spacing grows
+   * so wider/taller boxes don't collide; gaps that already suffice, and any
+   * layout where every node is the default size, are left exactly as-is.
+   * Omitted (default): sizes are ignored, i.e. the historical layout.
+   */
+  nodeSizes?: Map<string, DiagramNodeSize>;
 }
 
 /** Deterministic layout → node id → [x, y, 0]. */
@@ -72,7 +111,20 @@ export function layoutDiagram(graph: DiagramGraph, opts: LayoutOptions = {}): Ma
 
   if (opts.algorithm === "circular") {
     const n = graph.nodes.length || 1;
-    const rad = Math.max(1.5, (n * nodeGap) / (2 * Math.PI));
+    let rad = Math.max(1.5, (n * nodeGap) / (2 * Math.PI));
+    const sizes = opts.nodeSizes;
+    if (sizes && n > 1 && graph.nodes.some((nd) => {
+      const z = sizes.get(nd.id);
+      return z && (z.width > DIAGRAM_NODE_WIDTH || z.height > DIAGRAM_NODE_HEIGHT);
+    })) {
+      // Grow the ring until neighbouring boxes clear each other.
+      for (let i = 0; i < n; i++) {
+        const a = sizes.get(graph.nodes[i].id), b = sizes.get(graph.nodes[(i + 1) % n].id);
+        if (!a || !b) continue;
+        const chord = (a.width + b.width) / 2 + 0.3;
+        rad = Math.max(rad, chord / (2 * Math.sin(Math.PI / n)));
+      }
+    }
     graph.nodes.forEach((node, i) => {
       const a = (2 * Math.PI * i) / n;
       pos.set(node.id, [rad * Math.cos(a), rad * Math.sin(a), 0]);
@@ -139,13 +191,41 @@ export function layoutDiagram(graph: DiagramGraph, opts: LayoutOptions = {}): Ma
       if (next && cur) orderLayer(cur, (id) => adj.get(id) ?? [], indexMap(next));
     }
   }
+  const sizes = opts.nodeSizes;
+  // Column centers. Historical formula unless a wider box needs more room.
+  const layerWidth = (d: number) => Math.max(DIAGRAM_NODE_WIDTH, ...(byDepth.get(d) ?? []).map((id) => sizes?.get(id)?.width ?? DIAGRAM_NODE_WIDTH));
+  const gaps: number[] = [];
+  for (let d = 0; d < maxDepth; d++) gaps.push(sizes ? Math.max(layerGap, (layerWidth(d) + layerWidth(d + 1)) / 2 + CLEAR_X) : layerGap);
+  const grown = gaps.some((g) => g !== layerGap);
+  const colX: number[] = [];
+  if (!grown) {
+    for (let d = 0; d <= maxDepth; d++) colX.push((d - maxDepth / 2) * layerGap);
+  } else {
+    let x = 0;
+    colX.push(0);
+    for (const g of gaps) { x += g; colX.push(x); }
+    const mid = x / 2;
+    for (let d = 0; d <= maxDepth; d++) colX[d] -= mid;
+  }
   for (const [d, ids] of byDepth) {
     const count = ids.length;
-    ids.forEach((id, i) => {
-      const x = (d - maxDepth / 2) * layerGap;
-      const y = (i - (count - 1) / 2) * nodeGap;
-      pos.set(id, [x, y, 0]);
-    });
+    // Row offsets. Historical formula unless taller boxes need more room.
+    const rowGaps: number[] = [];
+    for (let i = 0; i + 1 < count; i++) {
+      const ha = sizes?.get(ids[i])?.height ?? DIAGRAM_NODE_HEIGHT, hb = sizes?.get(ids[i + 1])?.height ?? DIAGRAM_NODE_HEIGHT;
+      rowGaps.push(sizes ? Math.max(nodeGap, (ha + hb) / 2 + CLEAR_Y) : nodeGap);
+    }
+    const rowsGrown = rowGaps.some((g) => g !== nodeGap);
+    const ys: number[] = [];
+    if (!rowsGrown) {
+      for (let i = 0; i < count; i++) ys.push((i - (count - 1) / 2) * nodeGap);
+    } else {
+      let y = 0;
+      ys.push(0);
+      for (const g of rowGaps) { y += g; ys.push(y); }
+      for (let i = 0; i < count; i++) ys[i] -= y / 2;
+    }
+    ids.forEach((id, i) => pos.set(id, [colX[d], ys[i], 0]));
   }
   return pos;
 }
@@ -159,17 +239,19 @@ export interface BoardOptions extends LayoutOptions {
 
 /** Build a board: a VGroup of node + edge mobjects, each tagged with a `matchId`. */
 export function buildBoard(graph: DiagramGraph, opts: BoardOptions = {}): VGroup {
-  const pos = layoutDiagram(graph, opts);
+  const fontSize = opts.fontSize ?? 0.32;
+  const sizes = opts.nodeSizes ?? measureDiagramNodes(graph, fontSize);
+  const pos = layoutDiagram(graph, { ...opts, nodeSizes: sizes });
   const board = new VGroup();
   const nodeColor = opts.nodeColor ?? "#58C4DD";
   const edgeColor = opts.edgeColor ?? "#B0B0B0";
   const textColor = opts.textColor ?? "#FFFFFF";
-  const fontSize = opts.fontSize ?? 0.32;
 
   const nodeMobs = new Map<string, any>();
   for (const node of graph.nodes) {
     const p = pos.get(node.id) ?? [0, 0, 0];
-    const box = new RoundedRectangle({ width: 1.8, height: 0.9, cornerRadius: 0.15, color: nodeColor });
+    const sz = sizes.get(node.id) ?? { width: DIAGRAM_NODE_WIDTH, height: DIAGRAM_NODE_HEIGHT };
+    const box = new RoundedRectangle({ width: sz.width, height: sz.height, cornerRadius: 0.15, color: nodeColor });
     box.setStyle?.({ fillColor: Color.parse(nodeColor), fillOpacity: 0.18, strokeColor: Color.parse(nodeColor), strokeWidth: 3 });
     const label = new RasterText(node.label, { fontSize, color: textColor });
     const group = new VGroup();
