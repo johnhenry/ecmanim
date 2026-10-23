@@ -29,6 +29,13 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Fixed
+
+- `MathTex`/`Tex` no longer render Unicode superscripts/subscripts (`a²`, `x₁`) as
+  invisible glyphs that still take up space: they are rewritten to `^{…}`/`_{…}`
+  (runs merged) before MathJax. In `Tex` text mode, script runs become real math
+  scripts. Inputs without such characters are unchanged (#108).
+
 ## 0.13.0 — 2026-10-23
 
 Textbook geometry and an animated presenter. **`GeometryFigure`** draws

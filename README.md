@@ -439,6 +439,9 @@ Deeper module map, rendering pipeline, and registry mechanics:
   `setDefaultFont`). The Node path auto-initializes both.
 - **No true LaTeX binary.** `MathTex`/`Tex` render via **MathJax → SVG → Béziers**,
   not a real LaTeX/dvipng toolchain, so exotic LaTeX packages are out of scope.
+- **Unicode super/subscripts are converted to TeX.** MathJax has no glyphs for `a²`/`x₁`,
+  so `MathTex`/`Tex` rewrite them to `^{…}`/`_{…}` (runs merged) before rendering; in `Tex`
+  text mode a run like `m²` becomes a real math script. Plain TeX input is untouched.
 - **3D is CPU-projection, not GPU-lit.** The default renderer is a software
   projection camera with a per-pixel z-buffer and Gouraud/flat shading — there is
   no per-pixel Phong lighting model. The optional Three.js backend adds GPU depth
