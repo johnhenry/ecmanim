@@ -29,6 +29,18 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+## 0.14.0 — 2026-10-24
+
+**Breaking: behaviour now matches Manim CE** (epic #114, Wave A). A source audit
+against Manim CE and ManimGL found core behaviours that silently differed from CE,
+so scenes ported from manim rendered differently. This release fixes them to match CE
+outright. Existing ecmanim scenes may look different: groups now draw in sequence
+with `Create`, `Write` timing follows the content's size, `VGroup.arrange` recenters,
+group styling reaches children, `Axes()` defaults to CE's size with arrow tips, and
+arrow tips are larger. Each entry below says how to get the old behaviour back.
+The public API is additive: nothing was removed or renamed. ManimGX, which avoids
+copying CE's bugs, also matches CE on every one of these.
+
 ### Changed (breaking)
 
 Wave A of the manim-parity v2 epic (#114): behaviour and defaults now match Manim CE (#115, #116, #117, #118, #119, #123).
