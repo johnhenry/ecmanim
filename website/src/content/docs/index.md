@@ -78,16 +78,22 @@ const loop = async () => {
     looping = false;
   }
 };
-loop();
-document.getElementById('replay').addEventListener('click', run);
+loop().catch((err) => console.warn('ecmanim demo playback stopped:', err));
+document.getElementById('replay').addEventListener('click', () => {
+  run().catch((err) => console.warn('ecmanim demo replay failed:', err));
+});
 document.getElementById('download').addEventListener('click', async () => {
-  const blob = await record(Demo, { quality: 'high', background: '#0d1117' });
-  const a = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  a.href = url;
-  a.download = 'ecmanim-demo.webm';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try {
+    const blob = await record(Demo, { quality: 'high', background: '#0d1117' });
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = 'ecmanim-demo.webm';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    console.warn('ecmanim demo download failed:', err);
+  }
 });
 </script>
 
