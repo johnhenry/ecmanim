@@ -31,6 +31,40 @@ function drawWith(renderer, mobjects) {
 }
 ```
 
+## Node video frame transport
+
+The Canvas-2D Node renderer sends raw, straight-alpha RGBA frames to ffmpeg
+(`rawvideo`, `rgba`, explicit dimensions and frame rate), avoiding a PNG
+compression/decompression round trip for every video frame. This applies to
+`render()` and `renderParallel()`, including partial-movie cache misses.
+Readback uses `getImageData()` because native canvas storage is premultiplied;
+passing that storage directly would darken translucent colors.
+Before readback, the zero-copy `canvas.data()` call flushes the native canvas's
+deferred recordings so old composite-layer snapshots do not accumulate.
+`getImageData()` alone does not perform that consolidation in
+[`@napi-rs/canvas` 0.1.100](https://github.com/Brooooooklyn/canvas/blob/v0.1.100/src/ctx.rs#L131).
+
+Each renderer/worker streams one active segment with backpressure, rather than
+retaining raw frames for the whole scene. A frame takes `width × height × 4`
+bytes before encoding. Temporary partials become visible in the cache only
+after ffmpeg succeeds; failures terminate the encoder and remove its temporary
+file. Existing PNG-fed partial movies are still reusable. Codec/quality
+defaults, PNG stills/sequences, and the browser export paths are unchanged.
+This does not deduplicate still frames (#168) or add encoder presets (#169).
+
+The design follows ManimGX's direct pixel-to-video pipeline and bounded encoder
+queue: [`film.py`, `_send`](https://github.com/academa-labs/manimgx/blob/1eb91c0000f45916cff6563c22a4ebc3b32773ba/src/manimgx/rendering/film.py#L486)
+and [`encode.rs`, `Worker`](https://github.com/academa-labs/manimgx/blob/1eb91c0000f45916cff6563c22a4ebc3b32773ba/rust/engine/src/encode.rs#L39)
+(MIT, source pinned by #167). ManimGX sends NV12 macroblocks directly to x264;
+ecmanim independently implements RGBA transport through its existing ffmpeg
+process. No ManimGX implementation code is copied.
+
+Run `node test/raw-rgba.bench.ts [output-dir]` on the old and new revisions to
+compare median render times for the same 180-frame, 1280×720, 30 fps scene.
+The script warms the backend first, runs three trials for both single-stream
+and cold-cache rendering, and reports elapsed time and process peak RSS. Use a
+fresh output directory on each run so cached partials cannot skew the result.
+
 ## Static-subtree render caching (Canvas-2D)
 
 `mobject.cacheStatic()` opts a mobject into `CanvasRenderer`'s per-mobject

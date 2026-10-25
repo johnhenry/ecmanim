@@ -29,6 +29,14 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Changed
+
+- Node video rendering streams straight-alpha RGBA frames to ffmpeg, avoiding
+  per-frame PNG compression in sequential and parallel renders (#167).
+  Partial-movie cache misses encode as frames arrive with bounded buffering;
+  existing cache files remain reusable. PNG stills and sequences retain their
+  encoding, and video codec/quality defaults are unchanged.
+
 ## 0.14.0 — 2026-10-24
 
 **Breaking: behaviour now matches Manim CE** (epic #114, Wave A). A source audit

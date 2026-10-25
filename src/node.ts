@@ -13,7 +13,8 @@ import { makeScene, runConstruct } from "./scene/orchestrate.ts";
 import { QUALITIES } from "./index.ts";
 import { resolveOutputFormat, isJsEncoderFormat } from "./core/render_format.ts";
 import { config as manimConfig, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
-import { startFfmpeg, writeToStream, encodeFrames, runFfmpeg, concatPartials, remuxCopy, tempPathFor } from "./renderer/ffmpeg.ts";
+import { createFfmpegEncoder, runFfmpeg, concatPartials, remuxCopy, tempPathFor } from "./renderer/ffmpeg.ts";
+import { readRgbaFrame, createPartialEncoder } from "./renderer/raw_frames.ts";
 
 // Once ecmanim/node has been imported, Text/VText/VectorDecimalNumber lazily
 // auto-resolve a default system font the first time none is registered yet
@@ -373,10 +374,11 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     mkdirSync(cacheDir, { recursive: true });
     const partialExt = format === "webm" ? "webm" : format === "mov" ? "mov" : "mp4";
 
-    // Group emitted frames by segment id. `-1` is the pre-first-play bucket
+    // Stream emitted frames by segment id. `-1` is the pre-first-play bucket
     // (initial frames). Each play()/wait bumps activeSeg to rec.index; a segment
-    // whose partial already exists on disk is skipped (frames not re-buffered).
-    const segMap = new Map<number, any[]>();       // segId -> PNG buffers
+    // whose partial already exists on disk is skipped.
+    const segments = createPartialEncoder({ fps, pixelWidth, pixelHeight, format, transparent, verbose });
+    let hasInit = false;
     const segHashes = new Map<number, string>();   // segId -> content hash
     let activeSeg = -1;
     // Salt every partial's cache key with cacheConfigHash (see above) so a
@@ -396,28 +398,28 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
     scene.frameHandler = async (mobjects: any[]) => {
       renderer.renderScene(mobjects);
       emitted++;
-      const buf = canvas.toBuffer("image/png");
-      if (!segMap.has(activeSeg)) segMap.set(activeSeg, []);
-      segMap.get(activeSeg)!.push(buf);
+      if (activeSeg < 0) hasInit = true;
+      const hash = activeSeg < 0 ? "init" : (segHashes.get(activeSeg) ?? `seg${activeSeg}`);
+      await segments.write(activeSeg, join(cacheDir, `${keyed(hash)}.${partialExt}`), readRgbaFrame(ctx, pixelWidth, pixelHeight));
     };
 
-    await runConstruct(sceneOrConstruct, scene, resolvedParams);
-    if (emitted === 0 && segMap.size === 0) { await scene.emitFrame(); }
-
-    // Encode any freshly-rendered segments to their partial files.
-    for (const [id, frames] of segMap) {
-      const hash = id < 0 ? "init" : (segHashes.get(id) ?? `seg${id}`);
-      const partialPath = join(cacheDir, `${keyed(hash)}.${partialExt}`);
-      if (!existsSync(partialPath) && frames.length) {
-        await encodeFrames(frames, { fps, pixelWidth, pixelHeight, outPath: partialPath, format, transparent, verbose });
-      }
+    try {
+      await runConstruct(sceneOrConstruct, scene, resolvedParams);
+      // A fully reused scene already has its frames on disk. Only a scene
+      // without any segments or explicit frames needs the still fallback.
+      if (emitted === 0 && scene.playRecords.length === 0) await scene.emitFrame();
+      await segments.finish();
+    } catch (err) {
+      await segments.abort();
+      throw err;
     }
+    reusedPartials += segments.reused;
 
     // Build the concat order: the init bucket first, then one partial per
     // play()/wait record (in play order). Reused segments contribute their
     // existing on-disk partial.
     const concatList: string[] = [];
-    if (segMap.has(-1)) {
+    if (hasInit) {
       const p = join(cacheDir, `${keyed("init")}.${partialExt}`);
       if (existsSync(p)) concatList.push(p);
     }
@@ -426,13 +428,9 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       if (existsSync(p)) concatList.push(p);
     }
 
-    if (concatList.length === 0) {
-      // No segments at all — encode whatever the init bucket has straight to out.
-      const initFrames = segMap.get(-1) ?? [];
-      if (initFrames.length) await encodeFrames(initFrames, { fps, pixelWidth, pixelHeight, outPath, format, transparent, verbose });
-    } else if (concatList.length === 1) {
+    if (concatList.length === 1) {
       await remuxCopy(concatList[0], outPath, verbose);
-    } else {
+    } else if (concatList.length > 1) {
       await concatPartials(concatList, outPath, verbose);
     }
 
@@ -449,49 +447,19 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
   }
 
   // --- Single-stream path (caching disabled or range filtering active). ---
-  // Write to a TEMP path and renameSync() into `outPath` only after ffmpeg
-  // exits 0 -- same atomic-write pattern encodeFrames() (renderer/ffmpeg.ts)
-  // already uses for partial-movie segments, applied here too. Without this,
-  // a `runConstruct()` throw mid-render (a scene's construct() erroring
-  // partway through) skipped straight past `ffmpeg.stdin.end()` and the
-  // close-event wait below, leaving the ffmpeg child orphaned (hanging on
-  // stdin waiting for more frames that will never come) AND a partial/
-  // unfinalized file sitting at the real `outPath`. The try/finally below
-  // guarantees the ffmpeg child is killed and no partial file is left at
-  // `outPath` on any failure path.
-  const singleTempPath = tempPathFor(outPath);
-  const ffmpeg = startFfmpeg({ fps, pixelWidth, pixelHeight, outPath: singleTempPath, format, transparent, verbose });
+  const encoder = createFfmpegEncoder({ fps, pixelWidth, pixelHeight, outPath, format, transparent, verbose, inputFormat: "rgba" });
   scene.frameHandler = async (mobjects: any[]) => {
     renderer.renderScene(mobjects);
     emitted++;
-    const buf = canvas.toBuffer("image/png");
-    await writeToStream(ffmpeg.stdin, buf);
+    await encoder.write(readRgbaFrame(ctx, pixelWidth, pixelHeight));
   };
 
   try {
     await runConstruct(sceneOrConstruct, scene, resolvedParams);
     if (emitted === 0) await scene.emitFrame();
-
-    ffmpeg.stdin.end();
-    await new Promise<void>((res, rej) => {
-      ffmpeg.on("close", (code: number) => (code === 0 ? res() : rej(new Error("ffmpeg exited " + code))));
-      ffmpeg.on("error", rej);
-    });
-    renameSync(singleTempPath, outPath);
+    await encoder.finish();
   } catch (err) {
-    // SIGKILL, not the default SIGTERM: confirmed via direct repro that a
-    // plain `ffmpeg.kill()` (SIGTERM) can leave ffmpeg hung indefinitely --
-    // at least on macOS, it's blocked in a read() on stdin waiting for more
-    // frames, and (unlike Linux) macOS's signal() semantics restart
-    // interrupted blocking syscalls by default, so ffmpeg's SIGTERM handler
-    // never gets a chance to notice the pending termination and the process
-    // just sits there forever. We're discarding this output regardless (the
-    // temp file gets removed below, never renamed to `outPath`), so there's
-    // no reason to ask for a graceful shutdown -- SIGKILL can't be caught,
-    // blocked, or ignored, which is exactly the unconditional guarantee
-    // needed here.
-    try { ffmpeg.kill("SIGKILL"); } catch { /* already exited */ }
-    try { rmSync(singleTempPath, { force: true }); } catch { /* never created */ }
+    await encoder.abort();
     throw err;
   }
 
@@ -648,4 +616,3 @@ export async function loadPlugins(config: string | { plugins?: any[] } = "manim.
   }
   return registry;
 }
-

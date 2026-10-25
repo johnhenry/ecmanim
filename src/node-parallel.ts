@@ -39,7 +39,8 @@ import type { SegmentRecord } from "./scene/render_frame.ts";
 // Shared ffmpeg helpers — the single source of truth for both the sequential
 // (node.ts) and parallel cache paths, keeping partial files byte-compatible.
 import { normalizeFormat, partialExtension, isJsEncoderFormat } from "./core/render_format.ts";
-import { encodeFrames, concatPartials, remuxCopy } from "./renderer/ffmpeg.ts";
+import { concatPartials, remuxCopy } from "./renderer/ffmpeg.ts";
+import { readRgbaFrame, createPartialEncoder } from "./renderer/raw_frames.ts";
 
 export interface RenderParallelOptions {
   fps?: number;
@@ -226,10 +227,10 @@ export async function renderSegmentRange(
 
   const { scene, run } = buildScene(target, { fps: r.fps, camera, ...(params !== undefined ? { params } : {}) });
 
-  // Per-segment PNG buffers for assigned segments only. Segments NOT assigned to
+  // Stream assigned segments directly to ffmpeg. Segments NOT assigned to
   // this worker are skipped (frames not emitted) but time still advances — so the
   // scene state entering each assigned segment is identical to a full render.
-  const segMap = new Map<number, any[]>();
+  const segments = createPartialEncoder({ fps: r.fps, pixelWidth: r.pixelWidth, pixelHeight: r.pixelHeight, format: r.format, verbose });
   const segHashes = new Map<number, string>();
   let activeSeg = -2; // -2 = no active assigned segment; -1 = init bucket
   let reused = 0;
@@ -252,33 +253,21 @@ export async function renderSegmentRange(
   };
 
   scene.frameHandler = async (mobjects) => {
-    if (activeSeg < 0) return; // only buffer frames for an active assigned segment
+    if (activeSeg < 0) return; // only encode frames for an active assigned segment
     renderer.renderScene(mobjects);
-    const buf = canvas.toBuffer("image/png");
-    if (!segMap.has(activeSeg)) segMap.set(activeSeg, []);
-    segMap.get(activeSeg)!.push(buf);
+    const hash = segHashes.get(activeSeg) ?? `seg${activeSeg}`;
+    await segments.write(activeSeg, join(r.cacheDir, `${keyed(hash)}.${r.partialExt}`), readRgbaFrame(ctx, r.pixelWidth, r.pixelHeight));
   };
 
-  await run();
-
-  // Encode each freshly-rendered assigned segment to its partial file.
-  let encoded = 0;
-  for (const [id, frames] of segMap) {
-    if (!frames.length) continue;
-    const hash = segHashes.get(id) ?? `seg${id}`;
-    const partialPath = join(r.cacheDir, `${keyed(hash)}.${r.partialExt}`);
-    if (!existsSync(partialPath)) {
-      await encodeFrames(frames, {
-        fps: r.fps, pixelWidth: r.pixelWidth, pixelHeight: r.pixelHeight,
-        outPath: partialPath, format: r.format, verbose,
-      });
-      encoded++;
-    } else {
-      reused++;
-    }
+  try {
+    await run();
+    await segments.finish();
+  } catch (err) {
+    await segments.abort();
+    throw err;
   }
 
-  return { encoded, reused };
+  return { encoded: segments.encoded, reused: reused + segments.reused };
 }
 
 // ---------------------------------------------------------------------------
