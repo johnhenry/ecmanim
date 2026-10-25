@@ -52,6 +52,14 @@ for (const format of ["mp4", "webm", "mov", "gif"]) {
 const options = { pixelWidth: 96, pixelHeight: 64, fps: 8, verbose: false };
 const scenePath = fileURLToPath(new URL("./fixtures/raw-rgba-scene.ts", import.meta.url));
 
+test("raw readback bounds native memory across pooled composite frames", { timeout: 30_000 }, () => {
+  // Isolate RSS from the rest of the test suite. A very loose ceiling catches
+  // retained Skia snapshots (~640 MiB here), not allocator/GC timing noise.
+  const fixture = fileURLToPath(new URL("./fixtures/raw-rgba-memory.ts", import.meta.url));
+  const { growth } = JSON.parse(execFileSync(process.execPath, [fixture], { encoding: "utf8", timeout: 25_000 }));
+  assert.ok(growth < 192 * 1024 * 1024, `native memory grew by ${(growth / 1024 / 1024).toFixed(1)} MiB`);
+});
+
 test("sequential, cached and parallel videos avoid PNG and share identical partials", { timeout: 60_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "ecmanim-rgba-render-"));
   try {
