@@ -39,6 +39,10 @@ compression/decompression round trip for every video frame. This applies to
 `render()` and `renderParallel()`, including partial-movie cache misses.
 Readback uses `getImageData()` because native canvas storage is premultiplied;
 passing that storage directly would darken translucent colors.
+Before readback, the zero-copy `canvas.data()` call flushes the native canvas's
+deferred recordings so old composite-layer snapshots do not accumulate.
+`getImageData()` alone does not perform that consolidation in
+[`@napi-rs/canvas` 0.1.100](https://github.com/Brooooooklyn/canvas/blob/v0.1.100/src/ctx.rs#L131).
 
 Each renderer/worker streams one active segment with backpressure, rather than
 retaining raw frames for the whole scene. A frame takes `width × height × 4`

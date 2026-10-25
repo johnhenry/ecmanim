@@ -4,6 +4,11 @@ import { existsSync } from "node:fs";
 import { createFfmpegEncoder } from "./ffmpeg.ts";
 
 export function readRgbaFrame(ctx: any, width: number, height: number): Buffer {
+  // data() flushes/consolidates @napi-rs/canvas's deferred draw recordings;
+  // getImageData() alone retains old composite-layer snapshots indefinitely.
+  // This is a zero-copy view, used only for its flush (no PNG encoding).
+  // See canvas v0.1.100 src/lib.rs:data and src/ctx.rs:Context::flush.
+  ctx.canvas.data();
   // canvas.data() exposes premultiplied Skia pixels; ffmpeg expects straight
   // alpha. getImageData matches the pixels the old PNG path delivered.
   const data = ctx.getImageData(0, 0, width, height).data;
