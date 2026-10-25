@@ -29,6 +29,8 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+## 0.14.1 — 2026-10-25
+
 ### Changed
 
 - Node video rendering streams straight-alpha RGBA frames to ffmpeg, avoiding
