@@ -34,17 +34,24 @@ export function tempPathFor(outPath: string): string {
   return join(dirname(outPath), `${stem}.tmp-${tempSuffix()}${ext}`);
 }
 
-// Start an ffmpeg process reading PNGs from stdin (image2pipe) and encoding to
-// `outPath`. Codec/pixel-format is chosen by `format` ("webm" | "gif" | "mov" |
+// Start an ffmpeg process reading PNGs (default) or straight-alpha RGBA from
+// stdin. Keep PNG input for existing callers; Node video renderers select RGBA.
+// Codec/pixel-format is chosen by `format` ("webm" | "gif" | "mov" |
 // otherwise mp4/h264). `transparent` is accepted for signature compatibility but
 // unused here — transparency is decided upstream by picking the .mov (prores)
 // container, since h264 cannot store an alpha channel.
 export function startFfmpeg(
-  { fps, pixelWidth, pixelHeight, outPath, format, verbose }: any,
+  { fps, pixelWidth, pixelHeight, outPath, format, verbose, inputFormat = "png" }: any,
 ) {
+  const input = inputFormat === "rgba"
+    ? ["-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${pixelWidth}x${pixelHeight}`,
+      // @napi-rs/canvas's PNGs carry sRGB tags. Rawvideo has no header, so
+      // supply the same input tags to preserve color-managed playback.
+      "-color_range", "pc", "-color_primaries", "bt709", "-color_trc", "iec61966-2-1"]
+    : ["-f", "image2pipe"];
   const args = [
     "-y",
-    "-f", "image2pipe",
+    ...input,
     "-framerate", String(fps),
     "-i", "-",
     "-s", `${pixelWidth}x${pixelHeight}`,
@@ -65,17 +72,64 @@ export function startFfmpeg(
   return spawn("ffmpeg", args, { stdio: ["pipe", "inherit", verbose ? "inherit" : "ignore"] });
 }
 
-// Write one buffer to a stream, honoring backpressure (await the drain event
-// when the internal buffer is full).
+// Await the write callback so at most one frame is pending, even for large
+// RGBA buffers. The encoder owns the stream's error listener (see below).
 export function writeToStream(stream: any, buf: any): Promise<void> {
-  return new Promise<void>((res) => {
-    if (!stream.write(buf)) stream.once("drain", res);
-    else res();
+  return new Promise<void>((res, rej) => {
+    stream.write(buf, (error: Error | null | undefined) => error ? rej(error) : res());
   });
 }
 
-// Encode an array of PNG buffers to a single file via startFfmpeg. Used to write
-// one partial-movie file per animation segment.
+// A streaming, atomic encoder. Attach lifecycle listeners immediately: ffmpeg
+// can fail while construct() is still running or while a raw frame is writing.
+// The completion promise resolves with an error rather than rejecting before
+// finish() is awaited. abort() reaps the child BEFORE removing its temp file.
+export function createFfmpegEncoder(opts: any) {
+  const { outPath } = opts;
+  mkdirSync(dirname(outPath), { recursive: true });
+  const tempPath = tempPathFor(outPath);
+  const ff = startFfmpeg({ ...opts, outPath: tempPath });
+  let error: Error | undefined;
+  let exited = false;
+  let finished = false;
+  ff.on("error", (e) => { error ??= e; });
+  ff.stdin.on("error", (e) => { error ??= e; });
+  const closed = new Promise<Error | undefined>((resolve) => {
+    ff.once("close", (code) => {
+      exited = true;
+      if (code !== 0) error ??= new Error("ffmpeg partial exited " + code);
+      resolve(error);
+    });
+  });
+  return {
+    async write(frame: Uint8Array) {
+      if (error) throw error;
+      if (finished || exited) throw new Error("ffmpeg encoder is closed");
+      if (opts.inputFormat === "rgba" && frame.byteLength !== opts.pixelWidth * opts.pixelHeight * 4) {
+        throw new Error("RGBA frame size must equal pixelWidth * pixelHeight * 4");
+      }
+      await writeToStream(ff.stdin, frame);
+    },
+    async finish() {
+      if (finished) return;
+      ff.stdin.end();
+      const failure = await closed;
+      if (failure) throw failure;
+      renameSync(tempPath, outPath);
+      finished = true;
+    },
+    async abort() {
+      // SIGTERM can leave ffmpeg blocked on stdin on macOS. This output is
+      // being discarded, so use unconditional termination and wait for close.
+      if (!exited) ff.kill("SIGKILL");
+      await closed;
+      rmSync(tempPath, { force: true });
+    },
+  };
+}
+
+// Encode an array of PNG buffers (or RGBA with inputFormat: "rgba") to a file.
+// Streaming renderers use createFfmpegEncoder directly to bound memory use.
 //
 // Writes to a TEMP path in the same directory and renameSync()s it to the
 // real `outPath` only after ffmpeg exits 0 -- never straight to `outPath`.
@@ -94,26 +148,12 @@ export function writeToStream(stream: any, buf: any): Promise<void> {
 // fs.renameSync) -- a concurrent reader now only ever sees "doesn't exist
 // yet" or "fully written," never a partial state.
 export async function encodeFrames(frames: any[], opts: any): Promise<void> {
-  const { outPath } = opts;
-  mkdirSync(dirname(outPath), { recursive: true });
-  // ffmpeg infers its output muxer from the FILE EXTENSION -- the temp
-  // suffix must land BEFORE it (`seg.tmp-xyz.mp4`), not after
-  // (`seg.mp4.tmp-xyz`), or ffmpeg can't tell what container to write and
-  // exits with "Unable to choose an output format."
-  const tempPath = tempPathFor(outPath);
-  const ff = startFfmpeg({ ...opts, outPath: tempPath });
+  const encoder = createFfmpegEncoder(opts);
   try {
-    for (const buf of frames) await writeToStream(ff.stdin, buf);
-    ff.stdin.end();
-    await new Promise<void>((res, rej) => {
-      ff.on("close", (code: number) => (code === 0 ? res() : rej(new Error("ffmpeg partial exited " + code))));
-      ff.on("error", rej);
-    });
-    renameSync(tempPath, outPath);
+    for (const buf of frames) await encoder.write(buf);
+    await encoder.finish();
   } catch (err) {
-    // Don't leave a stray temp file behind on failure (a crashed/killed
-    // render shouldn't litter the cache dir with orphaned .tmp-* files).
-    try { rmSync(tempPath, { force: true }); } catch { /* already gone / never created */ }
+    await encoder.abort();
     throw err;
   }
 }

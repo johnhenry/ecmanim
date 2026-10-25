@@ -17,6 +17,7 @@ const NODE_ONLY_ALLOWLIST = new Set([
   "node-gl.ts",
   "node-parallel.ts",
   "renderer/ffmpeg.ts",
+  "renderer/raw_frames.ts",
   "renderer/fonts-node.ts",
   "video-node.ts",
   // The render service is a Node-only subsystem (protocol.ts stays node-free).
