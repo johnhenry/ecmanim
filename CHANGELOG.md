@@ -31,6 +31,9 @@ compatibility rules" section of `AGENTS.md`.
 
 ### Fixed
 
+- Render-service workers drain in-flight progress reports before sending final
+  statistics, preventing delayed reports or heartbeats from losing cache-reuse
+  counts on completed jobs (#186).
 - Homepage demo playback, replay, and WebM download failures now log the
   original error with an operation label instead of an unhandled rejection (#42).
 
