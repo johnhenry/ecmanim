@@ -29,6 +29,11 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Fixed
+
+- Homepage demo playback, replay, and WebM download failures now log the
+  original error with an operation label instead of an unhandled rejection (#42).
+
 ## 0.14.1 — 2026-10-25
 
 ### Changed
