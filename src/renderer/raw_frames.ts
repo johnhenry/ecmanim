@@ -1,5 +1,7 @@
 // Node Canvas readback and partial streaming. No movie-sized raw frame arrays:
 // each renderer/worker has at most one encoder and one pending frame write.
+import type { FrameHandler } from "../scene/Scene.ts";
+import type { CanvasRenderer } from "./CanvasRenderer.ts";
 import { existsSync } from "node:fs";
 import { createFfmpegEncoder } from "./ffmpeg.ts";
 
@@ -13,6 +15,27 @@ export function readRgbaFrame(ctx: any, width: number, height: number): Buffer {
   // alpha. getImageData matches the pixels the old PNG path delivered.
   const data = ctx.getImageData(0, 0, width, height).data;
   return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+}
+
+/** One retained RGBA buffer, reused only when Scene proves a static hold.
+ * Writes remain awaited one frame at a time, preserving encoder backpressure. */
+export function createRgbaFrameHandler(
+  renderer: CanvasRenderer, ctx: any, width: number, height: number,
+  write: (frame: Buffer) => Promise<void>, enabled: () => boolean = () => true,
+): FrameHandler {
+  let previous: Buffer | undefined;
+  const handler: FrameHandler = async (mobjects) => {
+    if (!enabled()) return;
+    renderer.renderScene(mobjects);
+    previous = readRgbaFrame(ctx, width, height);
+    await write(previous);
+  };
+  handler.repeat = async (...args) => {
+    if (!enabled()) return;
+    if (previous) await write(previous);
+    else await handler(...args);
+  };
+  return handler;
 }
 
 export function createPartialEncoder(options: any) {

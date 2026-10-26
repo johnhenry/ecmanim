@@ -14,7 +14,7 @@ import { QUALITIES } from "./index.ts";
 import { resolveOutputFormat, isJsEncoderFormat } from "./core/render_format.ts";
 import { config as manimConfig, resolveConfig, loadConfigFile, QUALITY_PRESETS } from "./_config.ts";
 import { createFfmpegEncoder, runFfmpeg, concatPartials, remuxCopy, tempPathFor } from "./renderer/ffmpeg.ts";
-import { readRgbaFrame, createPartialEncoder } from "./renderer/raw_frames.ts";
+import { createRgbaFrameHandler, createPartialEncoder } from "./renderer/raw_frames.ts";
 
 // Once ecmanim/node has been imported, Text/VText/VectorDecimalNumber lazily
 // auto-resolve a default system font the first time none is registered yet
@@ -395,13 +395,12 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
       if (reuse) reusedPartials++;
       return reuse ? { skip: true } : undefined;
     };
-    scene.frameHandler = async (mobjects: any[]) => {
-      renderer.renderScene(mobjects);
+    scene.frameHandler = createRgbaFrameHandler(renderer, ctx, pixelWidth, pixelHeight, async (frame) => {
       emitted++;
       if (activeSeg < 0) hasInit = true;
       const hash = activeSeg < 0 ? "init" : (segHashes.get(activeSeg) ?? `seg${activeSeg}`);
-      await segments.write(activeSeg, join(cacheDir, `${keyed(hash)}.${partialExt}`), readRgbaFrame(ctx, pixelWidth, pixelHeight));
-    };
+      await segments.write(activeSeg, join(cacheDir, `${keyed(hash)}.${partialExt}`), frame);
+    });
 
     try {
       await runConstruct(sceneOrConstruct, scene, resolvedParams);
@@ -448,11 +447,10 @@ export async function render(sceneOrConstruct: any, options: RenderOptions = {})
 
   // --- Single-stream path (caching disabled or range filtering active). ---
   const encoder = createFfmpegEncoder({ fps, pixelWidth, pixelHeight, outPath, format, transparent, verbose, inputFormat: "rgba" });
-  scene.frameHandler = async (mobjects: any[]) => {
-    renderer.renderScene(mobjects);
+  scene.frameHandler = createRgbaFrameHandler(renderer, ctx, pixelWidth, pixelHeight, async (frame) => {
     emitted++;
-    await encoder.write(readRgbaFrame(ctx, pixelWidth, pixelHeight));
-  };
+    await encoder.write(frame);
+  });
 
   try {
     await runConstruct(sceneOrConstruct, scene, resolvedParams);

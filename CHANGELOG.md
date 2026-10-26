@@ -29,6 +29,13 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+### Added
+
+- Static `Scene.wait()` holds reuse one rasterized RGBA frame in Node ffmpeg
+  exports, including cached and parallel rendering (#168). Dynamic update hooks
+  and camera effects retain per-frame rendering; frame timing and cache output
+  are preserved. Custom backends may opt in with `FrameHandler.repeat`.
+
 ### Fixed
 
 - Homepage demo playback, replay, and WebM download failures now log the

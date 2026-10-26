@@ -2,16 +2,21 @@
 // fps. It is backend-agnostic: a backend sets `frameHandler` (called with the
 // list of top-level mobjects once per frame) and awaits `render()`.
 
-import type { Mobject } from "../mobject/Mobject.ts";
-import { Group } from "../mobject/Mobject.ts";
-import type { Camera } from "../renderer/CanvasRenderer.ts";
+import { Mobject, Group } from "../mobject/Mobject.ts";
+import { Camera } from "../renderer/CanvasRenderer.ts";
 import { TransformMatchingAuto } from "../animation/auto_matching.ts";
 import type { AutoMatchingConfig } from "../animation/auto_matching.ts";
 import { PlayableKeyframeTrack } from "../reactive/keyframes.ts";
 import type { Keyframe, KeyframeTrackOptions } from "../animation/keyframe_track.ts";
 
 /** A frame callback invoked once per frame with the top-level mobjects. */
-export type FrameHandler = (mobjects: Mobject[], frameCount: number, time: number) => void | Promise<void>;
+export type FrameHandler = ((mobjects: Mobject[], frameCount: number, time: number) => void | Promise<void>) & {
+  /** Optional backend fast path for subsequent frames of a static wait.
+   * Called INSTEAD of the ordinary callback, once per frame with the same
+   * clock semantics. The first frame of every wait uses the ordinary callback.
+   * Leave unset when a callback itself changes scene state. */
+  repeat?: (mobjects: Mobject[], frameCount: number, time: number) => void | Promise<void>;
+};
 
 /** A scheduled audio clip. */
 export interface SceneSound {
@@ -457,11 +462,15 @@ export class Scene {
   // Override in subclasses (or pass config.construct) to define the animation.
   async construct(): Promise<void> {}
 
-  async emitFrame(): Promise<void> {
+  async emitFrame(repeatPrevious = false): Promise<void> {
     // Camera motion effects are pure functions of absolute scene time (seek /
     // parallel safe). No-op for a camera without effects.
     this.camera?.setEffectTime?.(this.time);
-    await this.frameHandler(this.mobjects, this.frameCount, this.time);
+    if (repeatPrevious && this.frameHandler.repeat) {
+      await this.frameHandler.repeat(this.mobjects, this.frameCount, this.time);
+    } else {
+      await this.frameHandler(this.mobjects, this.frameCount, this.time);
+    }
     this.frameCount++;
   }
 
@@ -549,6 +558,22 @@ export class Scene {
     return this;
   }
 
+  // Conservative proof for the built-in update path. Custom update hooks
+  // (including video clips and moving/3D cameras) can change pixels without
+  // registered updaters, so they retain ordinary rendering. Backend opt-in
+  // keeps user callbacks and browser/PNG exporters on their existing path.
+  private canRepeatWaitFrame(): boolean {
+    if (!this.frameHandler.repeat || this.emitFrame !== Scene.prototype.emitFrame ||
+        this.updateMobjects !== Scene.prototype.updateMobjects || this._tasks.some(t => !t.done)) return false;
+    const camera = this.camera;
+    if (camera && (Object.getPrototypeOf(camera) !== Camera.prototype || camera.frame ||
+        camera.effects?.length || camera.frameEffects?.length ||
+        Object.values(camera).some(value => typeof value === "function"))) return false;
+    const staticFamily = (m: Mobject): boolean => m.update === Mobject.prototype.update &&
+      m.updaters.length === 0 && m.submobjects.every(staticFamily);
+    return this.mobjects.every(staticFamily);
+  }
+
   // Hold the current frame for `duration` seconds (runs updaters each frame).
   async wait(duration = 1): Promise<this> {
     const nFrames = Math.max(1, Math.round(duration * this.fps));
@@ -568,13 +593,14 @@ export class Scene {
     const skip = !!directive?.skip;
 
     this.log("wait", `wait: ${duration}s`, { index: playIndex, duration, nFrames, startFrame });
+    const repeat = !skip && this.canRepeatWaitFrame();
 
     for (let f = 0; f < nFrames; f++) {
       this.updateMobjects(dt);
       this._tickTasks(dt);
       this.time += dt;
       if (skip) this.frameCount++;
-      else await this.emitFrame();
+      else await this.emitFrame(repeat && f > 0);
     }
     this.playRecords.push({ index: playIndex, kind: "wait", hash, startFrame, endFrame: this.frameCount });
     return this;
