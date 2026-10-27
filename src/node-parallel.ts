@@ -40,7 +40,7 @@ import type { SegmentRecord } from "./scene/render_frame.ts";
 // (node.ts) and parallel cache paths, keeping partial files byte-compatible.
 import { normalizeFormat, partialExtension, isJsEncoderFormat } from "./core/render_format.ts";
 import { concatPartials, remuxCopy } from "./renderer/ffmpeg.ts";
-import { readRgbaFrame, createPartialEncoder } from "./renderer/raw_frames.ts";
+import { createRgbaFrameHandler, createPartialEncoder } from "./renderer/raw_frames.ts";
 
 export interface RenderParallelOptions {
   fps?: number;
@@ -252,12 +252,10 @@ export async function renderSegmentRange(
     return undefined; // emit frames for this segment
   };
 
-  scene.frameHandler = async (mobjects) => {
-    if (activeSeg < 0) return; // only encode frames for an active assigned segment
-    renderer.renderScene(mobjects);
+  scene.frameHandler = createRgbaFrameHandler(renderer, ctx, r.pixelWidth, r.pixelHeight, async (frame) => {
     const hash = segHashes.get(activeSeg) ?? `seg${activeSeg}`;
-    await segments.write(activeSeg, join(r.cacheDir, `${keyed(hash)}.${r.partialExt}`), readRgbaFrame(ctx, r.pixelWidth, r.pixelHeight));
-  };
+    await segments.write(activeSeg, join(r.cacheDir, `${keyed(hash)}.${r.partialExt}`), frame);
+  }, () => activeSeg >= 0);
 
   try {
     await run();

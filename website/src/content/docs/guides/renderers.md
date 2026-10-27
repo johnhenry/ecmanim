@@ -34,6 +34,38 @@ function drawWith(renderer, mobjects) {
 }
 ```
 
+## Static holds in Node video exports
+
+For a static `scene.wait(duration)`, Node's ffmpeg backend draws and reads back
+one RGBA frame, then writes that same buffer for the remaining frames. This
+applies to single-stream exports, partial-movie cache misses, and parallel
+workers. Every wait starts with a fresh drawing, so changes between waits are
+visible. Warm cache hits continue to skip drawing entirely. Frame count, FPS,
+scene time, sections, audio timing, codec settings, and cache keys stay the same.
+The encoder still receives every frame at a constant frame rate; this saves
+rasterization and readback, not ffmpeg encoding or pipe traffic.
+
+Reuse requires the built-in update methods, no updaters anywhere in the mobject
+family, no active background tasks, and a plain static 2D camera without effects
+or a frame mobject. Custom update hooks, video clips, moving/3D camera scenes,
+and camera effects conservatively keep per-frame rendering. Browser, GPU, SVG,
+PNG, and JavaScript-encoder exports retain their existing behavior.
+
+Custom frame handlers still run once per frame. A backend can explicitly opt
+in by supplying `frameHandler.repeat`, which receives the same arguments instead
+of the ordinary handler for subsequent frames of an eligible hold. Both callbacks
+are awaited. Opt in only when the callbacks themselves do not mutate scene state.
+Wrapping the handler in an ordinary callback leaves reuse disabled.
+
+Sources: the repeated-frame idea follows
+[ManimGX's `Film._add` / `_send` at 1eb91c0](https://github.com/academa-labs/manimgx/blob/1eb91c0/src/manimgx/rendering/film.py#L469).
+The conservative static-wait check also draws on
+[Manim CE's `should_update_mobjects` at 3e19ee0](https://github.com/ManimCommunity/manim/blob/3e19ee0/manim/scene/scene.py#L445);
+[ManimGL's `wait` at fafa083](https://github.com/3b1b/manim/blob/fafa083/manimlib/scene/scene.py#L594)
+provides the per-frame update/emit reference. This is an independent TypeScript
+implementation; it does not implement ManimGX's general record deduplication or
+variable-frame-rate output.
+
 ## Static-subtree render caching (Canvas-2D)
 
 `mobject.cacheStatic()` opts a mobject into `CanvasRenderer`'s per-mobject
