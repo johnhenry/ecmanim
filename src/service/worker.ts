@@ -117,13 +117,18 @@ export class ServiceWorker {
     const verbose = this.opts.verbose ?? false;
     const heartbeatMs = this.opts.heartbeatMs ?? 15_000;
     let lastProgress: JobProgress | null = null;
-    const beat = setInterval(() => {
-      this.api(`/api/v1/worker/jobs/${job.id}/progress`, {
+    const pendingReports = new Set<Promise<void>>();
+    const reportProgress = () => {
+      const request = this.api(`/api/v1/worker/jobs/${job.id}/progress`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(lastProgress ? { progress: lastProgress } : {}),
-      }).catch(() => {});
-    }, heartbeatMs);
+      }).then(() => {}, () => {});
+      pendingReports.add(request);
+      void request.then(() => pendingReports.delete(request));
+      return request;
+    };
+    const beat = setInterval(() => { void reportProgress(); }, heartbeatMs);
     beat.unref?.();
 
     // STABLE per-scene work dir (not a per-job temp dir): render()'s
@@ -144,23 +149,20 @@ export class ServiceWorker {
         scenePath,
         outputPath,
         onProgress: (progress) => {
-          lastProgress = progress;
-          this.api(`/api/v1/worker/jobs/${job.id}/progress`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ progress }),
-          }).catch(() => {});
+          lastProgress = { ...progress };
+          void reportProgress();
         },
       });
       if (!existsSync(outputPath)) throw new Error("render produced no output file");
       if (stats && typeof stats === "object") {
         lastProgress = { ...(lastProgress ?? {}), ...stats };
-        await this.api(`/api/v1/worker/jobs/${job.id}/progress`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ progress: lastProgress }),
-        }).catch(() => {});
       }
+      // Older reports (including heartbeats) may still be in flight. Drain
+      // those before publishing the final snapshot, otherwise a late request
+      // can overwrite renderer statistics. Heartbeats keep renewing the lease
+      // while we wait, and new ones already carry this final snapshot.
+      await Promise.all([...pendingReports]);
+      if (lastProgress) await reportProgress();
 
       // Upload, then complete.
       const filename = `out.${artifactExtension(job.spec)}`;

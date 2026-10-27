@@ -79,6 +79,9 @@ job.
 Workers keep a stable per-scene render cache: a resubmitted identical job (or
 a param variant that shares unchanged segments) reuses partial movie files
 instead of re-encoding — `progress.reusedPartials` on the job reports it.
+Before upload, the worker waits for outstanding progress reports to settle and
+sends the final snapshot, so a delayed report cannot overwrite those counts.
+Heartbeats continue renewing the lease during this wait.
 Params are hashed into every partial's cache key, so two personalized renders
 can never collide.
 
