@@ -29,6 +29,8 @@ order, omitting empty ones -- **Added**, **Changed** (mark API-visible breaks
 `Changed (breaking)`), **Deprecated**, **Removed**, **Fixed**. See the "API
 compatibility rules" section of `AGENTS.md`.
 
+## 0.14.2 — 2026-10-29
+
 ### Added
 
 - Static `Scene.wait()` holds reuse one rasterized RGBA frame in Node ffmpeg
